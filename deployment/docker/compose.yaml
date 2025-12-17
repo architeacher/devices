@@ -1,0 +1,157 @@
+x-default-secrets: &secrets
+  - source: root_cert_file
+    target: "/etc/ssl/certs/rootCA.pem"
+  - source: cert_file
+    target: "/etc/ssl/certs/ca-cert-star-devices-dev-crt.pem"
+  - source: key_file
+    target: "/etc/ssl/certs/ca-cert-star-devices-dev-key.pem"
+
+x-default-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "5m"
+    max-file: "3"
+
+services:
+  traefik:
+    container_name: "svc-devices-traefik"
+    image: traefik:v3.6.5
+    networks:
+      - internal
+    ports:
+      - "80:80"
+      - "443:443"
+      - "${FORWARD_TRAEFIK_PORT:-8080}:8080"  # Traefik dashboard
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.traefik.rule=Host(`traefik.devices.dev`)"
+      - "traefik.http.routers.traefik.entrypoints=websecure"
+      - "traefik.http.routers.traefik.tls=true"
+      - "traefik.http.routers.traefik.service=api@internal"
+      - "traefik.http.middlewares.traefik-auth.basicauth.users=admin:$$2y$$10$$GU0rHJ9wjKnKl9AmaF9PU.ZTk4B5qM5J5qLgRrA8a4dJ5s7CklbWS"  # admin:bottom.Secret
+    healthcheck:
+      test: [ "CMD-SHELL", "wget --quiet --spider -S --tries=1 http://localhost:8083/ping" ]
+      interval: 10s
+      retries: 5
+      start_period: 1s
+      timeout: 1s
+    restart: unless-stopped
+    secrets: *secrets
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "./deployment/docker/traefik:/etc/traefik:ro"
+    command:
+      - "--configFile=/etc/traefik/static.yaml"
+    logging:
+      <<: *default-logging
+
+  vault-init:
+    container_name: "svc-shared-vault-init"
+    image: hashicorp/vault:1.21.1
+    networks:
+      - internal
+    env_file:
+      - .envrc
+    environment:
+      - SERVICES_CONFIG_DIR=/app/services
+    volumes:
+      - "./deployment/docker/vault/init-vault.sh:/vault/init-vault.sh"
+      - "./.envrc:/app/.envrc"
+      - "./services:/app/services:ro"
+    depends_on:
+      vault:
+        condition: service_healthy
+    command: ["sh", "/vault/init-vault.sh"]
+    restart: "no"
+    logging:
+      <<: *default-logging
+
+  vault:
+    container_name: "svc-shared-vault"
+    image: hashicorp/vault:1.21.1
+    networks:
+      - internal
+    ports:
+      - "${VAULT_PORT:-8200}:8200"
+    env_file:
+      - .envrc
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.vault.loadbalancer.server.port=${VAULT_PORT}"
+      - "traefik.http.routers.vault.rule=Host(`vault.devices.dev`)"
+      - "traefik.http.routers.vault.entrypoints=websecure"
+      - "traefik.http.routers.vault.tls=true"
+    cap_add:
+      - IPC_LOCK
+    volumes:
+      - vault-config-storage:/vault/config
+      - vault-storage:/vault/data
+      - vault-logs-storage:/vault/logs
+    command: ["vault", "server", "-dev"]
+    healthcheck:
+      test: ["CMD", "vault", "status"]
+      interval: 30s
+      retries: 3
+      start_period: 10s
+      timeout: 5s
+    restart: unless-stopped
+    logging:
+      <<: *default-logging
+
+  keydb:
+    container_name: "svc-shared-keydb"
+    image: eqalpha/keydb:alpine
+    networks:
+      - internal
+    ports:
+      - "${KEYDB_PORT:-6379}:6379"
+    env_file:
+      - .envrc
+    volumes:
+      - keydb-storage:/data
+    command: keydb-server --save 60 1 --loglevel warning --requirepass "${KEYDB_PASSWORD}"
+    healthcheck:
+      test: ["CMD", "keydb-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      retries: 3
+      start_period: 5s
+      timeout: 3s
+    restart: unless-stopped
+    logging:
+      <<: *default-logging
+
+  swagger-ui:
+    container_name: "svc-devices-swagger-ui"
+    image: swaggerapi/swagger-ui:v5.31.0
+    networks:
+      - internal
+    environment:
+      SWAGGER_JSON: /oas/svc-devices-swagger-v1.json
+    volumes:
+      - "./docs/openapi-spec/public:/oas"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.swagger-ui.loadbalancer.server.port=8080"
+      - "traefik.http.routers.swagger-ui.rule=Host(`docs.devices.dev`)"
+      - "traefik.http.routers.swagger-ui.entrypoints=websecure"
+      - "traefik.http.routers.swagger-ui.tls=true"
+    restart: unless-stopped
+    logging:
+      <<: *default-logging
+
+networks:
+  internal:
+
+secrets:
+  root_cert_file:
+    file: "./.certs/rootCA.pem"
+  cert_file:
+    file: "./.certs/star-devices-dev.crt"
+  key_file:
+    file: "./.certs/star-devices-dev.key"
+
+volumes:
+  vault-storage:
+  vault-logs-storage:
+  vault-config-storage:
+  keydb-storage:

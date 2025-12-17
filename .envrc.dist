@@ -1,0 +1,43 @@
+# +-------+
+# | Proxy |
+# +-------+
+
+FORWARD_PROXY_PORT=8080
+
+# +---------+
+# | Service |
+# +---------+
+
+SVC_API_GATEWAY_DEBUG_PORT=50001
+HTTP_SERVER_PORT=8088
+AUTH_ENABLED="true"
+
+# +----------------+
+# | Secret Storage |
+# +----------------+
+
+VAULT_PORT=8200
+VAULT_DEV_LISTEN_ADDRESS="0.0.0.0:8200"
+VAULT_DEV_ROOT_TOKEN_ID="bottom-secret-Token"
+VAULT_ADDR="http://vault:8200"
+VAULT_TOKEN="bottom-secret-Token"
+VAULT_ROOT_TOKEN="bottom-secret-Token"
+VAULT_UI=true
+
+# +---------+
+# | Storage |
+# +---------+
+
+POSTGRES_HOST="postgres"
+POSTGRES_PORT=5432
+POSTGRES_DATABASE="devices"
+POSTGRES_USERNAME="postgres"
+POSTGRES_PASSWORD="bottom.Secret"
+
+# +-------+
+# | Cache |
+# +-------+
+
+KEYDB_PORT=6379
+KEYDB_ADDR="keydb:6379"
+KEYDB_PASSWORD="bottom.Secret"

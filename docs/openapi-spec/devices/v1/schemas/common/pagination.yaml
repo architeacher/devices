@@ -1,0 +1,72 @@
+Pagination:
+  type: object
+  description: Pagination metadata for list responses
+  required:
+    - page
+    - size
+    - totalItems
+    - totalPages
+  properties:
+    page:
+      type: integer
+      description: Current page number (1-indexed)
+      minimum: 1
+      example: 1
+    size:
+      type: integer
+      description: Number of items per page
+      minimum: 1
+      maximum: 100
+      example: 20
+    totalItems:
+      type: integer
+      description: Total number of items across all pages
+      minimum: 0
+      example: 150
+    totalPages:
+      type: integer
+      description: Total number of pages
+      minimum: 0
+      example: 8
+    hasNext:
+      type: boolean
+      description: Whether there is a next page
+      example: true
+    hasPrevious:
+      type: boolean
+      description: Whether there is a previous page
+      example: false
+    links:
+      $ref: "#/PaginationLinks"
+
+PaginationLinks:
+  type: object
+  description: HATEOAS links for pagination navigation
+  properties:
+    self:
+      type: string
+      format: uri-reference
+      description: Link to the current page
+      example: "/devices?page=1&size=20"
+    first:
+      type: string
+      format: uri-reference
+      description: Link to the first page
+      example: "/devices?page=1&size=20"
+    last:
+      type: string
+      format: uri-reference
+      description: Link to the last page
+      example: "/devices?page=8&size=20"
+    next:
+      type: string
+      format: uri-reference
+      nullable: true
+      description: Link to the next page (null if on last page)
+      example: "/devices?page=2&size=20"
+    previous:
+      type: string
+      format: uri-reference
+      nullable: true
+      description: Link to the previous page (null if on first page)
+      example: null

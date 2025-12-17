@@ -1,0 +1,51 @@
+created:
+  summary: Newly created device
+  value:
+    data:
+      id: "019234a5-6b7c-8d9e-0f12-34567890abcd"
+      name: "iPhone 15 Pro"
+      brand: "Apple"
+      state: "available"
+      createdAt: "2024-01-15T10:30:00Z"
+      updatedAt: "2024-01-15T10:30:00Z"
+      links:
+        self: "/devices/019234a5-6b7c-8d9e-0f12-34567890abcd"
+
+device:
+  summary: Existing device
+  value:
+    data:
+      id: "019234a5-6b7c-8d9e-0f12-34567890abcd"
+      name: "iPhone 15 Pro"
+      brand: "Apple"
+      state: "in-use"
+      createdAt: "2024-01-15T10:30:00Z"
+      updatedAt: "2024-01-15T14:45:00Z"
+      links:
+        self: "/devices/019234a5-6b7c-8d9e-0f12-34567890abcd"
+
+updated:
+  summary: Updated device
+  value:
+    data:
+      id: "019234a5-6b7c-8d9e-0f12-34567890abcd"
+      name: "iPhone 15 Pro Max"
+      brand: "Apple"
+      state: "in-use"
+      createdAt: "2024-01-15T10:30:00Z"
+      updatedAt: "2024-01-15T16:20:00Z"
+      links:
+        self: "/devices/019234a5-6b7c-8d9e-0f12-34567890abcd"
+
+patched:
+  summary: Partially updated device
+  value:
+    data:
+      id: "019234a5-6b7c-8d9e-0f12-34567890abcd"
+      name: "iPhone 15 Pro"
+      brand: "Apple"
+      state: "inactive"
+      createdAt: "2024-01-15T10:30:00Z"
+      updatedAt: "2024-01-15T18:00:00Z"
+      links:
+        self: "/devices/019234a5-6b7c-8d9e-0f12-34567890abcd"

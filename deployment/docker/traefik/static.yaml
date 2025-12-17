@@ -1,0 +1,86 @@
+api:
+  dashboard: true
+  debug: true
+  disableDashboardAd: true
+  insecure: true
+
+accessLog:
+  bufferingSize: 50
+#  filePath: "/var/log/access.log"
+  format: json
+  filters:
+    statusCodes:
+      - 3xx
+      - 4xx
+      - 5xx
+    retryAttempts: true
+    minDuration: 302s
+
+entryPoints:
+  ping:
+    address: ":8083"
+
+  web:
+    address: ":80"
+    forwardedHeaders:
+      insecure: true
+    http:
+      redirections:
+        entrypoint:
+          to: websecure
+          scheme: https
+
+  websecure:
+    address: ":443"
+
+global:
+  checkNewVersion: true
+  sendAnonymousUsage: false
+
+log:
+#  filePath: "/var/log/error.log"
+  format: console
+  level: DEBUG
+
+ping:
+  entryPoint: "ping"
+
+providers:
+  docker:
+    exposedByDefault: false
+    watch: true
+  file:
+    debugLogGeneratedTemplate: true
+    directory: /etc/traefik
+    filename: dynamic.yaml
+    watch: true
+  http:
+    tls:
+      insecureSkipVerify: true
+
+serversTransport:
+  insecureSkipVerify: true
+  rootCAs:
+    - "/etc/ssl/certs/rootCA.pem"
+  maxIdleConnsPerHost: 10
+  forwardingTimeouts:
+    dialTimeout: 10s
+    responseHeaderTimeout: 10s
+    idleConnTimeout: 10s
+
+#tracing:
+#  serviceName: "jaeger"
+#  spanNameLimit: 35
+#  jaeger:
+#    disableAttemptReconnecting: false
+#    gen128Bit: true
+#    localAgentHostPort: 127.0.0.1:6831
+#    propagation: jaeger
+#    samplingParam: 1.0
+#    samplingType: const
+#    samplingServerURL: http://jaeger.devices.local:5778/sampling
+#    traceContextHeaderName: na-trace-id
+#    collector:
+#      user: root
+#      password: secret
+#      endpoint: "http://jaeger.devices.local:14268/api/traces?format=jaeger.thrift"

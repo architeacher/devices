@@ -1,0 +1,31 @@
+description: Too Many Requests - Rate limit has been exceeded
+headers:
+  API-Version:
+    $ref: "../headers/response-headers.yaml#/ApiVersionHeader"
+  X-Request-Id:
+    $ref: "../headers/response-headers.yaml#/RequestIdHeader"
+  traceparent:
+    $ref: "../headers/response-headers.yaml#/TraceparentResponseHeader"
+  tracestate:
+    $ref: "../headers/response-headers.yaml#/TracestateResponseHeader"
+  Retry-After:
+    $ref: "../headers/response-headers.yaml#/RetryAfterHeader"
+  X-RateLimit-Limit:
+    $ref: "../headers/response-headers.yaml#/RateLimitLimitHeader"
+  X-RateLimit-Remaining:
+    $ref: "../headers/response-headers.yaml#/RateLimitRemainingHeader"
+  X-RateLimit-Reset:
+    $ref: "../headers/response-headers.yaml#/RateLimitResetHeader"
+content:
+  application/json:
+    schema:
+      $ref: "../common/error-response.yaml#/ErrorResponse"
+    examples:
+      rate_limited:
+        summary: Rate limit exceeded
+        value:
+          code: "RATE_LIMIT_EXCEEDED"
+          message: "Rate limit exceeded. Please retry after 60 seconds"
+          requestId: "019234a5-6b7c-8d9e-0f12-34567890abcd"
+          traceId: "0af7651916cd43dd8448eb211c80319c"
+          timestamp: "2024-01-15T10:30:00Z"

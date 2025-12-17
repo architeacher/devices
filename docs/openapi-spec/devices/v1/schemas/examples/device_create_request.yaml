@@ -1,0 +1,19 @@
+basic:
+  summary: Create a new device with default state
+  value:
+    name: "iPhone 15 Pro"
+    brand: "Apple"
+
+with_state:
+  summary: Create a new device with explicit state
+  value:
+    name: "Galaxy S24 Ultra"
+    brand: "Samsung"
+    state: "available"
+
+inactive:
+  summary: Create a new inactive device
+  value:
+    name: "Pixel 8 Pro"
+    brand: "Google"
+    state: "inactive"

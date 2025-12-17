@@ -1,0 +1,102 @@
+list:
+  summary: List of devices
+  value:
+    data:
+      - id: "019234a5-6b7c-8d9e-0f12-34567890abcd"
+        name: "iPhone 15 Pro"
+        brand: "Apple"
+        state: "available"
+        createdAt: "2024-01-15T10:30:00Z"
+        updatedAt: "2024-01-15T10:30:00Z"
+        links:
+          self: "/devices/019234a5-6b7c-8d9e-0f12-34567890abcd"
+      - id: "019234a5-6b7c-8d9e-0f12-34567890abce"
+        name: "Galaxy S24 Ultra"
+        brand: "Samsung"
+        state: "in-use"
+        createdAt: "2024-01-14T08:15:00Z"
+        updatedAt: "2024-01-15T09:00:00Z"
+        links:
+          self: "/devices/019234a5-6b7c-8d9e-0f12-34567890abce"
+      - id: "019234a5-6b7c-8d9e-0f12-34567890abcf"
+        name: "Pixel 8 Pro"
+        brand: "Google"
+        state: "inactive"
+        createdAt: "2024-01-13T14:20:00Z"
+        updatedAt: "2024-01-13T14:20:00Z"
+        links:
+          self: "/devices/019234a5-6b7c-8d9e-0f12-34567890abcf"
+    pagination:
+      page: 1
+      size: 20
+      totalItems: 3
+      totalPages: 1
+      hasNext: false
+      hasPrevious: false
+      links:
+        self: "/devices?page=1&size=20"
+        first: "/devices?page=1&size=20"
+        last: "/devices?page=1&size=20"
+        next: null
+        previous: null
+    filters:
+      brand: null
+      state: null
+
+filteredByBrand:
+  summary: Devices filtered by brand
+  value:
+    data:
+      - id: "019234a5-6b7c-8d9e-0f12-34567890abcd"
+        name: "iPhone 15 Pro"
+        brand: "Apple"
+        state: "available"
+        createdAt: "2024-01-15T10:30:00Z"
+        updatedAt: "2024-01-15T10:30:00Z"
+        links:
+          self: "/devices/019234a5-6b7c-8d9e-0f12-34567890abcd"
+      - id: "019234a5-6b7c-8d9e-0f12-34567890abd0"
+        name: "MacBook Pro 16"
+        brand: "Apple"
+        state: "in-use"
+        createdAt: "2024-01-12T11:00:00Z"
+        updatedAt: "2024-01-15T08:30:00Z"
+        links:
+          self: "/devices/019234a5-6b7c-8d9e-0f12-34567890abd0"
+    pagination:
+      page: 1
+      size: 20
+      totalItems: 2
+      totalPages: 1
+      hasNext: false
+      hasPrevious: false
+      links:
+        self: "/devices?page=1&size=20&brand=Apple"
+        first: "/devices?page=1&size=20&brand=Apple"
+        last: "/devices?page=1&size=20&brand=Apple"
+        next: null
+        previous: null
+    filters:
+      brand: "Apple"
+      state: null
+
+empty:
+  summary: Empty list of devices
+  value:
+    data: []
+    pagination:
+      page: 1
+      size: 20
+      totalItems: 0
+      totalPages: 0
+      hasNext: false
+      hasPrevious: false
+      links:
+        self: "/devices?page=1&size=20"
+        first: "/devices?page=1&size=20"
+        last: "/devices?page=1&size=20"
+        next: null
+        previous: null
+    filters:
+      brand: null
+      state: null

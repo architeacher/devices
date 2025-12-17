@@ -1,0 +1,12 @@
+DeviceState:
+  type: string
+  description: The current state of the device
+  enum:
+    - available
+    - in-use
+    - inactive
+  example: "available"
+  x-enum-descriptions:
+    available: Device is available for use
+    in-use: Device is currently being used (name/brand cannot be updated, cannot be deleted)
+    inactive: Device is inactive and not available for use

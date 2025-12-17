@@ -1,0 +1,35 @@
+DeviceListResponse:
+  type: object
+  description: Response containing a paginated list of devices
+  required:
+    - data
+    - pagination
+  properties:
+    data:
+      type: array
+      description: List of devices
+      items:
+        $ref: "device-response.yaml#/Device"
+    pagination:
+      $ref: "../common/pagination.yaml#/Pagination"
+    filters:
+      $ref: "#/AppliedFilters"
+
+AppliedFilters:
+  type: object
+  description: Filters that were applied to this request
+  properties:
+    brand:
+      type: string
+      nullable: true
+      description: Brand filter that was applied
+      example: "Apple"
+    state:
+      type: string
+      nullable: true
+      description: State filter that was applied
+      enum:
+        - available
+        - in-use
+        - inactive
+      example: "available"

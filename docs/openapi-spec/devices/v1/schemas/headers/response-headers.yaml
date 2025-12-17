@@ -1,0 +1,94 @@
+ApiVersionHeader:
+  description: API version used for this response
+  schema:
+    type: string
+    enum: [v1]
+  example: v1
+
+LocationHeader:
+  description: URI of the newly created resource
+  schema:
+    type: string
+    format: uri
+  example: "/devices/019234a5-6b7c-8d9e-0f12-34567890abcd"
+
+RequestIdHeader:
+  description: Unique request identifier for tracing
+  schema:
+    type: string
+    format: uuid
+  example: "019234a5-6b7c-8d9e-0f12-34567890abcd"
+
+ETagHeader:
+  description: |
+    Entity tag for cache validation and optimistic concurrency control.
+    Use this value in If-Match or If-None-Match headers for subsequent requests.
+  schema:
+    type: string
+  example: '"a1b2c3d4e5f6"'
+
+CacheControlHeader:
+  description: |
+    Cache directives for the response.
+    - `private`: Response is specific to the user
+    - `max-age`: Maximum time in seconds the response can be cached
+    - `no-cache`: Must revalidate with server before using cached response
+  schema:
+    type: string
+  example: "private, max-age=300"
+
+LastModifiedHeader:
+  description: Timestamp when the resource was last modified
+  schema:
+    type: string
+    format: date-time
+  example: "Wed, 15 Jan 2024 14:45:00 GMT"
+
+RateLimitLimitHeader:
+  description: Maximum number of requests allowed per time window
+  schema:
+    type: integer
+  example: 100
+
+RateLimitRemainingHeader:
+  description: Number of requests remaining in the current time window
+  schema:
+    type: integer
+  example: 95
+
+RateLimitResetHeader:
+  description: Unix timestamp (seconds) when the rate limit window resets
+  schema:
+    type: integer
+  example: 1705320000
+
+RetryAfterHeader:
+  description: Number of seconds to wait before retrying the request
+  schema:
+    type: integer
+  example: 60
+
+ContentEncodingHeader:
+  description: Compression algorithm used for the response body
+  schema:
+    type: string
+    enum: [gzip, deflate, br, identity]
+  example: "gzip"
+
+VaryHeader:
+  description: Headers that affect response caching and content negotiation
+  schema:
+    type: string
+  example: "Accept-Encoding, Authorization"
+
+TraceparentResponseHeader:
+  description: W3C Trace Context parent header for distributed tracing
+  schema:
+    type: string
+  example: "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01"
+
+TracestateResponseHeader:
+  description: W3C Trace Context state header for vendor-specific trace data
+  schema:
+    type: string
+  example: "congo=t61rcWkgMzE"

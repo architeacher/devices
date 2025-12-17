@@ -1,0 +1,21 @@
+full:
+  summary: Fully update a device
+  value:
+    name: "iPhone 15 Pro Max"
+    brand: "Apple"
+    state: "in-use"
+
+patch_state:
+  summary: Update only the device state
+  value:
+    state: "inactive"
+
+patch_name:
+  summary: Update only the device name
+  value:
+    name: "iPhone 15 Pro Max 256GB"
+
+patch_brand:
+  summary: Update only the device brand
+  value:
+    brand: "Apple Inc."

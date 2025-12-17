@@ -1,0 +1,133 @@
+ok:
+  summary: Service is ready to accept traffic
+  value:
+    status: "ok"
+    timestamp: "2024-01-15T10:30:00Z"
+    version: "v1.0.0"
+    checks:
+      infra:
+        storage:
+          status: "up"
+          latencyMs: 5
+          message: "Connected to PostgreSQL 16.1"
+          lastChecked: "2024-01-15T10:30:00Z"
+        cache:
+          status: "up"
+          latencyMs: 1
+          message: "Redis connected"
+          lastChecked: "2024-01-15T10:30:00Z"
+          details:
+            totalKeys: 1024
+            poolStats:
+              hits: 15234
+              misses: 42
+              timeouts: 0
+              waitCount: 128
+              waitDurationNs: 5000000
+              totalConnections: 10
+              idleConnections: 5
+              staleConnections: 2
+      services:
+        devices:
+          status: "up"
+          latencyMs: 2
+          message: "gRPC connection established"
+          lastChecked: "2024-01-15T10:30:00Z"
+
+down:
+  summary: Service is not ready (storage down)
+  value:
+    status: "down"
+    timestamp: "2024-01-15T10:30:00Z"
+    version: "v1.0.0"
+    checks:
+      infra:
+        storage:
+          status: "down"
+          latencyMs: 0
+          message: "Connection refused"
+          lastChecked: "2024-01-15T10:30:00Z"
+          error: "dial tcp 127.0.0.1:5432: connection refused"
+        cache:
+          status: "up"
+          latencyMs: 1
+          message: "Redis connected"
+          lastChecked: "2024-01-15T10:30:00Z"
+          details:
+            totalKeys: 1024
+            poolStats:
+              hits: 15234
+              misses: 42
+              timeouts: 0
+              waitCount: 128
+              waitDurationNs: 5000000
+              totalConnections: 10
+              idleConnections: 5
+              staleConnections: 2
+      services:
+        devices:
+          status: "up"
+          latencyMs: 2
+          message: "gRPC connection established"
+          lastChecked: "2024-01-15T10:30:00Z"
+
+degraded:
+  summary: Service is ready but degraded
+  value:
+    status: "degraded"
+    timestamp: "2024-01-15T10:30:00Z"
+    version: "v1.0.0"
+    checks:
+      infra:
+        storage:
+          status: "up"
+          latencyMs: 150
+          message: "Connected to PostgreSQL 16.1 (high latency)"
+          lastChecked: "2024-01-15T10:30:00Z"
+        cache:
+          status: "degraded"
+          latencyMs: 50
+          message: "Redis high latency"
+          lastChecked: "2024-01-15T10:30:00Z"
+          details:
+            totalKeys: 50000
+            poolStats:
+              hits: 15234
+              misses: 5042
+              timeouts: 12
+              waitCount: 2500
+              waitDurationNs: 500000000
+              totalConnections: 10
+              idleConnections: 0
+              staleConnections: 8
+      services:
+        devices:
+          status: "degraded"
+          latencyMs: 500
+          message: "gRPC connection slow"
+          lastChecked: "2024-01-15T10:30:00Z"
+
+maintenance:
+  summary: Service is under maintenance
+  value:
+    status: "maintenance"
+    timestamp: "2024-01-15T10:30:00Z"
+    version: "v1.0.0"
+    checks:
+      infra:
+        storage:
+          status: "unknown"
+          latencyMs: 0
+          message: "Maintenance mode - checks disabled"
+          lastChecked: "2024-01-15T10:30:00Z"
+        cache:
+          status: "unknown"
+          latencyMs: 0
+          message: "Maintenance mode - checks disabled"
+          lastChecked: "2024-01-15T10:30:00Z"
+      services:
+        devices:
+          status: "unknown"
+          latencyMs: 0
+          message: "Maintenance mode - checks disabled"
+          lastChecked: "2024-01-15T10:30:00Z"

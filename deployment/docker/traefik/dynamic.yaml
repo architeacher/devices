@@ -1,0 +1,32 @@
+http:
+  routers:
+    api:
+      rule: hostregexp(`{host:.+}`)
+      entrypoints:
+        - web
+      service: api@internal
+      middlewares:
+        - redirect-to-https
+      tls: {}
+
+  middlewares:
+    latency-check:
+      circuitBreaker:
+        expression: "LatencyAtQuantileMS(50.0) > 100"
+    limit:
+      buffering:
+        memRequestBodyBytes: 3000000
+    plainAuth:
+      basicAuth:
+        users:
+          # password: middle.secret
+          - 'traefik:$apr1$a6os7wzt$BA.1mlLPna0/ly.GLelco/'
+    redirect-to-https:
+      redirectScheme:
+        permanent: true
+        scheme: https
+
+tls:
+  certificates:
+    - certFile: "/etc/ssl/certs/ca-cert-star-devices-dev-crt.pem"
+      keyFile: "/etc/ssl/certs/ca-cert-star-devices-dev-key.pem"

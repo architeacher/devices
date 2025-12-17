@@ -1,0 +1,193 @@
+ok:
+  summary: Service is healthy
+  value:
+    status: "ok"
+    timestamp: "2024-01-15T10:30:00Z"
+    version:
+      api: "v1"
+      build: "1.0.0-abc1234"
+      go: "go1.25"
+    uptime:
+      startedAt: "2024-01-15T08:00:00Z"
+      duration: "2h30m15s"
+      durationSeconds: 9015
+    checks:
+      infra:
+        storage:
+          status: "up"
+          latencyMs: 5
+          message: "Connected to PostgreSQL 16.1"
+          lastChecked: "2024-01-15T10:30:00Z"
+        cache:
+          status: "up"
+          latencyMs: 1
+          message: "Redis connected"
+          lastChecked: "2024-01-15T10:30:00Z"
+          details:
+            totalKeys: 1024
+            poolStats:
+              hits: 15234
+              misses: 42
+              timeouts: 0
+              waitCount: 128
+              waitDurationNs: 5000000
+              totalConnections: 10
+              idleConnections: 5
+              staleConnections: 2
+      services:
+        devices:
+          status: "up"
+          latencyMs: 2
+          message: "gRPC connection established"
+          lastChecked: "2024-01-15T10:30:00Z"
+    system:
+      memory:
+        allocMb: 45.5
+        totalAllocMb: 1024.8
+        sysMb: 72.3
+        gcCycles: 156
+      goroutines: 42
+      cpuCores: 8
+
+down:
+  summary: Service is unhealthy
+  value:
+    status: "down"
+    timestamp: "2024-01-15T10:30:00Z"
+    version:
+      api: "v1"
+      build: "1.0.0-abc1234"
+      go: "go1.25"
+    uptime:
+      startedAt: "2024-01-15T08:00:00Z"
+      duration: "2h30m15s"
+      durationSeconds: 9015
+    checks:
+      infra:
+        storage:
+          status: "down"
+          latencyMs: 0
+          message: "Connection refused"
+          lastChecked: "2024-01-15T10:30:00Z"
+          error: "dial tcp 127.0.0.1:5432: connection refused"
+        cache:
+          status: "up"
+          latencyMs: 1
+          message: "Redis connected"
+          lastChecked: "2024-01-15T10:30:00Z"
+          details:
+            totalKeys: 1024
+            poolStats:
+              hits: 15234
+              misses: 42
+              timeouts: 0
+              waitCount: 128
+              waitDurationNs: 5000000
+              totalConnections: 10
+              idleConnections: 5
+              staleConnections: 2
+      services:
+        devices:
+          status: "up"
+          latencyMs: 2
+          message: "gRPC connection established"
+          lastChecked: "2024-01-15T10:30:00Z"
+    system:
+      memory:
+        allocMb: 45.5
+        totalAllocMb: 1024.8
+        sysMb: 72.3
+        gcCycles: 156
+      goroutines: 42
+      cpuCores: 8
+
+degraded:
+  summary: Service is degraded
+  value:
+    status: "degraded"
+    timestamp: "2024-01-15T10:30:00Z"
+    version:
+      api: "v1"
+      build: "1.0.0-abc1234"
+      go: "go1.25"
+    uptime:
+      startedAt: "2024-01-15T08:00:00Z"
+      duration: "2h30m15s"
+      durationSeconds: 9015
+    checks:
+      infra:
+        storage:
+          status: "up"
+          latencyMs: 200
+          message: "Connected to PostgreSQL 16.1 (high latency)"
+          lastChecked: "2024-01-15T10:30:00Z"
+        cache:
+          status: "degraded"
+          latencyMs: 50
+          message: "Redis high latency"
+          lastChecked: "2024-01-15T10:30:00Z"
+          details:
+            totalKeys: 50000
+            poolStats:
+              hits: 15234
+              misses: 5042
+              timeouts: 12
+              waitCount: 2500
+              waitDurationNs: 500000000
+              totalConnections: 10
+              idleConnections: 0
+              staleConnections: 8
+      services:
+        devices:
+          status: "degraded"
+          latencyMs: 500
+          message: "gRPC connection slow"
+          lastChecked: "2024-01-15T10:30:00Z"
+    system:
+      memory:
+        allocMb: 890.5
+        totalAllocMb: 2048.8
+        sysMb: 1024.3
+        gcCycles: 312
+      goroutines: 1250
+      cpuCores: 8
+
+maintenance:
+  summary: Service is under maintenance
+  value:
+    status: "maintenance"
+    timestamp: "2024-01-15T10:30:00Z"
+    version:
+      api: "v1"
+      build: "1.0.0-abc1234"
+      go: "go1.25"
+    uptime:
+      startedAt: "2024-01-15T08:00:00Z"
+      duration: "2h30m15s"
+      durationSeconds: 9015
+    checks:
+      infra:
+        storage:
+          status: "unknown"
+          latencyMs: 0
+          message: "Maintenance mode - checks disabled"
+          lastChecked: "2024-01-15T10:30:00Z"
+        cache:
+          status: "unknown"
+          latencyMs: 0
+          message: "Maintenance mode - checks disabled"
+          lastChecked: "2024-01-15T10:30:00Z"
+      services:
+        devices:
+          status: "unknown"
+          latencyMs: 0
+          message: "Maintenance mode - checks disabled"
+          lastChecked: "2024-01-15T10:30:00Z"
+    system:
+      memory:
+        allocMb: 45.5
+        totalAllocMb: 1024.8
+        sysMb: 72.3
+        gcCycles: 156
+      goroutines: 42
+      cpuCores: 8

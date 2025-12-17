@@ -1,0 +1,20 @@
+ok:
+  summary: Service is alive and healthy
+  value:
+    status: "ok"
+    timestamp: "2024-01-15T10:30:00Z"
+    version: "v1.0.0"
+
+down:
+  summary: Service is not alive
+  value:
+    status: "down"
+    timestamp: "2024-01-15T10:30:00Z"
+    version: "v1.0.0"
+
+maintenance:
+  summary: Service is under maintenance
+  value:
+    status: "maintenance"
+    timestamp: "2024-01-15T10:30:00Z"
+    version: "v1.0.0"

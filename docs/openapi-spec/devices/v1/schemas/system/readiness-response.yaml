@@ -1,0 +1,152 @@
+ReadinessResponse:
+  type: object
+  description: Readiness probe response with dependency status
+  required:
+    - status
+    - timestamp
+    - checks
+  properties:
+    status:
+      type: string
+      description: The overall readiness status of the service
+      enum:
+        - ok
+        - degraded
+        - down
+        - maintenance
+      example: "ok"
+    timestamp:
+      type: string
+      format: date-time
+      description: Timestamp of the readiness check
+      example: "2024-01-15T10:30:00Z"
+    version:
+      type: string
+      description: Service version (optional)
+      example: "v1.0.0"
+    checks:
+      type: object
+      description: Status of individual dependency checks grouped by category
+      required:
+        - infra
+        - services
+      properties:
+        infra:
+          type: object
+          description: Infrastructure dependencies (storage, cache, etc.)
+          required:
+            - storage
+          properties:
+            storage:
+              $ref: "#/DependencyCheck"
+            cache:
+              $ref: "#/CacheDependencyCheck"
+        services:
+          type: object
+          description: Service dependencies (downstream services)
+          required:
+            - devices
+          properties:
+            devices:
+              $ref: "#/DependencyCheck"
+
+DependencyCheck:
+  type: object
+  description: Status of a single dependency
+  required:
+    - status
+  properties:
+    status:
+      type: string
+      description: The status of the dependency
+      enum:
+        - up
+        - down
+        - degraded
+        - unknown
+      example: "up"
+    latencyMs:
+      type: integer
+      description: Latency of the last health check in milliseconds
+      minimum: 0
+      example: 5
+    message:
+      type: string
+      description: Additional information about the dependency status
+      example: "Connected to PostgreSQL 16.1"
+    lastChecked:
+      type: string
+      format: date-time
+      description: Timestamp of the last health check for this dependency
+      example: "2024-01-15T10:30:00Z"
+    error:
+      type: string
+      description: Error message if the dependency is unhealthy
+      example: "connection refused"
+    details:
+      type: object
+      description: Additional dependency-specific details
+      additionalProperties: true
+
+CacheDependencyCheck:
+  allOf:
+    - $ref: "#/DependencyCheck"
+    - type: object
+      description: Cache dependency check with pool statistics
+      properties:
+        details:
+          type: object
+          description: Cache-specific details
+          properties:
+            totalKeys:
+              type: integer
+              description: Total number of keys in the cache
+              minimum: 0
+              example: 1024
+            poolStats:
+              $ref: "#/PoolStats"
+
+PoolStats:
+  type: object
+  description: Connection pool statistics
+  properties:
+    hits:
+      type: integer
+      description: Number of successful pool hits
+      minimum: 0
+      example: 15234
+    misses:
+      type: integer
+      description: Number of pool misses
+      minimum: 0
+      example: 42
+    timeouts:
+      type: integer
+      description: Number of connection timeouts
+      minimum: 0
+      example: 0
+    waitCount:
+      type: integer
+      description: Number of times a connection was waited for
+      minimum: 0
+      example: 128
+    waitDurationNs:
+      type: integer
+      description: Total time spent waiting for connections in nanoseconds
+      minimum: 0
+      example: 5000000
+    totalConnections:
+      type: integer
+      description: Total number of connections in the pool
+      minimum: 0
+      example: 10
+    idleConnections:
+      type: integer
+      description: Number of idle connections in the pool
+      minimum: 0
+      example: 5
+    staleConnections:
+      type: integer
+      description: Number of stale connections removed from the pool
+      minimum: 0
+      example: 2

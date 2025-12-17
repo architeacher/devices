@@ -1,0 +1,139 @@
+HealthResponse:
+  type: object
+  description: Comprehensive health check response with system metrics
+  required:
+    - status
+    - timestamp
+    - version
+    - uptime
+    - checks
+  properties:
+    status:
+      type: string
+      description: The overall health status of the service
+      enum:
+        - ok
+        - degraded
+        - down
+        - maintenance
+      example: "ok"
+    timestamp:
+      type: string
+      format: date-time
+      description: Timestamp of the health check
+      example: "2024-01-15T10:30:00Z"
+    version:
+      $ref: "#/VersionInfo"
+    uptime:
+      $ref: "#/UptimeInfo"
+    checks:
+      type: object
+      description: Status of individual dependency checks grouped by category
+      required:
+        - infra
+        - services
+      properties:
+        infra:
+          type: object
+          description: Infrastructure dependencies (storage, cache, etc.)
+          required:
+            - storage
+          properties:
+            storage:
+              $ref: "readiness-response.yaml#/DependencyCheck"
+            cache:
+              $ref: "readiness-response.yaml#/CacheDependencyCheck"
+        services:
+          type: object
+          description: Service dependencies (downstream services)
+          required:
+            - devices
+          properties:
+            devices:
+              $ref: "readiness-response.yaml#/DependencyCheck"
+    system:
+      $ref: "#/SystemInfo"
+
+VersionInfo:
+  type: object
+  description: Version information about the service
+  required:
+    - api
+    - build
+  properties:
+    api:
+      type: string
+      description: API version
+      example: "v1"
+    build:
+      type: string
+      description: Build version or commit hash
+      example: "1.0.0-abc1234"
+    go:
+      type: string
+      description: Go runtime version
+      example: "go1.25"
+
+UptimeInfo:
+  type: object
+  description: Service uptime information
+  required:
+    - startedAt
+    - duration
+  properties:
+    startedAt:
+      type: string
+      format: date-time
+      description: Timestamp when the service started
+      example: "2024-01-15T08:00:00Z"
+    duration:
+      type: string
+      description: Human-readable uptime duration
+      example: "2h30m15s"
+    durationSeconds:
+      type: integer
+      description: Uptime in seconds
+      minimum: 0
+      example: 9015
+
+SystemInfo:
+  type: object
+  description: System resource information
+  properties:
+    memory:
+      $ref: "#/MemoryInfo"
+    goroutines:
+      type: integer
+      description: Number of active goroutines
+      minimum: 0
+      example: 42
+    cpuCores:
+      type: integer
+      description: Number of CPU cores available
+      minimum: 1
+      example: 8
+
+MemoryInfo:
+  type: object
+  description: Memory usage information
+  properties:
+    allocMb:
+      type: number
+      format: float
+      description: Current memory allocation in MB
+      example: 45.5
+    totalAllocMb:
+      type: number
+      format: float
+      description: Total memory allocated since start in MB
+      example: 1024.8
+    sysMb:
+      type: number
+      format: float
+      description: Total memory obtained from the OS in MB
+      example: 72.3
+    gcCycles:
+      type: integer
+      description: Number of completed GC cycles
+      minimum: 0
+      example: 156

@@ -1,0 +1,8 @@
+package: handlers
+generate:
+  models: true
+  chi-server: true
+  embedded-spec: true
+output: ../../internal/adapters/inbound/http/handlers/http_server_gen.go
+output-options:
+  skip-prune: true

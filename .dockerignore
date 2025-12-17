@@ -1,0 +1,94 @@
+# Git files
+.git
+.gitignore
+.gitattributes
+
+# Compiled binaries, Static and Dynamic libs (Shared Objects)
+*.o
+*.a
+*.so
+*.dll
+*.dylib
+*.exe
+
+# Test binary, deploy with `go test -c`
+*.test
+*.prof
+
+# Output of the go coverage tool, log files
+*.out
+*.log
+
+# Build artifacts
+.artifacts/
+.docker*
+!.dockerignore
+bin/
+dist/
+
+# Data directories
+.data/
+.certs/
+.trees/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Environment and config
+.env
+.env.*
+.envrc
+!.env.example
+.version
+
+# Dependencies
+vendor/
+node_modules/
+
+# IDE files
+.idea/
+.vscode/
+*.iml
+*.swp
+*.swo
+*~
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Documentation
+*.md
+!README.md
+docs/
+LICENSE
+
+# Test files and coverage
+*_test.go
+itest/
+coverage/
+*.cover
+.testcache/
+
+# Docker files (except this one)
+Dockerfile*
+compose*.yaml
+compose*.yml
+
+# Web frontend applications (have their own builds)
+web/
+
+# Scripts and development tools
+scripts/
+Makefile
+*.mk
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+
+# Assets (if not needed in runtime)
+assets/

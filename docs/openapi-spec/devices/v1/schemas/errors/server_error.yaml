@@ -1,0 +1,31 @@
+description: Internal Server Error - An unexpected error occurred
+headers:
+  API-Version:
+    $ref: "../headers/response-headers.yaml#/ApiVersionHeader"
+  X-Request-Id:
+    $ref: "../headers/response-headers.yaml#/RequestIdHeader"
+  traceparent:
+    $ref: "../headers/response-headers.yaml#/TraceparentResponseHeader"
+  tracestate:
+    $ref: "../headers/response-headers.yaml#/TracestateResponseHeader"
+content:
+  application/json:
+    schema:
+      $ref: "../common/error-response.yaml#/ErrorResponse"
+    examples:
+      internal_error:
+        summary: Internal server error
+        value:
+          code: "INTERNAL_ERROR"
+          message: "An unexpected error occurred. Please try again later"
+          requestId: "019234a5-6b7c-8d9e-0f12-34567890abcd"
+          traceId: "0af7651916cd43dd8448eb211c80319c"
+          timestamp: "2024-01-15T10:30:00Z"
+      database_error:
+        summary: Database connection error
+        value:
+          code: "INTERNAL_ERROR"
+          message: "Service temporarily unavailable. Please try again later"
+          requestId: "019234a5-6b7c-8d9e-0f12-34567890abcd"
+          traceId: "0af7651916cd43dd8448eb211c80319c"
+          timestamp: "2024-01-15T10:30:00Z"
