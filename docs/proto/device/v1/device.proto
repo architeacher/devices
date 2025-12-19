@@ -1,0 +1,130 @@
+syntax = "proto3";
+
+package device.v1;
+
+option go_package = "github.com/architeacher/devices/pkg/proto/device/v1;devicev1";
+
+import "buf/validate/validate.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/field_mask.proto";
+import "google/protobuf/timestamp.proto";
+
+service DeviceService {
+  rpc CreateDevice(CreateDeviceRequest) returns (CreateDeviceResponse);
+  rpc GetDevice(GetDeviceRequest) returns (GetDeviceResponse);
+  rpc ListDevices(ListDevicesRequest) returns (ListDevicesResponse);
+  rpc UpdateDevice(UpdateDeviceRequest) returns (UpdateDeviceResponse);
+  rpc PatchDevice(PatchDeviceRequest) returns (PatchDeviceResponse);
+  rpc DeleteDevice(DeleteDeviceRequest) returns (google.protobuf.Empty);
+}
+
+service HealthService {
+  rpc Check(HealthCheckRequest) returns (HealthCheckResponse);
+  rpc Watch(HealthCheckRequest) returns (stream HealthCheckResponse);
+}
+
+enum DeviceState {
+  DEVICE_STATE_UNSPECIFIED = 0;
+  DEVICE_STATE_AVAILABLE = 1;
+  DEVICE_STATE_IN_USE = 2;
+  DEVICE_STATE_INACTIVE = 3;
+}
+
+message Device {
+  string id = 1;
+  string name = 2;
+  string brand = 3;
+  DeviceState state = 4;
+  google.protobuf.Timestamp created_at = 5;
+  google.protobuf.Timestamp updated_at = 6;
+}
+
+message CreateDeviceRequest {
+  string name = 1 [(buf.validate.field).string = {min_len: 1, max_len: 255}];
+  string brand = 2 [(buf.validate.field).string = {min_len: 1, max_len: 255}];
+  DeviceState state = 3 [(buf.validate.field).enum = {defined_only: true, not_in: [0]}];
+}
+
+message CreateDeviceResponse {
+  Device device = 1;
+}
+
+message GetDeviceRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+message GetDeviceResponse {
+  Device device = 1;
+}
+
+message ListDevicesRequest {
+  // Optional filter by brand.
+  optional string brand = 1 [(buf.validate.field).string.max_len = 255];
+
+  // Optional filter by state.
+  optional DeviceState state = 2 [(buf.validate.field).enum.defined_only = true];
+
+  // Page number (1-based).
+  uint32 page = 3 [(buf.validate.field).uint32.gte = 1];
+
+  // Page size.
+  uint32 size = 4 [(buf.validate.field).uint32 = {gte: 1, lte: 100}];
+
+  // Sort field (e.g., "createdAt", "-createdAt" for descending).
+  string sort = 5 [(buf.validate.field).string.max_len = 50];
+}
+
+message ListDevicesResponse {
+  repeated Device devices = 1;
+  Pagination pagination = 2;
+}
+
+message Pagination {
+  uint32 page = 1;
+  uint32 size = 2;
+  uint32 total_items = 3;
+  uint32 total_pages = 4;
+  bool has_next = 5;
+  bool has_previous = 6;
+}
+
+message UpdateDeviceRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+  string name = 2 [(buf.validate.field).string = {min_len: 1, max_len: 255}];
+  string brand = 3 [(buf.validate.field).string = {min_len: 1, max_len: 255}];
+  DeviceState state = 4 [(buf.validate.field).enum = {defined_only: true, not_in: [0]}];
+}
+
+message UpdateDeviceResponse {
+  Device device = 1;
+}
+
+message PatchDeviceRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+  optional string name = 2 [(buf.validate.field).string = {min_len: 1, max_len: 255}];
+  optional string brand = 3 [(buf.validate.field).string = {min_len: 1, max_len: 255}];
+  optional DeviceState state = 4 [(buf.validate.field).enum = {defined_only: true, not_in: [0]}];
+  google.protobuf.FieldMask update_mask = 5;
+}
+
+message PatchDeviceResponse {
+  Device device = 1;
+}
+
+message DeleteDeviceRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+message HealthCheckRequest {
+  string service = 1;
+}
+
+message HealthCheckResponse {
+  enum ServingStatus {
+    SERVING_STATUS_UNKNOWN = 0;
+    SERVING_STATUS_SERVING = 1;
+    SERVING_STATUS_NOT_SERVING = 2;
+    SERVING_STATUS_SERVICE_UNKNOWN = 3;
+  }
+  ServingStatus status = 1;
+}
