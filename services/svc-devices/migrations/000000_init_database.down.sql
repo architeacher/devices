@@ -1,0 +1,3 @@
+-- Drop database (use with caution)
+-- Note: This cannot be run inside a transaction.
+-- DROP DATABASE IF EXISTS devices;
