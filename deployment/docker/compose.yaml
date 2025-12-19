@@ -12,6 +12,19 @@ x-default-logging: &default-logging
     max-size: "5m"
     max-file: "3"
 
+x-base-app: &base-app
+  profiles:
+    - development
+  networks:
+    - internal
+  restart: unless-stopped
+  cap_add:
+    - SYS_PTRACE
+  security_opt:
+    - "seccomp:unconfined"
+  logging:
+    <<: *default-logging
+
 services:
   traefik:
     container_name: "svc-devices-traefik"
@@ -46,9 +59,9 @@ services:
       <<: *default-logging
 
   svc-api-gateway:
+    <<: *base-app
     container_name: "svc-api-gateway"
-    profiles:
-      - development
+    image: "svc-api-gateway:latest"
     build:
       args:
         GO_VERSION: "${GO_VERSION:-1.25.5}"
@@ -56,21 +69,14 @@ services:
       dockerfile: ./services/svc-api-gateway/deployment/docker/Dockerfile
     env_file:
       - ./services/svc-api-gateway/.envrc
-    networks:
-      - internal
     ports:
       - "${HTTP_SERVER_PORT:-8088}:8088"
       - "${DEBUG_PORT:-50001}:50001"
-    restart: unless-stopped
     depends_on:
       vault-init:
         condition: service_completed_successfully
       keydb:
         condition: service_healthy
-    cap_add:
-      - SYS_PTRACE
-    security_opt:
-      - "seccomp:unconfined"
     volumes:
       - "./services/svc-api-gateway:/app"
       - type: bind
@@ -78,13 +84,12 @@ services:
         target: "/etc/air"
     labels:
       - "traefik.enable=true"
+      - "traefik.docker.network=internal"
       - "traefik.http.services.svc-api-gateway.loadbalancer.server.port=${HTTP_SERVER_PORT}"
       - "traefik.http.routers.svc-api-gateway.rule=Host(`api.devices.dev`)"
       - "traefik.http.routers.svc-api-gateway.entrypoints=websecure"
       - "traefik.http.routers.svc-api-gateway.tls=true"
       - "traefik.http.routers.backend.service=backend"
-    logging:
-      <<: *default-logging
     healthcheck:
       test: [ "CMD-SHELL", "wget --quiet --spider --tries=1 http://localhost:8088/v1/readiness" ]
       interval: 10s
@@ -92,6 +97,92 @@ services:
       start_period: 15s
       timeout: 5s
     command: [ "sh", "-c", "air -c /etc/air/.svc.toml" ]
+
+  svc-devices:
+    <<: *base-app
+    container_name: "svc-devices"
+    image: "svc-devices:latest"
+    build:
+      args:
+        GO_VERSION: "${GO_VERSION:-1.25.5}"
+      context: .
+      dockerfile: ./services/svc-devices/deployment/docker/Dockerfile
+    env_file:
+      - ./services/svc-devices/.envrc
+    ports:
+      - "${SVC_DEVICES_GRPC_PORT:-9090}:9090"
+      - "${SVC_DEVICES_DEBUG_PORT:-50002}:50002"
+    depends_on:
+      vault-init:
+        condition: service_completed_successfully
+      migrate:
+        condition: service_completed_successfully
+      keydb:
+        condition: service_healthy
+    volumes:
+      - "./services/svc-devices:/app"
+      - type: bind
+        source: "./services/svc-devices/deployment/docker/config/air"
+        target: "/etc/air"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=internal"
+      - "traefik.http.services.svc-tracking.loadbalancer.server.port=9090"
+      - "traefik.http.routers.svc-tracking.rule=Host(`devices.dev`)"
+      - "traefik.http.routers.svc-tracking.entrypoints=websecure"
+      - "traefik.http.routers.svc-tracking.service=svc-tracking"
+      - "traefik.http.routers.svc-tracking.tls=true"
+    healthcheck:
+      test: [ "CMD-SHELL", "grpcurl -plaintext localhost:9090 svc_devices.devices/Health | grep -q '\"status\": \"Serving\"'" ]
+      interval: 10s
+      retries: 5
+      start_period: 15s
+      timeout: 5s
+    command: [ "sh", "-c", "air -c /etc/air/.svc.toml" ]
+
+  migrate:
+    container_name: "svc-web-analyzer-migrate"
+    image: migrate/migrate:v4.19.1
+    networks:
+      - internal
+    env_file:
+      - .envrc
+    volumes:
+      - "./services/svc-devices/migrations:/migrations"
+    command: [
+      "-path", "/migrations",
+      "-database", "postgres://${POSTGRES_USERNAME}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DATABASE}?sslmode=disable",
+      "up"
+    ]
+    depends_on:
+       postgres:
+         condition: service_healthy
+    restart: "no"
+    logging:
+      <<: *default-logging
+
+  postgres:
+    container_name: "svc-shared-postgres"
+    image: postgres:18.1-alpine
+    networks:
+      - internal
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    environment:
+      POSTGRES_USER: "${POSTGRES_USERNAME:-postgres}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-bottom.Secret}"
+      POSTGRES_DB: "${POSTGRES_DATABASE:-devices}"
+    volumes:
+      - postgres-storage:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USERNAME:-postgres} -d ${POSTGRES_DATABASE:-devices}" ]
+      interval: 10s
+      retries: 5
+      start_period: 10s
+      timeout: 5s
+    restart: unless-stopped
+    logging:
+      <<: *default-logging
 
   vault-init:
     container_name: "svc-shared-vault-init"
@@ -203,3 +294,4 @@ volumes:
   vault-logs-storage:
   vault-config-storage:
   keydb-storage:
+  postgres-storage:

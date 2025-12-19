@@ -1,0 +1,30 @@
+# +-------------+
+# | SVC Devices |
+# +-------------+
+
+GRPC_SERVER_HOST="0.0.0.0"
+GRPC_SERVER_PORT=9090
+GRPC_SHUTDOWN_TIMEOUT="30s"
+
+# +----------+
+# | Database |
+# +----------+
+
+POSTGRES_HOST="postgres"
+POSTGRES_PORT=5432
+POSTGRES_DATABASE="devices"
+POSTGRES_USERNAME="postgres"
+POSTGRES_PASSWORD="bottom.Secret"
+
+# +-------+
+# | Cache |
+# +-------+
+
+KEYDB_ADDR="keydb:6379"
+KEYDB_PASSWORD="bottom.Secret"
+
+# +-------+
+# | Vault |
+# +-------+
+
+VAULT_ADDR="http://vault:8200"
