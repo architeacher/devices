@@ -85,4 +85,24 @@ generate-api: ## 🤖 Generate API specs from OpenAPI definition.
 		-d \
 		--output "devices/${VERSION}/public/svc-api-gateway-swagger.json" \
 		--ext json \
-		--config .redocly.yaml
+		--config .redocly.yaml \
+	&& \
+	cd services/svc-api-gateway/internal/tools && go generate .
+
+$(MOCKS_DIR):
+	$(call printMessage,"🎭  Generating mocks",$(INFO_CLR))
+	GOFLAGS="-mod=mod" go generate ./...
+
+.PHONY: generate-mocks
+generate-mocks: $(MOCKS_DIR) ## 🎭 Generate test mocks from interfaces (only if needed).
+
+.PHONY: generate-mocks-force
+generate-mocks-force: ## 🎭 Force regenerate test mocks from interfaces.
+	$(call printMessage,"🎭  Force regenerating mocks",$(INFO_CLR))
+	rm -rf "${MOCKS_DIR}"
+	$(MAKE) generate-mocks
+
+.PHONY: test
+test: generate-mocks ## 🏃Run tests with race flag 🏁
+	$(call printMessage,"🕸️  Running tests",$(INFO_CLR))
+	GOFLAGS="-mod=mod" go test -v -race ./...

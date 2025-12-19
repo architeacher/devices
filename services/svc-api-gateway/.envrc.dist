@@ -1,0 +1,21 @@
+# +-------------+
+# | API Gateway |
+# +-------------+
+
+HTTP_SERVER_PORT=8088
+DEBUG_PORT=50001
+AUTH_ENABLED="true"
+
+# +-------+
+# | Cache |
+# +-------+
+
+KEYDB_ADDR="keydb:6379"
+KEYDB_PASSWORD="bottom.Secret"
+
+# +-------+
+# | Vault |
+# +-------+
+
+VAULT_ADDR="http://vault:8200"
+VAULT_TOKEN="bottom-secret-Token"

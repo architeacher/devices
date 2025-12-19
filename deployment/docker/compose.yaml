@@ -45,6 +45,54 @@ services:
     logging:
       <<: *default-logging
 
+  svc-api-gateway:
+    container_name: "svc-api-gateway"
+    profiles:
+      - development
+    build:
+      args:
+        GO_VERSION: "${GO_VERSION:-1.25.5}"
+      context: .
+      dockerfile: ./services/svc-api-gateway/deployment/docker/Dockerfile
+    env_file:
+      - ./services/svc-api-gateway/.envrc
+    networks:
+      - internal
+    ports:
+      - "${HTTP_SERVER_PORT:-8088}:8088"
+      - "${DEBUG_PORT:-50001}:50001"
+    restart: unless-stopped
+    depends_on:
+      vault-init:
+        condition: service_completed_successfully
+      keydb:
+        condition: service_healthy
+    cap_add:
+      - SYS_PTRACE
+    security_opt:
+      - "seccomp:unconfined"
+    volumes:
+      - "./services/svc-api-gateway:/app"
+      - type: bind
+        source: "./services/svc-api-gateway/deployment/docker/config/air"
+        target: "/etc/air"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.svc-api-gateway.loadbalancer.server.port=${HTTP_SERVER_PORT}"
+      - "traefik.http.routers.svc-api-gateway.rule=Host(`api.devices.dev`)"
+      - "traefik.http.routers.svc-api-gateway.entrypoints=websecure"
+      - "traefik.http.routers.svc-api-gateway.tls=true"
+      - "traefik.http.routers.backend.service=backend"
+    logging:
+      <<: *default-logging
+    healthcheck:
+      test: [ "CMD-SHELL", "wget --quiet --spider --tries=1 http://localhost:8088/v1/readiness" ]
+      interval: 10s
+      retries: 5
+      start_period: 15s
+      timeout: 5s
+    command: [ "sh", "-c", "air -c /etc/air/.svc.toml" ]
+
   vault-init:
     container_name: "svc-shared-vault-init"
     image: hashicorp/vault:1.21.1

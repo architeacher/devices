@@ -29,6 +29,7 @@ make start
 
 | Service | URL |
 |---------|-----|
+| API | https://api.devices.dev |
 | API Documentation | https://docs.devices.dev |
 | Traefik Dashboard | https://traefik.devices.dev |
 | Vault UI | https://vault.devices.dev |
@@ -63,4 +64,4 @@ make todo       # Find TODO items in codebase
 ## Documentation
 
 - [Architecture](architecture.md) - ADRs and system diagrams
-- [API Specification](openapi-spec/api-gateway.yaml) - OpenAPI spec
+- [API Specification](openapi-spec/devices/v1/svc-api-gateway.yaml) - OpenAPI spec

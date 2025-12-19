@@ -99,6 +99,44 @@
 
 ---
 
+### ADR-007: Hexagonal Architecture (Ports and Adapters)
+
+**Context**: Need a maintainable, testable architecture that isolates business logic from infrastructure concerns.
+
+**Decision**: Adopt Hexagonal Architecture (also known as Ports and Adapters):
+- **Domain Layer** (`domain/model/`): Core business entities and rules, no external dependencies
+- **Ports** (`ports/`): Interface definitions that the domain exposes (inbound) or requires (outbound)
+- **Adapters** (`adapters/`): Implementations that connect external systems to ports
+  - Inbound adapters: HTTP handlers, gRPC handlers
+  - Outbound adapters: Database repositories, external service clients
+- **Use Cases** (`usecases/`): Application-specific business rules orchestrating domain and ports
+
+**Consequences**:
+- Business logic isolated from frameworks and infrastructure
+- Easy to test domain logic in isolation with mock adapters
+- Flexible to swap implementations (e.g., change database without touching business logic)
+- Clear dependency direction: adapters depend on ports, never the reverse
+
+---
+
+### ADR-008: Command-Query Separation (CQS)
+
+**Context**: Need clear separation between operations that modify state and those that only read state.
+
+**Decision**: Apply [CQS pattern](https://en.wikipedia.org/wiki/Command%E2%80%93query_separation) in the use cases layer:
+- **Commands** (`usecases/commands/`): Operations that change state (Create, Update, Delete)
+- **Queries** (`usecases/queries/`): Operations that return data without side effects (Get, List)
+- Each handler implements a single responsibility with a consistent interface
+- Decorators (`shared/decorator/`) wrap handlers for cross-cutting concerns (logging, metrics, tracing)
+
+**Consequences**:
+- Clear intent: readers know immediately if an operation modifies the state
+- Easier optimization: queries can be cached, commands trigger cache invalidation
+- Simplified testing: commands and queries can be tested independently
+- Natural fit for event sourcing or CQRS evolution if needed
+
+---
+
 ## System Diagrams
 
 ### C4 Context Diagram

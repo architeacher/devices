@@ -1,0 +1,72 @@
+# Config file for [Air](https://github.com/cosmtrek/air) in TOML format
+
+# Working directory
+# . or absolute path, please note that the directories following must be under root.
+root = "."
+testdata_dir = "testdata"
+tmp_dir = "/tmp"
+
+[build]
+# Binary file yields from `cmd`.
+bin = "/tmp/svc-api-gateway"
+
+# Just plain old shell command. You could use `make` as well.
+cmd = "pkill -TERM /tmp/svc-api-gateway &>/dev/null && echo 'svc web analyzer process is killed!'; go build -buildvcs=false -gcflags='all=-N -l' -ldflags '-X api-gateway/internal/config.ServiceName=svc-api-gateway' -o /tmp/svc-api-gateway ./cmd/svc-api-gateway"
+
+# It's not necessary to trigger build each time file changes if it's too frequent.
+delay = 1000 # ms
+
+# Ignore these filename extensions or directories.
+exclude_dir = [".artifacts", ".certs", ".claude", ".github", ".trees", "assets", "build", "deployment", "docs", "itest", "migrations", "mocks", "node_modules", "scripts", "web"]
+
+# Exclude files.
+exclude_file = []
+
+# Exclude specific regular expressions.
+exclude_regex = ["_test.go"]
+
+# Exclude unchanged files.
+exclude_unchanged = true
+
+# Follow symlink for directories.
+follow_symlink = true
+
+# Customize binary.
+full_bin = "dlv exec --accept-multiclient --api-version 2 --continue --headless --listen :50001 --log /tmp/svc-api-gateway"
+
+# Watch these directories if you specified.
+include_dir = ["config", "internal", "pkg"]
+
+# Watch these filename extensions.
+include_ext = ["go", "json", "tpl", "tmpl", "html"]
+
+# Delay after sending Interrupt signal.
+kill_delay = 500 # ms
+
+# This log file places in your tmp_dir.
+log = "air.log"
+
+# Send Interrupt signal before killing the process (windows do not support this feature).
+send_interrupt = true
+
+# Stop running old binary when build errors occur.
+stop_on_error = true
+
+[color]
+# Customize each part's color. If no color is found, use the raw app log.
+app = ""
+build = "yellow"
+main = "magenta"
+runner = "green"
+watcher = "cyan"
+
+[log]
+# Show log time.
+time = false
+
+[misc]
+# Delete tmp directory on exit.
+clean_on_exit = true
+
+[screen]
+clear_on_rebuild = false
