@@ -214,7 +214,7 @@ func TestDeviceHandler_CreateDevice(t *testing.T) {
 			app := createTestApp(svc, dbChecker)
 			handler := inboundgrpc.NewDevicesHandler(app)
 
-			resp, err := handler.CreateDevice(context.Background(), tc.request)
+			resp, err := handler.CreateDevice(t.Context(), tc.request)
 
 			if tc.expectError {
 				require.Error(t, err)
@@ -289,7 +289,7 @@ func TestDeviceHandler_GetDevice(t *testing.T) {
 			app := createTestApp(svc, dbChecker)
 			handler := inboundgrpc.NewDevicesHandler(app)
 
-			resp, err := handler.GetDevice(context.Background(), &devicev1.GetDeviceRequest{Id: deviceID})
+			resp, err := handler.GetDevice(t.Context(), &devicev1.GetDeviceRequest{Id: deviceID})
 
 			if tc.expectError {
 				require.Error(t, err)
@@ -358,7 +358,7 @@ func TestDeviceHandler_ListDevices(t *testing.T) {
 			app := createTestApp(svc, dbChecker)
 			handler := inboundgrpc.NewDevicesHandler(app)
 
-			resp, err := handler.ListDevices(context.Background(), tc.request)
+			resp, err := handler.ListDevices(t.Context(), tc.request)
 
 			require.NoError(t, err)
 			require.NotNil(t, resp)
@@ -443,7 +443,7 @@ func TestDeviceHandler_UpdateDevice(t *testing.T) {
 			app := createTestApp(svc, dbChecker)
 			handler := inboundgrpc.NewDevicesHandler(app)
 
-			resp, err := handler.UpdateDevice(context.Background(), tc.request(deviceID))
+			resp, err := handler.UpdateDevice(t.Context(), tc.request(deviceID))
 
 			if tc.expectError {
 				require.Error(t, err)
@@ -510,7 +510,7 @@ func TestDeviceHandler_DeleteDevice(t *testing.T) {
 			app := createTestApp(svc, dbChecker)
 			handler := inboundgrpc.NewDevicesHandler(app)
 
-			resp, err := handler.DeleteDevice(context.Background(), &devicev1.DeleteDeviceRequest{Id: deviceID})
+			resp, err := handler.DeleteDevice(t.Context(), &devicev1.DeleteDeviceRequest{Id: deviceID})
 
 			if tc.expectError {
 				require.Error(t, err)

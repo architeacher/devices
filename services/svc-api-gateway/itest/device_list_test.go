@@ -1,77 +1,51 @@
+//go:build integration
+
 package itest
 
 import (
 	"fmt"
 	"net/http"
 	"testing"
-	"time"
 
 	"github.com/architeacher/devices/services/svc-api-gateway/internal/domain/model"
 	"github.com/stretchr/testify/suite"
 )
 
 type DeviceListTestSuite struct {
-	suite.Suite
+	BaseTestSuite
 }
 
 func TestDeviceListTestSuite(t *testing.T) {
-	t.Parallel()
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
 	suite.Run(t, new(DeviceListTestSuite))
 }
 
-func (s *DeviceListTestSuite) seedDevices(server *TestServer) []*model.Device {
-	devices := []*model.Device{
-		{
-			ID:        model.NewDeviceID(),
-			Name:      "iPhone 15",
-			Brand:     "Apple",
-			State:     model.StateAvailable,
-			CreatedAt: time.Now().UTC(),
-			UpdatedAt: time.Now().UTC(),
-		},
-		{
-			ID:        model.NewDeviceID(),
-			Name:      "iPhone 14",
-			Brand:     "Apple",
-			State:     model.StateInUse,
-			CreatedAt: time.Now().UTC(),
-			UpdatedAt: time.Now().UTC(),
-		},
-		{
-			ID:        model.NewDeviceID(),
-			Name:      "Galaxy S24",
-			Brand:     "Samsung",
-			State:     model.StateAvailable,
-			CreatedAt: time.Now().UTC(),
-			UpdatedAt: time.Now().UTC(),
-		},
-		{
-			ID:        model.NewDeviceID(),
-			Name:      "Galaxy S23",
-			Brand:     "Samsung",
-			State:     model.StateInactive,
-			CreatedAt: time.Now().UTC(),
-			UpdatedAt: time.Now().UTC(),
-		},
-		{
-			ID:        model.NewDeviceID(),
-			Name:      "Pixel 8",
-			Brand:     "Google",
-			State:     model.StateAvailable,
-			CreatedAt: time.Now().UTC(),
-			UpdatedAt: time.Now().UTC(),
-		},
+func (s *DeviceListTestSuite) seedDevices() []string {
+	devices := []struct {
+		name  string
+		brand string
+		state model.State
+	}{
+		{name: "iPhone 15", brand: "Apple", state: model.StateAvailable},
+		{name: "iPhone 14", brand: "Apple", state: model.StateInUse},
+		{name: "Galaxy S24", brand: "Samsung", state: model.StateAvailable},
+		{name: "Galaxy S23", brand: "Samsung", state: model.StateInactive},
+		{name: "Pixel 8", brand: "Google", state: model.StateAvailable},
 	}
 
-	for _, device := range devices {
-		server.DeviceService.AddDevice(device)
+	ids := make([]string, 0, len(devices))
+	for _, d := range devices {
+		id := s.CreateDevice(d.name, d.brand, d.state)
+		ids = append(ids, id)
 	}
 
-	return devices
+	return ids
 }
 
-func (s *DeviceListTestSuite) getDeviceList(server *TestServer, path string) ([]any, map[string]any) {
-	resp, err := server.Get(s.T().Context(), path)
+func (s *DeviceListTestSuite) getDeviceList(path string) ([]any, map[string]any) {
+	resp, err := s.Server.Get(s.T().Context(), path)
 	s.Require().NoError(err)
 	defer resp.Body.Close()
 
@@ -85,17 +59,14 @@ func (s *DeviceListTestSuite) getDeviceList(server *TestServer, path string) ([]
 }
 
 func (s *DeviceListTestSuite) TestListDevices() {
-	server := NewTestServer()
-	defer server.Close()
+	ids := s.seedDevices()
 
-	devices := s.seedDevices(server)
+	data, pagination := s.getDeviceList("/v1/devices")
 
-	data, pagination := s.getDeviceList(server, "/v1/devices")
-
-	s.Require().Equal(len(devices), len(data))
+	s.Require().Equal(len(ids), len(data))
 	s.Require().Equal(float64(1), pagination["page"])
 	s.Require().Equal(float64(20), pagination["size"])
-	s.Require().Equal(float64(len(devices)), pagination["totalItems"])
+	s.Require().Equal(float64(len(ids)), pagination["totalItems"])
 }
 
 func (s *DeviceListTestSuite) TestListDevicesWithPagination() {
@@ -148,13 +119,11 @@ func (s *DeviceListTestSuite) TestListDevicesWithPagination() {
 
 	for _, tc := range cases {
 		s.Run(tc.name, func() {
-			server := NewTestServer()
-			defer server.Close()
-
-			s.seedDevices(server)
+			s.Require().NoError(s.Server.TruncateDevices(s.T().Context()))
+			s.seedDevices()
 
 			path := fmt.Sprintf("/v1/devices?page=%d&size=%d", tc.page, tc.size)
-			data, pagination := s.getDeviceList(server, path)
+			data, pagination := s.getDeviceList(path)
 
 			s.Require().Equal(tc.expectedCount, len(data))
 			s.Require().Equal(float64(tc.page), pagination["page"])
@@ -180,12 +149,10 @@ func (s *DeviceListTestSuite) TestListDevicesWithBrandFilter() {
 
 	for _, tc := range cases {
 		s.Run(tc.name, func() {
-			server := NewTestServer()
-			defer server.Close()
+			s.Require().NoError(s.Server.TruncateDevices(s.T().Context()))
+			s.seedDevices()
 
-			s.seedDevices(server)
-
-			data, _ := s.getDeviceList(server, fmt.Sprintf("/v1/devices?brand=%s", tc.brand))
+			data, _ := s.getDeviceList(fmt.Sprintf("/v1/devices?brand=%s", tc.brand))
 			s.Require().Equal(tc.expectedCount, len(data))
 		})
 	}
@@ -204,12 +171,10 @@ func (s *DeviceListTestSuite) TestListDevicesWithStateFilter() {
 
 	for _, tc := range cases {
 		s.Run(tc.name, func() {
-			server := NewTestServer()
-			defer server.Close()
+			s.Require().NoError(s.Server.TruncateDevices(s.T().Context()))
+			s.seedDevices()
 
-			s.seedDevices(server)
-
-			data, _ := s.getDeviceList(server, fmt.Sprintf("/v1/devices?state=%s", tc.state))
+			data, _ := s.getDeviceList(fmt.Sprintf("/v1/devices?state=%s", tc.state))
 			s.Require().Equal(tc.expectedCount, len(data))
 		})
 	}
@@ -229,37 +194,29 @@ func (s *DeviceListTestSuite) TestListDevicesWithCombinedFilters() {
 
 	for _, tc := range cases {
 		s.Run(tc.name, func() {
-			server := NewTestServer()
-			defer server.Close()
-
-			s.seedDevices(server)
+			s.Require().NoError(s.Server.TruncateDevices(s.T().Context()))
+			s.seedDevices()
 
 			path := fmt.Sprintf("/v1/devices?brand=%s&state=%s", tc.brand, tc.state)
-			data, _ := s.getDeviceList(server, path)
+			data, _ := s.getDeviceList(path)
 			s.Require().Equal(tc.expectedCount, len(data))
 		})
 	}
 }
 
 func (s *DeviceListTestSuite) TestHeadDevices() {
-	server := NewTestServer()
-	defer server.Close()
+	ids := s.seedDevices()
 
-	devices := s.seedDevices(server)
-
-	resp, err := server.Head(s.T().Context(), "/v1/devices")
+	resp, err := s.Server.Head(s.T().Context(), "/v1/devices")
 	s.Require().NoError(err)
 	defer resp.Body.Close()
 
 	s.Require().Equal(http.StatusOK, resp.StatusCode)
-	s.Require().Equal(fmt.Sprintf("%d", len(devices)), resp.Header.Get("X-Total-Count"))
+	s.Require().Equal(fmt.Sprintf("%d", len(ids)), resp.Header.Get("X-Total-Count"))
 }
 
 func (s *DeviceListTestSuite) TestOptionsDevices() {
-	server := NewTestServer()
-	defer server.Close()
-
-	resp, err := server.Options(s.T().Context(), "/v1/devices")
+	resp, err := s.Server.Options(s.T().Context(), "/v1/devices")
 	s.Require().NoError(err)
 	defer resp.Body.Close()
 
@@ -273,28 +230,21 @@ func (s *DeviceListTestSuite) TestOptionsDevices() {
 }
 
 func (s *DeviceListTestSuite) TestListEmptyDevices() {
-	server := NewTestServer()
-	defer server.Close()
-
-	data, pagination := s.getDeviceList(server, "/v1/devices")
+	data, pagination := s.getDeviceList("/v1/devices")
 
 	s.Require().Empty(data)
 	s.Require().Equal(float64(0), pagination["totalItems"])
 }
 
 func (s *DeviceListTestSuite) TestDeviceResponseContainsLinks() {
-	server := NewTestServer()
-	defer server.Close()
+	deviceID := s.CreateDevice("Test Device", "Test Brand", model.StateAvailable)
 
-	device := model.NewDevice("Test Device", "Test Brand", model.StateAvailable)
-	server.DeviceService.AddDevice(device)
-
-	data, _ := s.getDeviceList(server, "/v1/devices")
+	data, _ := s.getDeviceList("/v1/devices")
 
 	s.Require().Len(data, 1)
 
 	deviceData := data[0].(map[string]any)
 	links := deviceData["links"].(map[string]any)
 	s.Require().NotEmpty(links["self"])
-	s.Require().Contains(links["self"], device.ID.String())
+	s.Require().Contains(links["self"], deviceID)
 }

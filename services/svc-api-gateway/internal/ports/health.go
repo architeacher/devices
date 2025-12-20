@@ -1,5 +1,7 @@
 package ports
 
+//counterfeiter:generate -o ../mocks/health_checker.go . HealthChecker
+
 import (
 	"context"
 

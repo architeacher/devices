@@ -1,5 +1,8 @@
 package ports
 
+//counterfeiter:generate -o ../mocks/health_checker.go . HealthChecker
+//counterfeiter:generate -o ../mocks/database_health_checker.go . DatabaseHealthChecker
+
 import "context"
 
 // HealthChecker defines the interface for health check operations.

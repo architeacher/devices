@@ -1,316 +1,155 @@
+//go:build integration
+
 package itest
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"sync"
 	"time"
 
 	"github.com/architeacher/devices/pkg/logger"
 	"github.com/architeacher/devices/pkg/metrics/noop"
 	internalhttp "github.com/architeacher/devices/services/svc-api-gateway/internal/adapters/inbound/http"
-	"github.com/architeacher/devices/services/svc-api-gateway/internal/config"
+	"github.com/architeacher/devices/services/svc-api-gateway/internal/adapters/outbound/devices"
+	apiconfig "github.com/architeacher/devices/services/svc-api-gateway/internal/config"
 	"github.com/architeacher/devices/services/svc-api-gateway/internal/domain/model"
 	"github.com/architeacher/devices/services/svc-api-gateway/internal/usecases"
+	"github.com/architeacher/devices/services/svc-devices/testserver"
+	"github.com/stretchr/testify/suite"
 	otelNoop "go.opentelemetry.io/otel/trace/noop"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
-type (
-	MockDeviceService struct {
-		mu      sync.RWMutex
-		devices map[string]*model.Device
+// BaseTestSuite provides common setup and helper methods for integration tests.
+type BaseTestSuite struct {
+	suite.Suite
+	Server *IntegrationTestServer
+}
 
-		CreateDeviceFn func(ctx context.Context, name, brand string, state model.State) (*model.Device, error)
-		GetDeviceFn    func(ctx context.Context, id model.DeviceID) (*model.Device, error)
-		ListDevicesFn  func(ctx context.Context, filter model.DeviceFilter) (*model.DeviceList, error)
-		UpdateDeviceFn func(ctx context.Context, id model.DeviceID, name, brand string, state model.State) (*model.Device, error)
-		PatchDeviceFn  func(ctx context.Context, id model.DeviceID, updates map[string]any) (*model.Device, error)
-		DeleteDeviceFn func(ctx context.Context, id model.DeviceID) error
-	}
+// SetupSuite initializes the integration test server.
+func (s *BaseTestSuite) SetupSuite() {
+	ctx := context.Background()
+	server, err := NewIntegrationTestServer(ctx)
+	s.Require().NoError(err)
+	s.Server = server
+}
 
-	MockHealthChecker struct {
-		LivenessFn  func(ctx context.Context) (*model.LivenessReport, error)
-		ReadinessFn func(ctx context.Context) (*model.ReadinessReport, error)
-		HealthFn    func(ctx context.Context) (*model.HealthReport, error)
-	}
-
-	TestServer struct {
-		Server        *httptest.Server
-		DeviceService *MockDeviceService
-		HealthChecker *MockHealthChecker
-	}
-)
-
-func NewMockDeviceService() *MockDeviceService {
-	return &MockDeviceService{
-		devices: make(map[string]*model.Device),
+// TearDownSuite shuts down the integration test server.
+func (s *BaseTestSuite) TearDownSuite() {
+	if s.Server != nil {
+		s.Server.Close()
 	}
 }
 
-func (m *MockDeviceService) CreateDevice(ctx context.Context, name, brand string, state model.State) (*model.Device, error) {
-	if m.CreateDeviceFn != nil {
-		return m.CreateDeviceFn(ctx, name, brand, state)
-	}
-
-	device := model.NewDevice(name, brand, state)
-	m.mu.Lock()
-	m.devices[device.ID.String()] = device
-	m.mu.Unlock()
-
-	return device, nil
+// SetupTest truncates devices before each test.
+func (s *BaseTestSuite) SetupTest() {
+	err := s.Server.TruncateDevices(s.T().Context())
+	s.Require().NoError(err)
 }
 
-func (m *MockDeviceService) GetDevice(ctx context.Context, id model.DeviceID) (*model.Device, error) {
-	if m.GetDeviceFn != nil {
-		return m.GetDeviceFn(ctx, id)
+// CreateDevice creates a device and returns its ID.
+func (s *BaseTestSuite) CreateDevice(name, brand string, state model.State) string {
+	body := map[string]any{
+		"name":  name,
+		"brand": brand,
+		"state": string(state),
 	}
+	bodyBytes, err := json.Marshal(body)
+	s.Require().NoError(err)
 
-	m.mu.RLock()
-	device, ok := m.devices[id.String()]
-	m.mu.RUnlock()
+	resp, err := s.Server.Post(s.T().Context(), "/v1/devices", bytes.NewReader(bodyBytes))
+	s.Require().NoError(err)
+	defer resp.Body.Close()
 
-	if !ok {
-		return nil, model.ErrDeviceNotFound
-	}
+	s.Require().Equal(http.StatusCreated, resp.StatusCode)
 
-	return device, nil
+	var response map[string]any
+	err = DecodeJSON(resp.Body, &response)
+	s.Require().NoError(err)
+
+	data := response["data"].(map[string]any)
+
+	return data["id"].(string)
 }
 
-func (m *MockDeviceService) ListDevices(ctx context.Context, filter model.DeviceFilter) (*model.DeviceList, error) {
-	if m.ListDevicesFn != nil {
-		return m.ListDevicesFn(ctx, filter)
-	}
-
-	m.mu.RLock()
-	devices := make([]*model.Device, 0, len(m.devices))
-	for _, device := range m.devices {
-		if filter.Brand != nil && device.Brand != *filter.Brand {
-			continue
-		}
-		if filter.State != nil && device.State != *filter.State {
-			continue
-		}
-		devices = append(devices, device)
-	}
-	m.mu.RUnlock()
-
-	totalItems := uint(len(devices))
-	totalPages := uint(1)
-	if filter.Size > 0 && totalItems > 0 {
-		totalPages = (totalItems + filter.Size - 1) / filter.Size
-	}
-
-	start := (filter.Page - 1) * filter.Size
-	end := start + filter.Size
-	if start > totalItems {
-		start = totalItems
-	}
-	if end > totalItems {
-		end = totalItems
-	}
-
-	return &model.DeviceList{
-		Devices: devices[start:end],
-		Pagination: model.Pagination{
-			Page:        filter.Page,
-			Size:        filter.Size,
-			TotalItems:  totalItems,
-			TotalPages:  totalPages,
-			HasNext:     filter.Page < totalPages,
-			HasPrevious: filter.Page > 1,
-		},
-		Filters: filter,
-	}, nil
+// DevicePath returns the API path for a device by ID.
+func (s *BaseTestSuite) DevicePath(id string) string {
+	return fmt.Sprintf("/v1/devices/%s", id)
 }
 
-func (m *MockDeviceService) UpdateDevice(ctx context.Context, id model.DeviceID, name, brand string, state model.State) (*model.Device, error) {
-	if m.UpdateDeviceFn != nil {
-		return m.UpdateDeviceFn(ctx, id, name, brand, state)
-	}
+// IntegrationTestServer provides a full integration test environment with
+// PostgreSQL, gRPC svc-devices, and HTTP svc-api-gateway.
+type IntegrationTestServer struct {
+	HTTPServer    *httptest.Server
+	DevicesServer *testserver.TestServer
+	GRPCClient    *devices.Client
+	grpcConn      *grpc.ClientConn
+}
 
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	device, ok := m.devices[id.String()]
-	if !ok {
-		return nil, model.ErrDeviceNotFound
-	}
-
-	if err := device.Update(name, brand, state); err != nil {
+// NewIntegrationTestServer creates a complete integration test environment.
+func NewIntegrationTestServer(ctx context.Context) (*IntegrationTestServer, error) {
+	devicesServer, err := testserver.New(ctx)
+	if err != nil {
 		return nil, err
 	}
 
-	return device, nil
-}
+	grpcAddress := devicesServer.Address()
 
-func (m *MockDeviceService) PatchDevice(ctx context.Context, id model.DeviceID, updates map[string]any) (*model.Device, error) {
-	if m.PatchDeviceFn != nil {
-		return m.PatchDeviceFn(ctx, id, updates)
-	}
-
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	device, ok := m.devices[id.String()]
-	if !ok {
-		return nil, model.ErrDeviceNotFound
-	}
-
-	name := device.Name
-	brand := device.Brand
-	state := device.State
-
-	if v, exists := updates["name"]; exists {
-		name = v.(string)
-	}
-	if v, exists := updates["brand"]; exists {
-		brand = v.(string)
-	}
-	if v, exists := updates["state"]; exists {
-		state = model.State(v.(string))
-	}
-
-	if err := device.Update(name, brand, state); err != nil {
+	conn, err := grpc.NewClient(grpcAddress,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
+	if err != nil {
+		devicesServer.Close()
 		return nil, err
 	}
 
-	return device, nil
-}
-
-func (m *MockDeviceService) DeleteDevice(ctx context.Context, id model.DeviceID) error {
-	if m.DeleteDeviceFn != nil {
-		return m.DeleteDeviceFn(ctx, id)
-	}
-
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	device, ok := m.devices[id.String()]
-	if !ok {
-		return model.ErrDeviceNotFound
-	}
-
-	if !device.CanDelete() {
-		return model.ErrCannotDeleteInUseDevice
-	}
-
-	delete(m.devices, id.String())
-
-	return nil
-}
-
-func (m *MockDeviceService) AddDevice(device *model.Device) {
-	m.mu.Lock()
-	m.devices[device.ID.String()] = device
-	m.mu.Unlock()
-}
-
-func (m *MockDeviceService) Clear() {
-	m.mu.Lock()
-	m.devices = make(map[string]*model.Device)
-	m.mu.Unlock()
-}
-
-func NewMockHealthChecker() *MockHealthChecker {
-	return &MockHealthChecker{}
-}
-
-func (m *MockHealthChecker) Liveness(ctx context.Context) (*model.LivenessReport, error) {
-	if m.LivenessFn != nil {
-		return m.LivenessFn(ctx)
-	}
-
-	return &model.LivenessReport{
-		Status:    model.HealthStatusOK,
-		Timestamp: time.Now().UTC(),
-		Version:   "1.0.0",
-	}, nil
-}
-
-func (m *MockHealthChecker) Readiness(ctx context.Context) (*model.ReadinessReport, error) {
-	if m.ReadinessFn != nil {
-		return m.ReadinessFn(ctx)
-	}
-
-	return &model.ReadinessReport{
-		Status:    model.HealthStatusOK,
-		Timestamp: time.Now().UTC(),
-		Version:   "1.0.0",
-		Checks: map[string]model.DependencyCheck{
-			"storage": {
-				Status:      model.DependencyStatusUp,
-				LatencyMs:   1,
-				Message:     "ok",
-				LastChecked: time.Now().UTC(),
-			},
+	grpcClient, err := devices.NewClient(
+		apiconfig.DevicesConfig{
+			Address:        grpcAddress,
+			Timeout:        10 * time.Second,
+			MaxRetries:     1,
+			CircuitBreaker: apiconfig.CircuitBreakerConfig{Enabled: false},
 		},
-	}, nil
-}
-
-func (m *MockHealthChecker) Health(ctx context.Context) (*model.HealthReport, error) {
-	if m.HealthFn != nil {
-		return m.HealthFn(ctx)
+		apiconfig.BackoffConfig{},
+		devices.WithConnection(conn),
+	)
+	if err != nil {
+		conn.Close()
+		devicesServer.Close()
+		return nil, err
 	}
-
-	return &model.HealthReport{
-		Status:    model.HealthStatusOK,
-		Timestamp: time.Now().UTC(),
-		Version: model.VersionInfo{
-			API:   "1.0.0",
-			Build: "test",
-			Go:    "1.25",
-		},
-		Checks: map[string]model.DependencyCheck{
-			"storage": {
-				Status:      model.DependencyStatusUp,
-				LatencyMs:   1,
-				Message:     "ok",
-				LastChecked: time.Now().UTC(),
-			},
-		},
-		System: model.SystemInfo{
-			Goroutines: 10,
-			CPUCores:   4,
-		},
-	}, nil
-}
-
-func NewTestServer() *TestServer {
-	return NewTestServerWithAuth(false)
-}
-
-func NewTestServerWithAuth(authEnabled bool) *TestServer {
-	deviceService := NewMockDeviceService()
-	healthChecker := NewMockHealthChecker()
 
 	log := logger.NewTestLogger()
 	metricsClient := noop.NewMetricsClient()
 	tracerProvider := otelNoop.NewTracerProvider()
 
-	app := usecases.NewWebApplication(deviceService, healthChecker, log, tracerProvider, metricsClient)
+	apiApp := usecases.NewWebApplication(grpcClient, grpcClient, log, tracerProvider, metricsClient)
 
-	cfg := &config.ServiceConfig{
-		App: config.AppConfig{
+	cfg := &apiconfig.ServiceConfig{
+		App: apiconfig.AppConfig{
 			ServiceName:    "api-gateway-test",
 			ServiceVersion: "1.0.0",
 			Env:            "test",
 		},
-		HTTPServer: config.HTTPServerConfig{
+		HTTPServer: apiconfig.HTTPServerConfig{
 			WriteTimeout: 15 * time.Second,
 		},
-		Auth: config.AuthConfig{
-			Enabled:   authEnabled,
+		Auth: apiconfig.AuthConfig{
+			Enabled:   false,
 			SkipPaths: []string{"/v1/health", "/v1/liveness", "/v1/readiness"},
 		},
-		Telemetry: config.TelemetryConfig{
-			Metrics: config.Metrics{Enabled: false},
-			Traces:  config.Traces{Enabled: false},
+		Telemetry: apiconfig.TelemetryConfig{
+			Metrics: apiconfig.Metrics{Enabled: false},
+			Traces:  apiconfig.Traces{Enabled: false},
 		},
-		Logging: config.LoggingConfig{
-			AccessLog: config.AccessLogConfig{
+		Logging: apiconfig.LoggingConfig{
+			AccessLog: apiconfig.AccessLogConfig{
 				Enabled:         false,
 				LogHealthChecks: false,
 			},
@@ -318,31 +157,54 @@ func NewTestServerWithAuth(authEnabled bool) *TestServer {
 	}
 
 	router := internalhttp.NewRouter(internalhttp.RouterConfig{
-		App:           app,
+		App:           apiApp,
 		Logger:        log,
 		MetricsClient: metricsClient,
 		Config:        cfg,
 	})
 
-	server := httptest.NewServer(router)
+	httpServer := httptest.NewServer(router)
 
-	return &TestServer{
-		Server:        server,
-		DeviceService: deviceService,
-		HealthChecker: healthChecker,
+	return &IntegrationTestServer{
+		HTTPServer:    httpServer,
+		DevicesServer: devicesServer,
+		GRPCClient:    grpcClient,
+		grpcConn:      conn,
+	}, nil
+}
+
+// Close shuts down all test resources.
+func (s *IntegrationTestServer) Close() {
+	if s.HTTPServer != nil {
+		s.HTTPServer.Close()
+	}
+
+	if s.GRPCClient != nil {
+		s.GRPCClient.Close()
+	}
+
+	if s.grpcConn != nil {
+		s.grpcConn.Close()
+	}
+
+	if s.DevicesServer != nil {
+		s.DevicesServer.Close()
 	}
 }
 
-func (ts *TestServer) Close() {
-	ts.Server.Close()
+// TruncateDevices removes all devices from the database.
+func (s *IntegrationTestServer) TruncateDevices(ctx context.Context) error {
+	return s.DevicesServer.TruncateDevices(ctx)
 }
 
-func (ts *TestServer) URL() string {
-	return ts.Server.URL
+// URL returns the base URL of the HTTP server.
+func (s *IntegrationTestServer) URL() string {
+	return s.HTTPServer.URL
 }
 
-func (ts *TestServer) Client() *http.Client {
-	return ts.Server.Client()
+// Client returns the HTTP client for making requests.
+func (s *IntegrationTestServer) Client() *http.Client {
+	return s.HTTPServer.Client()
 }
 
 // RequestOption configures an HTTP request.
@@ -358,7 +220,7 @@ func WithBody(body io.Reader) RequestOption {
 	}
 }
 
-// WithIdempotencyKey sets the Idempotency-Key header.
+// WithIdempotencyKey sets a unique idempotency key.
 func WithIdempotencyKey() RequestOption {
 	return func(req *http.Request) {
 		req.Header.Set("Idempotency-Key", model.NewDeviceID().String())
@@ -366,8 +228,8 @@ func WithIdempotencyKey() RequestOption {
 }
 
 // DoRequest performs an HTTP request with the given method, path, and options.
-func (ts *TestServer) DoRequest(ctx context.Context, method, path string, opts ...RequestOption) (*http.Response, error) {
-	req, err := http.NewRequestWithContext(ctx, method, ts.URL()+path, nil)
+func (s *IntegrationTestServer) DoRequest(ctx context.Context, method, path string, opts ...RequestOption) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, method, s.URL()+path, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -380,58 +242,58 @@ func (ts *TestServer) DoRequest(ctx context.Context, method, path string, opts .
 		opt(req)
 	}
 
-	return ts.Client().Do(req)
+	return s.Client().Do(req)
 }
 
-// Get performs a GET request with authentication.
-func (ts *TestServer) Get(ctx context.Context, path string) (*http.Response, error) {
-	return ts.DoRequest(ctx, http.MethodGet, path)
+// Get performs a GET request.
+func (s *IntegrationTestServer) Get(ctx context.Context, path string) (*http.Response, error) {
+	return s.DoRequest(ctx, http.MethodGet, path)
 }
 
-// Head performs a HEAD request with authentication.
-func (ts *TestServer) Head(ctx context.Context, path string) (*http.Response, error) {
-	return ts.DoRequest(ctx, http.MethodHead, path)
+// Head performs a HEAD request.
+func (s *IntegrationTestServer) Head(ctx context.Context, path string) (*http.Response, error) {
+	return s.DoRequest(ctx, http.MethodHead, path)
 }
 
-// Options performs an OPTIONS request (no auth needed for preflight).
-func (ts *TestServer) Options(ctx context.Context, path string) (*http.Response, error) {
-	return ts.DoRequest(ctx, http.MethodOptions, path)
+// Options performs an OPTIONS request.
+func (s *IntegrationTestServer) Options(ctx context.Context, path string) (*http.Response, error) {
+	return s.DoRequest(ctx, http.MethodOptions, path)
 }
 
-// Post performs a POST request with authentication and idempotency key.
-func (ts *TestServer) Post(ctx context.Context, path string, body io.Reader) (*http.Response, error) {
-	return ts.DoRequest(ctx, http.MethodPost, path, WithBody(body), WithIdempotencyKey())
+// Post performs a POST request with body and idempotency key.
+func (s *IntegrationTestServer) Post(ctx context.Context, path string, body io.Reader) (*http.Response, error) {
+	return s.DoRequest(ctx, http.MethodPost, path, WithBody(body), WithIdempotencyKey())
 }
 
-// Put performs a PUT request with authentication.
-func (ts *TestServer) Put(ctx context.Context, path string, body io.Reader) (*http.Response, error) {
-	return ts.DoRequest(ctx, http.MethodPut, path, WithBody(body))
+// Put performs a PUT request with body.
+func (s *IntegrationTestServer) Put(ctx context.Context, path string, body io.Reader) (*http.Response, error) {
+	return s.DoRequest(ctx, http.MethodPut, path, WithBody(body))
 }
 
-// Patch performs a PATCH request with authentication.
-func (ts *TestServer) Patch(ctx context.Context, path string, body io.Reader) (*http.Response, error) {
-	return ts.DoRequest(ctx, http.MethodPatch, path, WithBody(body))
+// Patch performs a PATCH request with body.
+func (s *IntegrationTestServer) Patch(ctx context.Context, path string, body io.Reader) (*http.Response, error) {
+	return s.DoRequest(ctx, http.MethodPatch, path, WithBody(body))
 }
 
-// Delete performs a DELETE request with authentication.
-func (ts *TestServer) Delete(ctx context.Context, path string) (*http.Response, error) {
-	return ts.DoRequest(ctx, http.MethodDelete, path)
+// Delete performs a DELETE request.
+func (s *IntegrationTestServer) Delete(ctx context.Context, path string) (*http.Response, error) {
+	return s.DoRequest(ctx, http.MethodDelete, path)
 }
 
-// TestAuthToken is a dummy PASETO v4 token for testing when auth is disabled.
+// TestAuthToken is a test token for authentication.
 const TestAuthToken = "v4.public.test-token-for-integration-tests"
 
-// SetAuthHeader sets the Authorization header with a test token.
+// SetAuthHeader sets the Authorization header with the test token.
 func SetAuthHeader(req *http.Request) {
 	req.Header.Set("Authorization", "Bearer "+TestAuthToken)
 }
 
-// SetIdempotencyKey sets the Idempotency-Key header for POST requests.
+// SetIdempotencyKey sets a unique idempotency key header.
 func SetIdempotencyKey(req *http.Request) {
 	req.Header.Set("Idempotency-Key", model.NewDeviceID().String())
 }
 
-// DecodeJSON decodes a JSON response body into the provided destination.
+// DecodeJSON decodes a JSON response body.
 func DecodeJSON(body io.Reader, dest any) error {
 	return json.NewDecoder(body).Decode(dest)
 }

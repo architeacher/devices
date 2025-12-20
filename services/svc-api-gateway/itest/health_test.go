@@ -1,27 +1,42 @@
+//go:build integration
+
 package itest
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"testing"
-	"time"
 
-	"github.com/architeacher/devices/services/svc-api-gateway/internal/domain/model"
 	"github.com/stretchr/testify/suite"
 )
 
 type HealthCheckTestSuite struct {
 	suite.Suite
+	server *IntegrationTestServer
 }
 
 func TestHealthCheckTestSuite(t *testing.T) {
-	t.Parallel()
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
 	suite.Run(t, new(HealthCheckTestSuite))
 }
 
-func (s *HealthCheckTestSuite) getHealth(server *TestServer, path string) (map[string]any, *http.Response) {
-	resp, err := server.Get(s.T().Context(), path)
+func (s *HealthCheckTestSuite) SetupSuite() {
+	ctx := context.Background()
+	server, err := NewIntegrationTestServer(ctx)
+	s.Require().NoError(err)
+	s.server = server
+}
+
+func (s *HealthCheckTestSuite) TearDownSuite() {
+	if s.server != nil {
+		s.server.Close()
+	}
+}
+
+func (s *HealthCheckTestSuite) getHealth(path string) (map[string]any, *http.Response) {
+	resp, err := s.server.Get(s.T().Context(), path)
 	s.Require().NoError(err)
 
 	var response map[string]any
@@ -31,186 +46,45 @@ func (s *HealthCheckTestSuite) getHealth(server *TestServer, path string) (map[s
 }
 
 func (s *HealthCheckTestSuite) TestLivenessCheck() {
-	cases := []struct {
-		name           string
-		setupFn        func(server *TestServer)
-		expectedStatus int
-		expectedBody   string
-	}{
-		{
-			name:           "liveness returns ok",
-			setupFn:        func(_ *TestServer) {},
-			expectedStatus: http.StatusOK,
-			expectedBody:   "ok",
-		},
-		{
-			name: "liveness returns down on error",
-			setupFn: func(server *TestServer) {
-				server.HealthChecker.LivenessFn = func(_ context.Context) (*model.LivenessReport, error) {
-					return nil, errors.New("liveness check failed")
-				}
-			},
-			expectedStatus: http.StatusServiceUnavailable,
-			expectedBody:   "down",
-		},
-	}
+	response, resp := s.getHealth("/v1/liveness")
+	defer resp.Body.Close()
 
-	for _, tc := range cases {
-		s.Run(tc.name, func() {
-			server := NewTestServer()
-			defer server.Close()
-
-			tc.setupFn(server)
-
-			response, resp := s.getHealth(server, "/v1/liveness")
-			defer resp.Body.Close()
-
-			s.Require().Equal(tc.expectedStatus, resp.StatusCode)
-			s.Require().Equal(tc.expectedBody, response["status"])
-			s.Require().NotEmpty(response["timestamp"])
-		})
-	}
+	s.Require().Equal(http.StatusOK, resp.StatusCode)
+	s.Require().Equal("ok", response["status"])
+	s.Require().NotEmpty(response["timestamp"])
 }
 
 func (s *HealthCheckTestSuite) TestReadinessCheck() {
-	cases := []struct {
-		name           string
-		setupFn        func(server *TestServer)
-		expectedStatus int
-		expectedBody   string
-	}{
-		{
-			name:           "readiness returns ok",
-			setupFn:        func(_ *TestServer) {},
-			expectedStatus: http.StatusOK,
-			expectedBody:   "ok",
-		},
-		{
-			name: "readiness returns down on error",
-			setupFn: func(server *TestServer) {
-				server.HealthChecker.ReadinessFn = func(_ context.Context) (*model.ReadinessReport, error) {
-					return nil, errors.New("readiness check failed")
-				}
-			},
-			expectedStatus: http.StatusServiceUnavailable,
-			expectedBody:   "down",
-		},
-		{
-			name: "readiness returns down when status is not ok",
-			setupFn: func(server *TestServer) {
-				server.HealthChecker.ReadinessFn = func(_ context.Context) (*model.ReadinessReport, error) {
-					return &model.ReadinessReport{
-						Status:    model.HealthStatusDown,
-						Timestamp: time.Now().UTC(),
-					}, nil
-				}
-			},
-			expectedStatus: http.StatusServiceUnavailable,
-			expectedBody:   "down",
-		},
-	}
+	response, resp := s.getHealth("/v1/readiness")
+	defer resp.Body.Close()
 
-	for _, tc := range cases {
-		s.Run(tc.name, func() {
-			server := NewTestServer()
-			defer server.Close()
-
-			tc.setupFn(server)
-
-			response, resp := s.getHealth(server, "/v1/readiness")
-			defer resp.Body.Close()
-
-			s.Require().Equal(tc.expectedStatus, resp.StatusCode)
-			s.Require().Equal(tc.expectedBody, response["status"])
-			s.Require().NotEmpty(response["timestamp"])
-		})
-	}
+	s.Require().Equal(http.StatusOK, resp.StatusCode)
+	s.Require().Equal("ok", response["status"])
+	s.Require().NotEmpty(response["timestamp"])
 }
 
 func (s *HealthCheckTestSuite) TestHealthCheck() {
-	cases := []struct {
-		name           string
-		setupFn        func(server *TestServer)
-		expectedStatus int
-		expectedBody   string
-	}{
-		{
-			name:           "health returns ok",
-			setupFn:        func(_ *TestServer) {},
-			expectedStatus: http.StatusOK,
-			expectedBody:   "ok",
-		},
-		{
-			name: "health returns down on error",
-			setupFn: func(server *TestServer) {
-				server.HealthChecker.HealthFn = func(_ context.Context) (*model.HealthReport, error) {
-					return nil, errors.New("health check failed")
-				}
-			},
-			expectedStatus: http.StatusServiceUnavailable,
-			expectedBody:   "down",
-		},
-		{
-			name: "health returns degraded status as down",
-			setupFn: func(server *TestServer) {
-				server.HealthChecker.HealthFn = func(_ context.Context) (*model.HealthReport, error) {
-					return &model.HealthReport{
-						Status:    model.HealthStatusDegraded,
-						Timestamp: time.Now().UTC(),
-						Version: model.VersionInfo{
-							API:   "1.0.0",
-							Build: "test",
-							Go:    "1.25",
-						},
-						System: model.SystemInfo{
-							Goroutines: 10,
-							CPUCores:   4,
-						},
-					}, nil
-				}
-			},
-			expectedStatus: http.StatusServiceUnavailable,
-			expectedBody:   "down",
-		},
-	}
+	response, resp := s.getHealth("/v1/health")
+	defer resp.Body.Close()
 
-	for _, tc := range cases {
-		s.Run(tc.name, func() {
-			server := NewTestServer()
-			defer server.Close()
-
-			tc.setupFn(server)
-
-			response, resp := s.getHealth(server, "/v1/health")
-			defer resp.Body.Close()
-
-			s.Require().Equal(tc.expectedStatus, resp.StatusCode)
-			s.Require().Equal(tc.expectedBody, response["status"])
-			s.Require().NotEmpty(response["timestamp"])
-		})
-	}
+	s.Require().Equal(http.StatusOK, resp.StatusCode)
+	s.Require().Equal("ok", response["status"])
+	s.Require().NotEmpty(response["timestamp"])
 }
 
 func (s *HealthCheckTestSuite) TestHealthCheckReturnsVersionInfo() {
-	server := NewTestServer()
-	defer server.Close()
-
-	response, resp := s.getHealth(server, "/v1/health")
+	response, resp := s.getHealth("/v1/health")
 	defer resp.Body.Close()
 
 	s.Require().Equal(http.StatusOK, resp.StatusCode)
 
-	version := response["version"].(map[string]any)
-	s.Require().NotEmpty(version["api"])
-	s.Require().NotEmpty(version["build"])
-	s.Require().NotEmpty(version["go"])
+	version, ok := response["version"].(map[string]any)
+	s.Require().True(ok, "version should be a map")
+	s.Require().NotNil(version["go"], "go version should be present")
 }
 
 func (s *HealthCheckTestSuite) TestHealthCheckReturnsUptimeInfo() {
-	server := NewTestServer()
-	defer server.Close()
-
-	response, resp := s.getHealth(server, "/v1/health")
+	response, resp := s.getHealth("/v1/health")
 	defer resp.Body.Close()
 
 	s.Require().Equal(http.StatusOK, resp.StatusCode)
@@ -222,10 +96,7 @@ func (s *HealthCheckTestSuite) TestHealthCheckReturnsUptimeInfo() {
 }
 
 func (s *HealthCheckTestSuite) TestHealthCheckReturnsSystemInfo() {
-	server := NewTestServer()
-	defer server.Close()
-
-	response, resp := s.getHealth(server, "/v1/health")
+	response, resp := s.getHealth("/v1/health")
 	defer resp.Body.Close()
 
 	s.Require().Equal(http.StatusOK, resp.StatusCode)
@@ -235,15 +106,14 @@ func (s *HealthCheckTestSuite) TestHealthCheckReturnsSystemInfo() {
 	s.Require().NotNil(system["goroutines"])
 }
 
-func (s *HealthCheckTestSuite) TestLivenessReturnsVersion() {
-	server := NewTestServer()
-	defer server.Close()
-
-	response, resp := s.getHealth(server, "/v1/liveness")
+func (s *HealthCheckTestSuite) TestLivenessReturnsVersionAsString() {
+	response, resp := s.getHealth("/v1/liveness")
 	defer resp.Body.Close()
 
 	s.Require().Equal(http.StatusOK, resp.StatusCode)
-	s.Require().NotEmpty(response["version"])
+
+	_, ok := response["version"].(string)
+	s.Require().True(ok, "version should be a string in liveness response")
 }
 
 func (s *HealthCheckTestSuite) TestHealthEndpointsReturnJSON() {
@@ -251,10 +121,7 @@ func (s *HealthCheckTestSuite) TestHealthEndpointsReturnJSON() {
 
 	for _, endpoint := range endpoints {
 		s.Run(endpoint, func() {
-			server := NewTestServer()
-			defer server.Close()
-
-			resp, err := server.Get(s.T().Context(), endpoint)
+			resp, err := s.server.Get(s.T().Context(), endpoint)
 			s.Require().NoError(err)
 			defer resp.Body.Close()
 

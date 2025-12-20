@@ -55,4 +55,4 @@ temp/
 *.tmp
 
 # Generated mocks
-internal/mocks/
+mocks/

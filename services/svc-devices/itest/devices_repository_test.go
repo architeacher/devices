@@ -128,8 +128,6 @@ func (s *DevicesRepositoryIntegrationTestSuite) seedDevices(ctx context.Context,
 	}
 }
 
-// Create tests
-
 func (s *DevicesRepositoryIntegrationTestSuite) TestCreate_Success() {
 	ctx := s.T().Context()
 
@@ -183,8 +181,6 @@ func (s *DevicesRepositoryIntegrationTestSuite) TestCreate_DuplicateID() {
 	s.Require().ErrorIs(err, model.ErrDuplicateDevice)
 }
 
-// GetByID tests
-
 func (s *DevicesRepositoryIntegrationTestSuite) TestGetByID_Success() {
 	ctx := s.T().Context()
 
@@ -212,8 +208,6 @@ func (s *DevicesRepositoryIntegrationTestSuite) TestGetByID_NotFound() {
 	s.Require().ErrorIs(err, model.ErrDeviceNotFound)
 	s.Require().Nil(retrieved)
 }
-
-// List tests
 
 func (s *DevicesRepositoryIntegrationTestSuite) TestList_Empty() {
 	ctx := s.T().Context()
@@ -364,7 +358,256 @@ func (s *DevicesRepositoryIntegrationTestSuite) TestList_SortByName() {
 	s.Require().Equal("Charlie", list.Devices[2].Name)
 }
 
-// Update tests
+func (s *DevicesRepositoryIntegrationTestSuite) TestList_SortByNameDescending() {
+	ctx := s.T().Context()
+
+	devices := []*model.Device{
+		model.NewDevice("Alpha", "Brand", model.StateAvailable),
+		model.NewDevice("Charlie", "Brand", model.StateAvailable),
+		model.NewDevice("Bravo", "Brand", model.StateAvailable),
+	}
+	s.seedDevices(ctx, devices)
+
+	filter := model.DeviceFilter{
+		Page: 1,
+		Size: 20,
+		Sort: "-name",
+	}
+
+	list, err := s.repo.List(ctx, filter)
+
+	s.Require().NoError(err)
+	s.Require().Len(list.Devices, 3)
+	s.Require().Equal("Charlie", list.Devices[0].Name)
+	s.Require().Equal("Bravo", list.Devices[1].Name)
+	s.Require().Equal("Alpha", list.Devices[2].Name)
+}
+
+func (s *DevicesRepositoryIntegrationTestSuite) TestList_SortByBrandDescending() {
+	ctx := s.T().Context()
+
+	devices := []*model.Device{
+		model.NewDevice("Device 1", "Apple", model.StateAvailable),
+		model.NewDevice("Device 2", "Samsung", model.StateAvailable),
+		model.NewDevice("Device 3", "Google", model.StateAvailable),
+	}
+	s.seedDevices(ctx, devices)
+
+	filter := model.DeviceFilter{
+		Page: 1,
+		Size: 20,
+		Sort: "-brand",
+	}
+
+	list, err := s.repo.List(ctx, filter)
+
+	s.Require().NoError(err)
+	s.Require().Len(list.Devices, 3)
+	s.Require().Equal("Samsung", list.Devices[0].Brand)
+	s.Require().Equal("Google", list.Devices[1].Brand)
+	s.Require().Equal("Apple", list.Devices[2].Brand)
+}
+
+func (s *DevicesRepositoryIntegrationTestSuite) TestList_SortByStateDescending() {
+	ctx := s.T().Context()
+
+	devices := []*model.Device{
+		model.NewDevice("Device 1", "Brand", model.StateAvailable),
+		model.NewDevice("Device 2", "Brand", model.StateInUse),
+		model.NewDevice("Device 3", "Brand", model.StateInactive),
+	}
+	s.seedDevices(ctx, devices)
+
+	filter := model.DeviceFilter{
+		Page: 1,
+		Size: 20,
+		Sort: "-state",
+	}
+
+	list, err := s.repo.List(ctx, filter)
+
+	s.Require().NoError(err)
+	s.Require().Len(list.Devices, 3)
+	s.Require().Equal(model.StateInactive, list.Devices[0].State)
+	s.Require().Equal(model.StateInUse, list.Devices[1].State)
+	s.Require().Equal(model.StateAvailable, list.Devices[2].State)
+}
+
+func (s *DevicesRepositoryIntegrationTestSuite) TestList_SortByUpdatedAtDescending() {
+	ctx := s.T().Context()
+
+	now := time.Now().UTC()
+	devices := []*model.Device{
+		{
+			ID:        model.NewDeviceID(),
+			Name:      "Old Device",
+			Brand:     "Brand",
+			State:     model.StateAvailable,
+			CreatedAt: now.Add(-3 * time.Hour),
+			UpdatedAt: now.Add(-3 * time.Hour),
+		},
+		{
+			ID:        model.NewDeviceID(),
+			Name:      "New Device",
+			Brand:     "Brand",
+			State:     model.StateAvailable,
+			CreatedAt: now.Add(-1 * time.Hour),
+			UpdatedAt: now.Add(-1 * time.Hour),
+		},
+		{
+			ID:        model.NewDeviceID(),
+			Name:      "Middle Device",
+			Brand:     "Brand",
+			State:     model.StateAvailable,
+			CreatedAt: now.Add(-2 * time.Hour),
+			UpdatedAt: now.Add(-2 * time.Hour),
+		},
+	}
+	s.seedDevices(ctx, devices)
+
+	filter := model.DeviceFilter{
+		Page: 1,
+		Size: 20,
+		Sort: "-updatedAt",
+	}
+
+	list, err := s.repo.List(ctx, filter)
+
+	s.Require().NoError(err)
+	s.Require().Len(list.Devices, 3)
+	s.Require().Equal("New Device", list.Devices[0].Name)
+	s.Require().Equal("Middle Device", list.Devices[1].Name)
+	s.Require().Equal("Old Device", list.Devices[2].Name)
+}
+
+func (s *DevicesRepositoryIntegrationTestSuite) TestList_InvalidSortFieldFallsBackToCreatedAt() {
+	ctx := s.T().Context()
+
+	now := time.Now().UTC()
+	devices := []*model.Device{
+		{
+			ID:        model.NewDeviceID(),
+			Name:      "Third",
+			Brand:     "Brand",
+			State:     model.StateAvailable,
+			CreatedAt: now.Add(-1 * time.Hour),
+			UpdatedAt: now,
+		},
+		{
+			ID:        model.NewDeviceID(),
+			Name:      "First",
+			Brand:     "Brand",
+			State:     model.StateAvailable,
+			CreatedAt: now.Add(-3 * time.Hour),
+			UpdatedAt: now,
+		},
+		{
+			ID:        model.NewDeviceID(),
+			Name:      "Second",
+			Brand:     "Brand",
+			State:     model.StateAvailable,
+			CreatedAt: now.Add(-2 * time.Hour),
+			UpdatedAt: now,
+		},
+	}
+	s.seedDevices(ctx, devices)
+
+	filter := model.DeviceFilter{
+		Page: 1,
+		Size: 20,
+		Sort: "invalidField",
+	}
+
+	list, err := s.repo.List(ctx, filter)
+
+	s.Require().NoError(err)
+	s.Require().Len(list.Devices, 3)
+	s.Require().Equal("First", list.Devices[0].Name)
+	s.Require().Equal("Second", list.Devices[1].Name)
+	s.Require().Equal("Third", list.Devices[2].Name)
+}
+
+func (s *DevicesRepositoryIntegrationTestSuite) TestList_EmptyBrandFilterIsIgnored() {
+	ctx := s.T().Context()
+
+	devices := []*model.Device{
+		model.NewDevice("iPhone", "Apple", model.StateAvailable),
+		model.NewDevice("Galaxy", "Samsung", model.StateAvailable),
+		model.NewDevice("Pixel", "Google", model.StateAvailable),
+	}
+	s.seedDevices(ctx, devices)
+
+	emptyBrand := ""
+	filter := model.DeviceFilter{
+		Brand: &emptyBrand,
+		Page:  1,
+		Size:  20,
+		Sort:  "-createdAt",
+	}
+
+	list, err := s.repo.List(ctx, filter)
+
+	s.Require().NoError(err)
+	s.Require().Len(list.Devices, 3)
+}
+
+func (s *DevicesRepositoryIntegrationTestSuite) TestList_BrandFilterIsCaseSensitive() {
+	ctx := s.T().Context()
+
+	devices := []*model.Device{
+		model.NewDevice("iPhone", "Apple", model.StateAvailable),
+		model.NewDevice("MacBook", "apple", model.StateAvailable),
+		model.NewDevice("iPad", "APPLE", model.StateAvailable),
+	}
+	s.seedDevices(ctx, devices)
+
+	brand := "Apple"
+	filter := model.DeviceFilter{
+		Brand: &brand,
+		Page:  1,
+		Size:  20,
+		Sort:  "-createdAt",
+	}
+
+	list, err := s.repo.List(ctx, filter)
+
+	s.Require().NoError(err)
+	s.Require().Len(list.Devices, 1)
+	s.Require().Equal("Apple", list.Devices[0].Brand)
+}
+
+func (s *DevicesRepositoryIntegrationTestSuite) TestList_CombinedFiltersAndSort() {
+	ctx := s.T().Context()
+
+	devices := []*model.Device{
+		model.NewDevice("iPhone 15", "Apple", model.StateAvailable),
+		model.NewDevice("iPhone 14", "Apple", model.StateAvailable),
+		model.NewDevice("MacBook", "Apple", model.StateInUse),
+		model.NewDevice("Galaxy", "Samsung", model.StateAvailable),
+	}
+	s.seedDevices(ctx, devices)
+
+	brand := "Apple"
+	state := model.StateAvailable
+	filter := model.DeviceFilter{
+		Brand: &brand,
+		State: &state,
+		Page:  1,
+		Size:  20,
+		Sort:  "name",
+	}
+
+	list, err := s.repo.List(ctx, filter)
+
+	s.Require().NoError(err)
+	s.Require().Len(list.Devices, 2)
+	s.Require().Equal("iPhone 14", list.Devices[0].Name)
+	s.Require().Equal("iPhone 15", list.Devices[1].Name)
+	for _, device := range list.Devices {
+		s.Require().Equal("Apple", device.Brand)
+		s.Require().Equal(model.StateAvailable, device.State)
+	}
+}
 
 func (s *DevicesRepositoryIntegrationTestSuite) TestUpdate_Success() {
 	ctx := s.T().Context()
@@ -419,8 +662,6 @@ func (s *DevicesRepositoryIntegrationTestSuite) TestUpdate_StateTransition() {
 		s.Require().Equal(newState, retrieved.State)
 	}
 }
-
-// Delete tests
 
 func (s *DevicesRepositoryIntegrationTestSuite) TestDelete_Success() {
 	ctx := s.T().Context()

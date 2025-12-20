@@ -1,4 +1,8 @@
+//go:generate go tool github.com/maxbrunsfeld/counterfeiter/v6 -generate
+
 package ports
+
+//counterfeiter:generate -o ../mocks/device_service.go . DevicesService
 
 import (
 	"context"

@@ -8,419 +8,398 @@ import (
 	"github.com/architeacher/devices/pkg/logger"
 	"github.com/architeacher/devices/pkg/metrics/noop"
 	"github.com/architeacher/devices/services/svc-api-gateway/internal/domain/model"
+	"github.com/architeacher/devices/services/svc-api-gateway/internal/mocks"
 	"github.com/architeacher/devices/services/svc-api-gateway/internal/usecases/queries"
-	"github.com/stretchr/testify/suite"
+	"github.com/stretchr/testify/require"
 	otelNoop "go.opentelemetry.io/otel/trace/noop"
 )
 
-type mockDeviceService struct {
-	getDeviceFn   func(ctx context.Context, id model.DeviceID) (*model.Device, error)
-	listDevicesFn func(ctx context.Context, filter model.DeviceFilter) (*model.DeviceList, error)
-}
-
-func (m *mockDeviceService) CreateDevice(_ context.Context, name, brand string, state model.State) (*model.Device, error) {
-	return model.NewDevice(name, brand, state), nil
-}
-
-func (m *mockDeviceService) GetDevice(ctx context.Context, id model.DeviceID) (*model.Device, error) {
-	if m.getDeviceFn != nil {
-		return m.getDeviceFn(ctx, id)
-	}
-
-	return &model.Device{ID: id}, nil
-}
-
-func (m *mockDeviceService) ListDevices(ctx context.Context, filter model.DeviceFilter) (*model.DeviceList, error) {
-	if m.listDevicesFn != nil {
-		return m.listDevicesFn(ctx, filter)
-	}
-
-	return &model.DeviceList{
-		Devices: []*model.Device{},
-		Pagination: model.Pagination{
-			Page:       filter.Page,
-			Size:       filter.Size,
-			TotalItems: 0,
-			TotalPages: 1,
-		},
-		Filters: filter,
-	}, nil
-}
-
-func (m *mockDeviceService) UpdateDevice(_ context.Context, id model.DeviceID, name, brand string, state model.State) (*model.Device, error) {
-	return &model.Device{ID: id, Name: name, Brand: brand, State: state}, nil
-}
-
-func (m *mockDeviceService) PatchDevice(_ context.Context, id model.DeviceID, _ map[string]any) (*model.Device, error) {
-	return &model.Device{ID: id}, nil
-}
-
-func (m *mockDeviceService) DeleteDevice(_ context.Context, _ model.DeviceID) error {
-	return nil
-}
-
-type mockHealthChecker struct {
-	livenessFn  func(ctx context.Context) (*model.LivenessReport, error)
-	readinessFn func(ctx context.Context) (*model.ReadinessReport, error)
-	healthFn    func(ctx context.Context) (*model.HealthReport, error)
-}
-
-func (m *mockHealthChecker) Liveness(ctx context.Context) (*model.LivenessReport, error) {
-	if m.livenessFn != nil {
-		return m.livenessFn(ctx)
-	}
-
-	return &model.LivenessReport{
-		Status:    model.HealthStatusOK,
-		Timestamp: time.Now().UTC(),
-		Version:   "1.0.0",
-	}, nil
-}
-
-func (m *mockHealthChecker) Readiness(ctx context.Context) (*model.ReadinessReport, error) {
-	if m.readinessFn != nil {
-		return m.readinessFn(ctx)
-	}
-
-	return &model.ReadinessReport{
-		Status:    model.HealthStatusOK,
-		Timestamp: time.Now().UTC(),
-		Version:   "1.0.0",
-		Checks: map[string]model.DependencyCheck{
-			"storage": {
-				Status:      model.DependencyStatusUp,
-				LatencyMs:   0,
-				Message:     "ok",
-				LastChecked: time.Now().UTC(),
-			},
-		},
-	}, nil
-}
-
-func (m *mockHealthChecker) Health(ctx context.Context) (*model.HealthReport, error) {
-	if m.healthFn != nil {
-		return m.healthFn(ctx)
-	}
-
-	return &model.HealthReport{
-		Status:    model.HealthStatusOK,
-		Timestamp: time.Now().UTC(),
-		Version: model.VersionInfo{
-			API:   "1.0.0",
-			Build: "development",
-			Go:    "1.23",
-		},
-		Checks: map[string]model.DependencyCheck{
-			"storage": {
-				Status:      model.DependencyStatusUp,
-				LatencyMs:   0,
-				Message:     "ok",
-				LastChecked: time.Now().UTC(),
-			},
-		},
-		System: model.SystemInfo{
-			Goroutines: 1,
-			CPUCores:   1,
-		},
-	}, nil
-}
-
-type GetDeviceQueryTestSuite struct {
-	suite.Suite
-	ctx context.Context
-}
-
-func TestGetDeviceQueryTestSuite(t *testing.T) {
+func TestGetDeviceQueryHandler(t *testing.T) {
 	t.Parallel()
-	suite.Run(t, new(GetDeviceQueryTestSuite))
-}
 
-func (s *GetDeviceQueryTestSuite) SetupTest() {
-	s.ctx = context.Background()
-}
+	log := logger.NewTestLogger()
+	tp := otelNoop.NewTracerProvider()
+	mc := noop.NewMetricsClient()
 
-func (s *GetDeviceQueryTestSuite) TestExecute_Success() {
-	s.T().Parallel()
+	cases := []struct {
+		name        string
+		setupSvc    func(*mocks.FakeDevicesService) model.DeviceID
+		expectError bool
+		expectedErr error
+	}{
+		{
+			name: "successfully get device",
+			setupSvc: func(fake *mocks.FakeDevicesService) model.DeviceID {
+				id := model.NewDeviceID()
+				expectedDevice := &model.Device{
+					ID:    id,
+					Name:  "Test Device",
+					Brand: "Test Brand",
+					State: model.StateAvailable,
+				}
+				fake.GetDeviceReturns(expectedDevice, nil)
 
-	id := model.NewDeviceID()
-	expectedDevice := &model.Device{
-		ID:    id,
-		Name:  "Test Device",
-		Brand: "Test Brand",
-		State: model.StateAvailable,
-	}
+				return id
+			},
+			expectError: false,
+		},
+		{
+			name: "device not found",
+			setupSvc: func(fake *mocks.FakeDevicesService) model.DeviceID {
+				fake.GetDeviceReturns(nil, model.ErrDeviceNotFound)
 
-	svc := &mockDeviceService{
-		getDeviceFn: func(_ context.Context, _ model.DeviceID) (*model.Device, error) {
-			return expectedDevice, nil
+				return model.NewDeviceID()
+			},
+			expectError: true,
+			expectedErr: model.ErrDeviceNotFound,
 		},
 	}
-	handler := queries.NewGetDeviceQueryHandler(svc, logger.NewTestLogger(), otelNoop.NewTracerProvider(), noop.NewMetricsClient())
 
-	query := queries.GetDeviceQuery{ID: id}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 
-	result, err := handler.Execute(s.ctx, query)
+			svc := &mocks.FakeDevicesService{}
+			deviceID := tc.setupSvc(svc)
 
-	s.Require().NoError(err)
-	s.Require().NotNil(result)
-	s.Require().Equal(expectedDevice.ID, result.ID)
-	s.Require().Equal(expectedDevice.Name, result.Name)
-}
+			handler := queries.NewGetDeviceQueryHandler(svc, log, tp, mc)
+			query := queries.GetDeviceQuery{ID: deviceID}
 
-func (s *GetDeviceQueryTestSuite) TestExecute_NotFound() {
-	s.T().Parallel()
+			result, err := handler.Execute(t.Context(), query)
 
-	svc := &mockDeviceService{
-		getDeviceFn: func(_ context.Context, _ model.DeviceID) (*model.Device, error) {
-			return nil, model.ErrDeviceNotFound
-		},
+			if tc.expectError {
+				require.Error(t, err)
+				require.Nil(t, result)
+				if tc.expectedErr != nil {
+					require.ErrorIs(t, err, tc.expectedErr)
+				}
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, result)
+				require.Equal(t, deviceID, result.ID)
+			}
+		})
 	}
-	handler := queries.NewGetDeviceQueryHandler(svc, logger.NewTestLogger(), otelNoop.NewTracerProvider(), noop.NewMetricsClient())
-
-	query := queries.GetDeviceQuery{ID: model.NewDeviceID()}
-
-	result, err := handler.Execute(s.ctx, query)
-
-	s.Require().ErrorIs(err, model.ErrDeviceNotFound)
-	s.Require().Nil(result)
 }
 
-type ListDevicesQueryTestSuite struct {
-	suite.Suite
-	ctx context.Context
-}
-
-func TestListDevicesQueryTestSuite(t *testing.T) {
+func TestListDevicesQueryHandler(t *testing.T) {
 	t.Parallel()
-	suite.Run(t, new(ListDevicesQueryTestSuite))
-}
 
-func (s *ListDevicesQueryTestSuite) SetupTest() {
-	s.ctx = context.Background()
-}
-
-func (s *ListDevicesQueryTestSuite) TestExecute_Success() {
-	s.T().Parallel()
-
-	svc := &mockDeviceService{}
-	handler := queries.NewListDevicesQueryHandler(svc, logger.NewTestLogger(), otelNoop.NewTracerProvider(), noop.NewMetricsClient())
-
-	filter := model.DefaultDeviceFilter()
-	query := queries.ListDevicesQuery{Filter: filter}
-
-	result, err := handler.Execute(s.ctx, query)
-
-	s.Require().NoError(err)
-	s.Require().NotNil(result)
-	s.Require().Equal(filter.Page, result.Pagination.Page)
-	s.Require().Equal(filter.Size, result.Pagination.Size)
-}
-
-func (s *ListDevicesQueryTestSuite) TestExecute_WithFilters() {
-	s.T().Parallel()
+	log := logger.NewTestLogger()
+	tp := otelNoop.NewTracerProvider()
+	mc := noop.NewMetricsClient()
 
 	brand := "Apple"
 	state := model.StateAvailable
 
-	svc := &mockDeviceService{
-		listDevicesFn: func(_ context.Context, filter model.DeviceFilter) (*model.DeviceList, error) {
-			return &model.DeviceList{
-				Devices: []*model.Device{},
-				Pagination: model.Pagination{
-					Page:       filter.Page,
-					Size:       filter.Size,
-					TotalItems: 0,
-					TotalPages: 1,
-				},
-				Filters: filter,
-			}, nil
+	cases := []struct {
+		name     string
+		filter   model.DeviceFilter
+		setupSvc func(*mocks.FakeDevicesService)
+		validate func(*testing.T, *model.DeviceList)
+	}{
+		{
+			name:   "list with default filter",
+			filter: model.DefaultDeviceFilter(),
+			setupSvc: func(fake *mocks.FakeDevicesService) {
+				fake.ListDevicesStub = func(_ context.Context, filter model.DeviceFilter) (*model.DeviceList, error) {
+					return &model.DeviceList{
+						Devices: []*model.Device{},
+						Pagination: model.Pagination{
+							Page:       filter.Page,
+							Size:       filter.Size,
+							TotalItems: 0,
+							TotalPages: 1,
+						},
+						Filters: filter,
+					}, nil
+				}
+			},
+			validate: func(t *testing.T, result *model.DeviceList) {
+				require.NotNil(t, result)
+				require.Equal(t, uint(1), result.Pagination.Page)
+			},
+		},
+		{
+			name: "list with brand and state filters",
+			filter: model.DeviceFilter{
+				Brand: &brand,
+				State: &state,
+				Page:  1,
+				Size:  10,
+			},
+			setupSvc: func(fake *mocks.FakeDevicesService) {
+				fake.ListDevicesStub = func(_ context.Context, filter model.DeviceFilter) (*model.DeviceList, error) {
+					return &model.DeviceList{
+						Devices: []*model.Device{},
+						Pagination: model.Pagination{
+							Page:       filter.Page,
+							Size:       filter.Size,
+							TotalItems: 0,
+							TotalPages: 1,
+						},
+						Filters: filter,
+					}, nil
+				}
+			},
+			validate: func(t *testing.T, result *model.DeviceList) {
+				require.NotNil(t, result)
+				require.Equal(t, &brand, result.Filters.Brand)
+				require.Equal(t, &state, result.Filters.State)
+			},
 		},
 	}
-	handler := queries.NewListDevicesQueryHandler(svc, logger.NewTestLogger(), otelNoop.NewTracerProvider(), noop.NewMetricsClient())
 
-	filter := model.DeviceFilter{
-		Brand: &brand,
-		State: &state,
-		Page:  1,
-		Size:  10,
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			svc := &mocks.FakeDevicesService{}
+			if tc.setupSvc != nil {
+				tc.setupSvc(svc)
+			}
+
+			handler := queries.NewListDevicesQueryHandler(svc, log, tp, mc)
+			query := queries.ListDevicesQuery{Filter: tc.filter}
+
+			result, err := handler.Execute(t.Context(), query)
+
+			require.NoError(t, err)
+			tc.validate(t, result)
+		})
 	}
-	query := queries.ListDevicesQuery{Filter: filter}
-
-	result, err := handler.Execute(s.ctx, query)
-
-	s.Require().NoError(err)
-	s.Require().NotNil(result)
-	s.Require().Equal(&brand, result.Filters.Brand)
-	s.Require().Equal(&state, result.Filters.State)
 }
 
-type FetchLivenessQueryTestSuite struct {
-	suite.Suite
-	ctx context.Context
-}
-
-func TestFetchLivenessQueryTestSuite(t *testing.T) {
+func TestFetchLivenessQueryHandler(t *testing.T) {
 	t.Parallel()
-	suite.Run(t, new(FetchLivenessQueryTestSuite))
+
+	log := logger.NewTestLogger()
+	tp := otelNoop.NewTracerProvider()
+	mc := noop.NewMetricsClient()
+
+	cases := []struct {
+		name     string
+		setupSvc func(*mocks.FakeHealthChecker)
+		validate func(*testing.T, *model.LivenessReport)
+	}{
+		{
+			name: "healthy liveness",
+			setupSvc: func(fake *mocks.FakeHealthChecker) {
+				fake.LivenessReturns(&model.LivenessReport{
+					Status:    model.HealthStatusOK,
+					Timestamp: time.Now().UTC(),
+					Version:   "1.0.0",
+				}, nil)
+			},
+			validate: func(t *testing.T, result *model.LivenessReport) {
+				require.NotNil(t, result)
+				require.Equal(t, model.HealthStatusOK, result.Status)
+				require.NotEmpty(t, result.Version)
+				require.False(t, result.Timestamp.IsZero())
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			healthChecker := &mocks.FakeHealthChecker{}
+			if tc.setupSvc != nil {
+				tc.setupSvc(healthChecker)
+			}
+
+			handler := queries.NewFetchLivenessQueryHandler(healthChecker, log, tp, mc)
+			query := queries.FetchLivenessQuery{}
+
+			result, err := handler.Execute(t.Context(), query)
+
+			require.NoError(t, err)
+			tc.validate(t, result)
+		})
+	}
 }
 
-func (s *FetchLivenessQueryTestSuite) SetupTest() {
-	s.ctx = context.Background()
-}
-
-func (s *FetchLivenessQueryTestSuite) TestExecute_Success() {
-	s.T().Parallel()
-
-	healthChecker := &mockHealthChecker{}
-	handler := queries.NewFetchLivenessQueryHandler(healthChecker, logger.NewTestLogger(), otelNoop.NewTracerProvider(), noop.NewMetricsClient())
-
-	query := queries.FetchLivenessQuery{}
-
-	result, err := handler.Execute(s.ctx, query)
-
-	s.Require().NoError(err)
-	s.Require().NotNil(result)
-	s.Require().Equal(model.HealthStatusOK, result.Status)
-	s.Require().NotEmpty(result.Version)
-	s.Require().False(result.Timestamp.IsZero())
-}
-
-type FetchReadinessQueryTestSuite struct {
-	suite.Suite
-	ctx context.Context
-}
-
-func TestFetchReadinessQueryTestSuite(t *testing.T) {
+func TestFetchReadinessQueryHandler(t *testing.T) {
 	t.Parallel()
-	suite.Run(t, new(FetchReadinessQueryTestSuite))
-}
 
-func (s *FetchReadinessQueryTestSuite) SetupTest() {
-	s.ctx = context.Background()
-}
+	log := logger.NewTestLogger()
+	tp := otelNoop.NewTracerProvider()
+	mc := noop.NewMetricsClient()
 
-func (s *FetchReadinessQueryTestSuite) TestExecute_Healthy() {
-	s.T().Parallel()
-
-	healthChecker := &mockHealthChecker{}
-	handler := queries.NewFetchReadinessQueryHandler(healthChecker, logger.NewTestLogger(), otelNoop.NewTracerProvider(), noop.NewMetricsClient())
-
-	query := queries.FetchReadinessQuery{}
-
-	result, err := handler.Execute(s.ctx, query)
-
-	s.Require().NoError(err)
-	s.Require().NotNil(result)
-	s.Require().Equal(model.HealthStatusOK, result.Status)
-	s.Require().Contains(result.Checks, "storage")
-	s.Require().Equal(model.DependencyStatusUp, result.Checks["storage"].Status)
-}
-
-func (s *FetchReadinessQueryTestSuite) TestExecute_Unhealthy() {
-	s.T().Parallel()
-
-	healthChecker := &mockHealthChecker{
-		readinessFn: func(_ context.Context) (*model.ReadinessReport, error) {
-			return &model.ReadinessReport{
-				Status:    model.HealthStatusDown,
-				Timestamp: time.Now().UTC(),
-				Version:   "1.0.0",
-				Checks: map[string]model.DependencyCheck{
-					"storage": {
-						Status:      model.DependencyStatusDown,
-						LatencyMs:   0,
-						Message:     "connection refused",
-						LastChecked: time.Now().UTC(),
-						Error:       "connection refused",
+	cases := []struct {
+		name     string
+		setupSvc func(*mocks.FakeHealthChecker)
+		validate func(*testing.T, *model.ReadinessReport)
+	}{
+		{
+			name: "healthy readiness",
+			setupSvc: func(fake *mocks.FakeHealthChecker) {
+				fake.ReadinessReturns(&model.ReadinessReport{
+					Status:    model.HealthStatusOK,
+					Timestamp: time.Now().UTC(),
+					Version:   "1.0.0",
+					Checks: map[string]model.DependencyCheck{
+						"storage": {
+							Status:      model.DependencyStatusUp,
+							LatencyMs:   0,
+							Message:     "ok",
+							LastChecked: time.Now().UTC(),
+						},
 					},
-				},
-			}, nil
+				}, nil)
+			},
+			validate: func(t *testing.T, result *model.ReadinessReport) {
+				require.NotNil(t, result)
+				require.Equal(t, model.HealthStatusOK, result.Status)
+				require.Contains(t, result.Checks, "storage")
+				require.Equal(t, model.DependencyStatusUp, result.Checks["storage"].Status)
+			},
 		},
-	}
-	handler := queries.NewFetchReadinessQueryHandler(healthChecker, logger.NewTestLogger(), otelNoop.NewTracerProvider(), noop.NewMetricsClient())
-
-	query := queries.FetchReadinessQuery{}
-
-	result, err := handler.Execute(s.ctx, query)
-
-	s.Require().NoError(err)
-	s.Require().NotNil(result)
-	s.Require().Equal(model.HealthStatusDown, result.Status)
-	s.Require().Contains(result.Checks, "storage")
-	s.Require().Equal(model.DependencyStatusDown, result.Checks["storage"].Status)
-}
-
-type FetchHealthReportQueryTestSuite struct {
-	suite.Suite
-	ctx context.Context
-}
-
-func TestFetchHealthReportQueryTestSuite(t *testing.T) {
-	t.Parallel()
-	suite.Run(t, new(FetchHealthReportQueryTestSuite))
-}
-
-func (s *FetchHealthReportQueryTestSuite) SetupTest() {
-	s.ctx = context.Background()
-}
-
-func (s *FetchHealthReportQueryTestSuite) TestExecute_Healthy() {
-	s.T().Parallel()
-
-	healthChecker := &mockHealthChecker{}
-	handler := queries.NewFetchHealthReportQueryHandler(healthChecker, logger.NewTestLogger(), otelNoop.NewTracerProvider(), noop.NewMetricsClient())
-
-	query := queries.FetchHealthReportQuery{}
-
-	result, err := handler.Execute(s.ctx, query)
-
-	s.Require().NoError(err)
-	s.Require().NotNil(result)
-	s.Require().Equal(model.HealthStatusOK, result.Status)
-	s.Require().NotEmpty(result.Version.API)
-	s.Require().NotEmpty(result.Version.Go)
-	s.Require().Greater(result.System.CPUCores, uint(0))
-	s.Require().Greater(result.System.Goroutines, uint(0))
-}
-
-func (s *FetchHealthReportQueryTestSuite) TestExecute_Unhealthy() {
-	s.T().Parallel()
-
-	healthChecker := &mockHealthChecker{
-		healthFn: func(_ context.Context) (*model.HealthReport, error) {
-			return &model.HealthReport{
-				Status:    model.HealthStatusDown,
-				Timestamp: time.Now().UTC(),
-				Version: model.VersionInfo{
-					API:   "1.0.0",
-					Build: "development",
-					Go:    "1.23",
-				},
-				Checks: map[string]model.DependencyCheck{
-					"storage": {
-						Status:      model.DependencyStatusDown,
-						LatencyMs:   0,
-						Message:     "service unavailable",
-						LastChecked: time.Now().UTC(),
-						Error:       "service unavailable",
+		{
+			name: "unhealthy readiness",
+			setupSvc: func(fake *mocks.FakeHealthChecker) {
+				fake.ReadinessReturns(&model.ReadinessReport{
+					Status:    model.HealthStatusDown,
+					Timestamp: time.Now().UTC(),
+					Version:   "1.0.0",
+					Checks: map[string]model.DependencyCheck{
+						"storage": {
+							Status:      model.DependencyStatusDown,
+							LatencyMs:   0,
+							Message:     "connection refused",
+							LastChecked: time.Now().UTC(),
+							Error:       "connection refused",
+						},
 					},
-				},
-				System: model.SystemInfo{
-					Goroutines: 1,
-					CPUCores:   1,
-				},
-			}, nil
+				}, nil)
+			},
+			validate: func(t *testing.T, result *model.ReadinessReport) {
+				require.NotNil(t, result)
+				require.Equal(t, model.HealthStatusDown, result.Status)
+				require.Contains(t, result.Checks, "storage")
+				require.Equal(t, model.DependencyStatusDown, result.Checks["storage"].Status)
+			},
 		},
 	}
-	handler := queries.NewFetchHealthReportQueryHandler(healthChecker, logger.NewTestLogger(), otelNoop.NewTracerProvider(), noop.NewMetricsClient())
 
-	query := queries.FetchHealthReportQuery{}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 
-	result, err := handler.Execute(s.ctx, query)
+			healthChecker := &mocks.FakeHealthChecker{}
+			if tc.setupSvc != nil {
+				tc.setupSvc(healthChecker)
+			}
 
-	s.Require().NoError(err)
-	s.Require().NotNil(result)
-	s.Require().Equal(model.HealthStatusDown, result.Status)
-	s.Require().Contains(result.Checks, "storage")
-	s.Require().Equal(model.DependencyStatusDown, result.Checks["storage"].Status)
+			handler := queries.NewFetchReadinessQueryHandler(healthChecker, log, tp, mc)
+			query := queries.FetchReadinessQuery{}
+
+			result, err := handler.Execute(t.Context(), query)
+
+			require.NoError(t, err)
+			tc.validate(t, result)
+		})
+	}
+}
+
+func TestFetchHealthReportQueryHandler(t *testing.T) {
+	t.Parallel()
+
+	log := logger.NewTestLogger()
+	tp := otelNoop.NewTracerProvider()
+	mc := noop.NewMetricsClient()
+
+	cases := []struct {
+		name     string
+		setupSvc func(*mocks.FakeHealthChecker)
+		validate func(*testing.T, *model.HealthReport)
+	}{
+		{
+			name: "healthy report",
+			setupSvc: func(fake *mocks.FakeHealthChecker) {
+				fake.HealthReturns(&model.HealthReport{
+					Status:    model.HealthStatusOK,
+					Timestamp: time.Now().UTC(),
+					Version: model.VersionInfo{
+						API:   "1.0.0",
+						Build: "development",
+						Go:    "1.25",
+					},
+					Checks: map[string]model.DependencyCheck{
+						"storage": {
+							Status:      model.DependencyStatusUp,
+							LatencyMs:   0,
+							Message:     "ok",
+							LastChecked: time.Now().UTC(),
+						},
+					},
+					System: model.SystemInfo{
+						Goroutines: 1,
+						CPUCores:   1,
+					},
+				}, nil)
+			},
+			validate: func(t *testing.T, result *model.HealthReport) {
+				require.NotNil(t, result)
+				require.Equal(t, model.HealthStatusOK, result.Status)
+				require.NotEmpty(t, result.Version.API)
+				require.NotEmpty(t, result.Version.Go)
+				require.Greater(t, result.System.CPUCores, uint(0))
+				require.Greater(t, result.System.Goroutines, uint(0))
+			},
+		},
+		{
+			name: "unhealthy report",
+			setupSvc: func(fake *mocks.FakeHealthChecker) {
+				fake.HealthReturns(&model.HealthReport{
+					Status:    model.HealthStatusDown,
+					Timestamp: time.Now().UTC(),
+					Version: model.VersionInfo{
+						API:   "1.0.0",
+						Build: "development",
+						Go:    "1.25",
+					},
+					Checks: map[string]model.DependencyCheck{
+						"storage": {
+							Status:      model.DependencyStatusDown,
+							LatencyMs:   0,
+							Message:     "service unavailable",
+							LastChecked: time.Now().UTC(),
+							Error:       "service unavailable",
+						},
+					},
+					System: model.SystemInfo{
+						Goroutines: 1,
+						CPUCores:   1,
+					},
+				}, nil)
+			},
+			validate: func(t *testing.T, result *model.HealthReport) {
+				require.NotNil(t, result)
+				require.Equal(t, model.HealthStatusDown, result.Status)
+				require.Contains(t, result.Checks, "storage")
+				require.Equal(t, model.DependencyStatusDown, result.Checks["storage"].Status)
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			healthChecker := &mocks.FakeHealthChecker{}
+			if tc.setupSvc != nil {
+				tc.setupSvc(healthChecker)
+			}
+
+			handler := queries.NewFetchHealthReportQueryHandler(healthChecker, log, tp, mc)
+			query := queries.FetchHealthReportQuery{}
+
+			result, err := handler.Execute(t.Context(), query)
+
+			require.NoError(t, err)
+			tc.validate(t, result)
+		})
+	}
 }

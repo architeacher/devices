@@ -77,6 +77,8 @@ services:
         condition: service_completed_successfully
       keydb:
         condition: service_healthy
+      svc-devices:
+          condition: service_healthy
     volumes:
       - "./services/svc-api-gateway:/app"
       - type: bind
@@ -133,7 +135,7 @@ services:
       - "traefik.http.routers.svc-tracking.service=svc-tracking"
       - "traefik.http.routers.svc-tracking.tls=true"
     healthcheck:
-      test: [ "CMD-SHELL", "grpcurl -plaintext localhost:9090 svc_devices.devices/Health | grep -q '\"status\": \"Serving\"'" ]
+      test: [ "CMD-SHELL", "grpcurl -plaintext localhost:9090 device.v1.HealthService/Check | grep -q 'SERVING_STATUS_SERVING'" ]
       interval: 10s
       retries: 5
       start_period: 15s

@@ -1,111 +1,16 @@
 package queries_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/architeacher/devices/pkg/logger"
 	"github.com/architeacher/devices/pkg/metrics/noop"
 	"github.com/architeacher/devices/services/svc-devices/internal/domain/model"
 	"github.com/architeacher/devices/services/svc-devices/internal/infrastructure/telemetry"
+	"github.com/architeacher/devices/services/svc-devices/internal/mocks"
 	"github.com/architeacher/devices/services/svc-devices/internal/usecases/queries"
 	"github.com/stretchr/testify/require"
 )
-
-type mockDevicesService struct {
-	devices        map[string]*model.Device
-	getDeviceFn    func(ctx context.Context, id model.DeviceID) (*model.Device, error)
-	listDevicesFn  func(ctx context.Context, filter model.DeviceFilter) (*model.DeviceList, error)
-	createDeviceFn func(ctx context.Context, name, brand string, state model.State) (*model.Device, error)
-	updateDeviceFn func(ctx context.Context, id model.DeviceID, name, brand string, state model.State) (*model.Device, error)
-	patchDeviceFn  func(ctx context.Context, id model.DeviceID, updates map[string]any) (*model.Device, error)
-	deleteDeviceFn func(ctx context.Context, id model.DeviceID) error
-}
-
-func newMockDevicesService() *mockDevicesService {
-	return &mockDevicesService{
-		devices: make(map[string]*model.Device),
-	}
-}
-
-func (m *mockDevicesService) CreateDevice(ctx context.Context, name, brand string, state model.State) (*model.Device, error) {
-	if m.createDeviceFn != nil {
-		return m.createDeviceFn(ctx, name, brand, state)
-	}
-
-	device := model.NewDevice(name, brand, state)
-	m.devices[device.ID.String()] = device
-
-	return device, nil
-}
-
-func (m *mockDevicesService) GetDevice(ctx context.Context, id model.DeviceID) (*model.Device, error) {
-	if m.getDeviceFn != nil {
-		return m.getDeviceFn(ctx, id)
-	}
-
-	device, ok := m.devices[id.String()]
-	if !ok {
-		return nil, model.ErrDeviceNotFound
-	}
-
-	return device, nil
-}
-
-func (m *mockDevicesService) ListDevices(ctx context.Context, filter model.DeviceFilter) (*model.DeviceList, error) {
-	if m.listDevicesFn != nil {
-		return m.listDevicesFn(ctx, filter)
-	}
-
-	devices := make([]*model.Device, 0)
-
-	for _, d := range m.devices {
-		if filter.Brand != nil && d.Brand != *filter.Brand {
-			continue
-		}
-
-		if filter.State != nil && d.State != *filter.State {
-			continue
-		}
-
-		devices = append(devices, d)
-	}
-
-	return &model.DeviceList{
-		Devices: devices,
-		Pagination: model.Pagination{
-			Page:       filter.Page,
-			Size:       filter.Size,
-			TotalItems: uint(len(devices)),
-			TotalPages: 1,
-		},
-		Filters: filter,
-	}, nil
-}
-
-func (m *mockDevicesService) UpdateDevice(ctx context.Context, id model.DeviceID, name, brand string, state model.State) (*model.Device, error) {
-	if m.updateDeviceFn != nil {
-		return m.updateDeviceFn(ctx, id, name, brand, state)
-	}
-
-	return nil, model.ErrDeviceNotFound
-}
-
-func (m *mockDevicesService) PatchDevice(ctx context.Context, id model.DeviceID, updates map[string]any) (*model.Device, error) {
-	if m.patchDeviceFn != nil {
-		return m.patchDeviceFn(ctx, id, updates)
-	}
-
-	return nil, model.ErrDeviceNotFound
-}
-
-func (m *mockDevicesService) DeleteDevice(ctx context.Context, id model.DeviceID) error {
-	if m.deleteDeviceFn != nil {
-		return m.deleteDeviceFn(ctx, id)
-	}
-
-	return model.ErrDeviceNotFound
-}
 
 func TestGetDeviceQueryHandler(t *testing.T) {
 	t.Parallel()
@@ -116,14 +21,14 @@ func TestGetDeviceQueryHandler(t *testing.T) {
 
 	cases := []struct {
 		name        string
-		setupSvc    func(*mockDevicesService) model.DeviceID
+		setupSvc    func(*mocks.FakeDevicesService) model.DeviceID
 		expectError bool
 	}{
 		{
 			name: "successfully get device",
-			setupSvc: func(m *mockDevicesService) model.DeviceID {
+			setupSvc: func(fake *mocks.FakeDevicesService) model.DeviceID {
 				device := model.NewDevice("Test", "Brand", model.StateAvailable)
-				m.devices[device.ID.String()] = device
+				fake.GetDeviceReturns(device, nil)
 
 				return device.ID
 			},
@@ -131,7 +36,9 @@ func TestGetDeviceQueryHandler(t *testing.T) {
 		},
 		{
 			name: "device not found",
-			setupSvc: func(_ *mockDevicesService) model.DeviceID {
+			setupSvc: func(fake *mocks.FakeDevicesService) model.DeviceID {
+				fake.GetDeviceReturns(nil, model.ErrDeviceNotFound)
+
 				return model.NewDeviceID()
 			},
 			expectError: true,
@@ -142,15 +49,14 @@ func TestGetDeviceQueryHandler(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			svc := newMockDevicesService()
+			svc := &mocks.FakeDevicesService{}
 			deviceID := tc.setupSvc(svc)
 
 			handler := queries.NewGetDeviceQueryHandler(svc, log, tp, mc)
-			ctx := context.Background()
 
 			query := queries.GetDeviceQuery{ID: deviceID}
 
-			device, err := handler.Execute(ctx, query)
+			device, err := handler.Execute(t.Context(), query)
 
 			if tc.expectError {
 				require.Error(t, err)
@@ -173,28 +79,44 @@ func TestListDevicesQueryHandler(t *testing.T) {
 
 	cases := []struct {
 		name          string
-		setupSvc      func(*mockDevicesService)
+		setupSvc      func(*mocks.FakeDevicesService)
 		filter        model.DeviceFilter
 		expectedCount int
 	}{
 		{
 			name: "list all devices",
-			setupSvc: func(m *mockDevicesService) {
+			setupSvc: func(fake *mocks.FakeDevicesService) {
 				device1 := model.NewDevice("Device 1", "Brand A", model.StateAvailable)
 				device2 := model.NewDevice("Device 2", "Brand B", model.StateInUse)
-				m.devices[device1.ID.String()] = device1
-				m.devices[device2.ID.String()] = device2
+				fake.ListDevicesReturns(&model.DeviceList{
+					Devices: []*model.Device{device1, device2},
+					Pagination: model.Pagination{
+						Page:       1,
+						Size:       10,
+						TotalItems: 2,
+						TotalPages: 1,
+					},
+					Filters: model.DefaultDeviceFilter(),
+				}, nil)
 			},
 			filter:        model.DefaultDeviceFilter(),
 			expectedCount: 2,
 		},
 		{
 			name: "filter by brand",
-			setupSvc: func(m *mockDevicesService) {
+			setupSvc: func(fake *mocks.FakeDevicesService) {
 				device1 := model.NewDevice("Device 1", "Brand A", model.StateAvailable)
-				device2 := model.NewDevice("Device 2", "Brand B", model.StateInUse)
-				m.devices[device1.ID.String()] = device1
-				m.devices[device2.ID.String()] = device2
+				brand := "Brand A"
+				fake.ListDevicesReturns(&model.DeviceList{
+					Devices: []*model.Device{device1},
+					Pagination: model.Pagination{
+						Page:       1,
+						Size:       10,
+						TotalItems: 1,
+						TotalPages: 1,
+					},
+					Filters: model.DeviceFilter{Brand: &brand, Page: 1, Size: 10},
+				}, nil)
 			},
 			filter: func() model.DeviceFilter {
 				f := model.DefaultDeviceFilter()
@@ -207,13 +129,20 @@ func TestListDevicesQueryHandler(t *testing.T) {
 		},
 		{
 			name: "filter by state",
-			setupSvc: func(m *mockDevicesService) {
+			setupSvc: func(fake *mocks.FakeDevicesService) {
 				device1 := model.NewDevice("Device 1", "Brand A", model.StateAvailable)
-				device2 := model.NewDevice("Device 2", "Brand B", model.StateInUse)
 				device3 := model.NewDevice("Device 3", "Brand C", model.StateAvailable)
-				m.devices[device1.ID.String()] = device1
-				m.devices[device2.ID.String()] = device2
-				m.devices[device3.ID.String()] = device3
+				state := model.StateAvailable
+				fake.ListDevicesReturns(&model.DeviceList{
+					Devices: []*model.Device{device1, device3},
+					Pagination: model.Pagination{
+						Page:       1,
+						Size:       10,
+						TotalItems: 2,
+						TotalPages: 1,
+					},
+					Filters: model.DeviceFilter{State: &state, Page: 1, Size: 10},
+				}, nil)
 			},
 			filter: func() model.DeviceFilter {
 				f := model.DefaultDeviceFilter()
@@ -226,7 +155,17 @@ func TestListDevicesQueryHandler(t *testing.T) {
 		},
 		{
 			name: "empty list",
-			setupSvc: func(_ *mockDevicesService) {
+			setupSvc: func(fake *mocks.FakeDevicesService) {
+				fake.ListDevicesReturns(&model.DeviceList{
+					Devices: []*model.Device{},
+					Pagination: model.Pagination{
+						Page:       1,
+						Size:       10,
+						TotalItems: 0,
+						TotalPages: 1,
+					},
+					Filters: model.DefaultDeviceFilter(),
+				}, nil)
 			},
 			filter:        model.DefaultDeviceFilter(),
 			expectedCount: 0,
@@ -237,15 +176,14 @@ func TestListDevicesQueryHandler(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			svc := newMockDevicesService()
+			svc := &mocks.FakeDevicesService{}
 			tc.setupSvc(svc)
 
 			handler := queries.NewListDevicesQueryHandler(svc, log, tp, mc)
-			ctx := context.Background()
 
 			query := queries.ListDevicesQuery{Filter: tc.filter}
 
-			list, err := handler.Execute(ctx, query)
+			list, err := handler.Execute(t.Context(), query)
 
 			require.NoError(t, err)
 			require.NotNil(t, list)
@@ -262,25 +200,12 @@ func TestFetchLivenessQueryHandler(t *testing.T) {
 	mc := noop.NewMetricsClient()
 
 	handler := queries.NewFetchLivenessQueryHandler(log, tp, mc)
-	ctx := context.Background()
 
-	result, err := handler.Execute(ctx, queries.FetchLivenessQuery{})
+	result, err := handler.Execute(t.Context(), queries.FetchLivenessQuery{})
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	require.Equal(t, "ok", result.Status)
-}
-
-type mockDBHealthChecker struct {
-	healthy bool
-}
-
-func (m *mockDBHealthChecker) Ping(_ context.Context) error {
-	if !m.healthy {
-		return model.ErrDatabaseConnection
-	}
-
-	return nil
 }
 
 func TestFetchReadinessQueryHandler(t *testing.T) {
@@ -292,17 +217,21 @@ func TestFetchReadinessQueryHandler(t *testing.T) {
 
 	cases := []struct {
 		name          string
-		dbHealthy     bool
+		setupChecker  func(*mocks.FakeDatabaseHealthChecker)
 		expectedReady bool
 	}{
 		{
-			name:          "service is ready when db is healthy",
-			dbHealthy:     true,
+			name: "service is ready when db is healthy",
+			setupChecker: func(fake *mocks.FakeDatabaseHealthChecker) {
+				fake.PingReturns(nil)
+			},
 			expectedReady: true,
 		},
 		{
-			name:          "service is not ready when db is unhealthy",
-			dbHealthy:     false,
+			name: "service is not ready when db is unhealthy",
+			setupChecker: func(fake *mocks.FakeDatabaseHealthChecker) {
+				fake.PingReturns(model.ErrDatabaseConnection)
+			},
 			expectedReady: false,
 		},
 	}
@@ -311,11 +240,12 @@ func TestFetchReadinessQueryHandler(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			dbChecker := &mockDBHealthChecker{healthy: tc.dbHealthy}
-			handler := queries.NewFetchReadinessQueryHandler(dbChecker, log, tp, mc)
-			ctx := context.Background()
+			dbChecker := &mocks.FakeDatabaseHealthChecker{}
+			tc.setupChecker(dbChecker)
 
-			result, err := handler.Execute(ctx, queries.FetchReadinessQuery{})
+			handler := queries.NewFetchReadinessQueryHandler(dbChecker, log, tp, mc)
+
+			result, err := handler.Execute(t.Context(), queries.FetchReadinessQuery{})
 
 			require.NoError(t, err)
 			require.NotNil(t, result)

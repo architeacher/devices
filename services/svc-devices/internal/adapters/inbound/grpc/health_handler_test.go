@@ -37,7 +37,7 @@ func TestHealthHandler_Check(t *testing.T) {
 			dbChecker := &mockHealthChecker{healthy: tc.dbHealthy}
 			handler := inboundgrpc.NewHealthHandler(dbChecker)
 
-			resp, err := handler.Check(context.Background(), &devicev1.HealthCheckRequest{})
+			resp, err := handler.Check(t.Context(), &devicev1.HealthCheckRequest{})
 
 			require.NoError(t, err)
 			require.NotNil(t, resp)

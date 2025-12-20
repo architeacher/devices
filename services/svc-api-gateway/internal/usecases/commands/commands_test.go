@@ -8,222 +8,337 @@ import (
 	"github.com/architeacher/devices/pkg/logger"
 	"github.com/architeacher/devices/pkg/metrics/noop"
 	"github.com/architeacher/devices/services/svc-api-gateway/internal/domain/model"
+	"github.com/architeacher/devices/services/svc-api-gateway/internal/mocks"
 	"github.com/architeacher/devices/services/svc-api-gateway/internal/usecases/commands"
-	"github.com/stretchr/testify/suite"
+	"github.com/stretchr/testify/require"
 	otelNoop "go.opentelemetry.io/otel/trace/noop"
 )
 
-type mockDeviceService struct {
-	createDeviceFn func(ctx context.Context, name, brand string, state model.State) (*model.Device, error)
-	updateDeviceFn func(ctx context.Context, id model.DeviceID, name, brand string, state model.State) (*model.Device, error)
-	patchDeviceFn  func(ctx context.Context, id model.DeviceID, updates map[string]any) (*model.Device, error)
-	deleteDeviceFn func(ctx context.Context, id model.DeviceID) error
-}
-
-func (m *mockDeviceService) CreateDevice(ctx context.Context, name, brand string, state model.State) (*model.Device, error) {
-	if m.createDeviceFn != nil {
-		return m.createDeviceFn(ctx, name, brand, state)
-	}
-
-	return model.NewDevice(name, brand, state), nil
-}
-
-func (m *mockDeviceService) GetDevice(_ context.Context, id model.DeviceID) (*model.Device, error) {
-	return &model.Device{ID: id}, nil
-}
-
-func (m *mockDeviceService) ListDevices(_ context.Context, filter model.DeviceFilter) (*model.DeviceList, error) {
-	return &model.DeviceList{Filters: filter}, nil
-}
-
-func (m *mockDeviceService) UpdateDevice(ctx context.Context, id model.DeviceID, name, brand string, state model.State) (*model.Device, error) {
-	if m.updateDeviceFn != nil {
-		return m.updateDeviceFn(ctx, id, name, brand, state)
-	}
-
-	return &model.Device{ID: id, Name: name, Brand: brand, State: state}, nil
-}
-
-func (m *mockDeviceService) PatchDevice(ctx context.Context, id model.DeviceID, updates map[string]any) (*model.Device, error) {
-	if m.patchDeviceFn != nil {
-		return m.patchDeviceFn(ctx, id, updates)
-	}
-
-	return &model.Device{ID: id}, nil
-}
-
-func (m *mockDeviceService) DeleteDevice(ctx context.Context, id model.DeviceID) error {
-	if m.deleteDeviceFn != nil {
-		return m.deleteDeviceFn(ctx, id)
-	}
-
-	return nil
-}
-
-type CreateDeviceCommandTestSuite struct {
-	suite.Suite
-	ctx context.Context
-}
-
-func TestCreateDeviceCommandTestSuite(t *testing.T) {
+func TestCreateDeviceCommandHandler(t *testing.T) {
 	t.Parallel()
-	suite.Run(t, new(CreateDeviceCommandTestSuite))
-}
 
-func (s *CreateDeviceCommandTestSuite) SetupTest() {
-	s.ctx = context.Background()
-}
-
-func (s *CreateDeviceCommandTestSuite) TestHandle_Success() {
-	s.T().Parallel()
+	log := logger.NewTestLogger()
+	tp := otelNoop.NewTracerProvider()
+	mc := noop.NewMetricsClient()
 
 	cases := []struct {
-		name  string
-		dName string
-		brand string
-		state model.State
+		name        string
+		cmd         commands.CreateDeviceCommand
+		setupSvc    func(*mocks.FakeDevicesService)
+		expectError bool
 	}{
 		{
-			name:  "create available device",
-			dName: "iPhone",
-			brand: "Apple",
-			state: model.StateAvailable,
+			name: "create available device",
+			cmd: commands.CreateDeviceCommand{
+				Name:  "iPhone",
+				Brand: "Apple",
+				State: model.StateAvailable,
+			},
+			setupSvc: func(fake *mocks.FakeDevicesService) {
+				fake.CreateDeviceStub = func(_ context.Context, name, brand string, state model.State) (*model.Device, error) {
+					return model.NewDevice(name, brand, state), nil
+				}
+			},
+			expectError: false,
 		},
 		{
-			name:  "create in-use device",
-			dName: "Pixel",
-			brand: "Google",
-			state: model.StateInUse,
+			name: "create in-use device",
+			cmd: commands.CreateDeviceCommand{
+				Name:  "Pixel",
+				Brand: "Google",
+				State: model.StateInUse,
+			},
+			setupSvc: func(fake *mocks.FakeDevicesService) {
+				fake.CreateDeviceStub = func(_ context.Context, name, brand string, state model.State) (*model.Device, error) {
+					return model.NewDevice(name, brand, state), nil
+				}
+			},
+			expectError: false,
+		},
+		{
+			name: "service error",
+			cmd: commands.CreateDeviceCommand{
+				Name:  "Test",
+				Brand: "Brand",
+				State: model.StateAvailable,
+			},
+			setupSvc: func(fake *mocks.FakeDevicesService) {
+				fake.CreateDeviceReturns(nil, errors.New("service error"))
+			},
+			expectError: true,
 		},
 	}
 
 	for _, tc := range cases {
-		s.Run(tc.name, func() {
-			svc := &mockDeviceService{}
-			handler := commands.NewCreateDeviceCommandHandler(svc, logger.NewTestLogger(), otelNoop.NewTracerProvider(), noop.NewMetricsClient())
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 
-			cmd := commands.CreateDeviceCommand{
-				Name:  tc.dName,
-				Brand: tc.brand,
-				State: tc.state,
+			svc := &mocks.FakeDevicesService{}
+			if tc.setupSvc != nil {
+				tc.setupSvc(svc)
 			}
 
-			result, err := handler.Handle(s.ctx, cmd)
+			handler := commands.NewCreateDeviceCommandHandler(svc, log, tp, mc)
+			device, err := handler.Handle(t.Context(), tc.cmd)
 
-			s.Require().NoError(err)
-			s.Require().NotNil(result)
-			s.Require().Equal(tc.dName, result.Name)
-			s.Require().Equal(tc.brand, result.Brand)
-			s.Require().Equal(tc.state, result.State)
+			if tc.expectError {
+				require.Error(t, err)
+				require.Nil(t, device)
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, device)
+				require.Equal(t, tc.cmd.Name, device.Name)
+				require.Equal(t, tc.cmd.Brand, device.Brand)
+				require.Equal(t, tc.cmd.State, device.State)
+			}
 		})
 	}
 }
 
-func (s *CreateDeviceCommandTestSuite) TestHandle_ServiceError() {
-	s.T().Parallel()
+func TestUpdateDeviceCommandHandler(t *testing.T) {
+	t.Parallel()
 
-	expectedErr := errors.New("service error")
-	svc := &mockDeviceService{
-		createDeviceFn: func(_ context.Context, _, _ string, _ model.State) (*model.Device, error) {
-			return nil, expectedErr
+	log := logger.NewTestLogger()
+	tp := otelNoop.NewTracerProvider()
+	mc := noop.NewMetricsClient()
+
+	cases := []struct {
+		name        string
+		setupSvc    func(*mocks.FakeDevicesService) model.DeviceID
+		newName     string
+		newBrand    string
+		newState    model.State
+		expectError bool
+	}{
+		{
+			name: "successfully update device",
+			setupSvc: func(fake *mocks.FakeDevicesService) model.DeviceID {
+				id := model.NewDeviceID()
+				fake.UpdateDeviceStub = func(_ context.Context, deviceID model.DeviceID, name, brand string, state model.State) (*model.Device, error) {
+					return &model.Device{
+						ID:    deviceID,
+						Name:  name,
+						Brand: brand,
+						State: state,
+					}, nil
+				}
+
+				return id
+			},
+			newName:     "Updated",
+			newBrand:    "Updated Brand",
+			newState:    model.StateInUse,
+			expectError: false,
+		},
+		{
+			name: "device not found",
+			setupSvc: func(fake *mocks.FakeDevicesService) model.DeviceID {
+				fake.UpdateDeviceReturns(nil, model.ErrDeviceNotFound)
+
+				return model.NewDeviceID()
+			},
+			newName:     "Name",
+			newBrand:    "Brand",
+			newState:    model.StateAvailable,
+			expectError: true,
 		},
 	}
-	handler := commands.NewCreateDeviceCommandHandler(svc, logger.NewTestLogger(), otelNoop.NewTracerProvider(), noop.NewMetricsClient())
 
-	cmd := commands.CreateDeviceCommand{
-		Name:  "Test",
-		Brand: "Brand",
-		State: model.StateAvailable,
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			svc := &mocks.FakeDevicesService{}
+			deviceID := tc.setupSvc(svc)
+
+			handler := commands.NewUpdateDeviceCommandHandler(svc, log, tp, mc)
+
+			cmd := commands.UpdateDeviceCommand{
+				ID:    deviceID,
+				Name:  tc.newName,
+				Brand: tc.newBrand,
+				State: tc.newState,
+			}
+
+			device, err := handler.Handle(t.Context(), cmd)
+
+			if tc.expectError {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, device)
+				require.Equal(t, deviceID, device.ID)
+				require.Equal(t, tc.newName, device.Name)
+				require.Equal(t, tc.newBrand, device.Brand)
+				require.Equal(t, tc.newState, device.State)
+			}
+		})
 	}
-
-	result, err := handler.Handle(s.ctx, cmd)
-
-	s.Require().Error(err)
-	s.Require().Nil(result)
 }
 
-type UpdateDeviceCommandTestSuite struct {
-	suite.Suite
-	ctx context.Context
-}
-
-func TestUpdateDeviceCommandTestSuite(t *testing.T) {
+func TestPatchDeviceCommandHandler(t *testing.T) {
 	t.Parallel()
-	suite.Run(t, new(UpdateDeviceCommandTestSuite))
-}
 
-func (s *UpdateDeviceCommandTestSuite) SetupTest() {
-	s.ctx = context.Background()
-}
+	log := logger.NewTestLogger()
+	tp := otelNoop.NewTracerProvider()
+	mc := noop.NewMetricsClient()
 
-func (s *UpdateDeviceCommandTestSuite) TestHandle_Success() {
-	s.T().Parallel()
+	cases := []struct {
+		name        string
+		setupSvc    func(*mocks.FakeDevicesService) model.DeviceID
+		updates     map[string]any
+		expectError bool
+		validate    func(*testing.T, *model.Device)
+	}{
+		{
+			name: "patch name of device",
+			setupSvc: func(fake *mocks.FakeDevicesService) model.DeviceID {
+				id := model.NewDeviceID()
+				fake.PatchDeviceStub = func(_ context.Context, deviceID model.DeviceID, _ map[string]any) (*model.Device, error) {
+					return &model.Device{
+						ID:    deviceID,
+						Name:  "Patched Name",
+						Brand: "Brand",
+						State: model.StateAvailable,
+					}, nil
+				}
 
-	svc := &mockDeviceService{}
-	handler := commands.NewUpdateDeviceCommandHandler(svc, logger.NewTestLogger(), otelNoop.NewTracerProvider(), noop.NewMetricsClient())
+				return id
+			},
+			updates: map[string]any{
+				"name": "Patched Name",
+			},
+			expectError: false,
+			validate: func(t *testing.T, d *model.Device) {
+				require.Equal(t, "Patched Name", d.Name)
+				require.Equal(t, "Brand", d.Brand)
+			},
+		},
+		{
+			name: "patch state only",
+			setupSvc: func(fake *mocks.FakeDevicesService) model.DeviceID {
+				id := model.NewDeviceID()
+				fake.PatchDeviceStub = func(_ context.Context, deviceID model.DeviceID, _ map[string]any) (*model.Device, error) {
+					return &model.Device{
+						ID:    deviceID,
+						Name:  "Original",
+						Brand: "Brand",
+						State: model.StateInUse,
+					}, nil
+				}
 
-	id := model.NewDeviceID()
-	cmd := commands.UpdateDeviceCommand{
-		ID:    id,
-		Name:  "Updated",
-		Brand: "Updated Brand",
-		State: model.StateInUse,
-	}
+				return id
+			},
+			updates: map[string]any{
+				"state": "in_use",
+			},
+			expectError: false,
+			validate: func(t *testing.T, d *model.Device) {
+				require.Equal(t, model.StateInUse, d.State)
+			},
+		},
+		{
+			name: "device not found",
+			setupSvc: func(fake *mocks.FakeDevicesService) model.DeviceID {
+				fake.PatchDeviceReturns(nil, model.ErrDeviceNotFound)
 
-	result, err := handler.Handle(s.ctx, cmd)
-
-	s.Require().NoError(err)
-	s.Require().NotNil(result)
-	s.Require().Equal(id, result.ID)
-	s.Require().Equal(cmd.Name, result.Name)
-	s.Require().Equal(cmd.Brand, result.Brand)
-	s.Require().Equal(cmd.State, result.State)
-}
-
-type DeleteDeviceCommandTestSuite struct {
-	suite.Suite
-	ctx context.Context
-}
-
-func TestDeleteDeviceCommandTestSuite(t *testing.T) {
-	t.Parallel()
-	suite.Run(t, new(DeleteDeviceCommandTestSuite))
-}
-
-func (s *DeleteDeviceCommandTestSuite) SetupTest() {
-	s.ctx = context.Background()
-}
-
-func (s *DeleteDeviceCommandTestSuite) TestHandle_Success() {
-	s.T().Parallel()
-
-	svc := &mockDeviceService{}
-	handler := commands.NewDeleteDeviceCommandHandler(svc, logger.NewTestLogger(), otelNoop.NewTracerProvider(), noop.NewMetricsClient())
-
-	id := model.NewDeviceID()
-	cmd := commands.DeleteDeviceCommand{ID: id}
-
-	result, err := handler.Handle(s.ctx, cmd)
-
-	s.Require().NoError(err)
-	s.Require().True(result.Success)
-}
-
-func (s *DeleteDeviceCommandTestSuite) TestHandle_ServiceError() {
-	s.T().Parallel()
-
-	expectedErr := errors.New("cannot delete")
-	svc := &mockDeviceService{
-		deleteDeviceFn: func(_ context.Context, _ model.DeviceID) error {
-			return expectedErr
+				return model.NewDeviceID()
+			},
+			updates: map[string]any{
+				"name": "New Name",
+			},
+			expectError: true,
+			validate:    nil,
 		},
 	}
-	handler := commands.NewDeleteDeviceCommandHandler(svc, logger.NewTestLogger(), otelNoop.NewTracerProvider(), noop.NewMetricsClient())
 
-	cmd := commands.DeleteDeviceCommand{ID: model.NewDeviceID()}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 
-	result, err := handler.Handle(s.ctx, cmd)
+			svc := &mocks.FakeDevicesService{}
+			deviceID := tc.setupSvc(svc)
 
-	s.Require().Error(err)
-	s.Require().False(result.Success)
+			handler := commands.NewPatchDeviceCommandHandler(svc, log, tp, mc)
+
+			cmd := commands.PatchDeviceCommand{
+				ID:      deviceID,
+				Updates: tc.updates,
+			}
+
+			device, err := handler.Handle(t.Context(), cmd)
+
+			if tc.expectError {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, device)
+				if tc.validate != nil {
+					tc.validate(t, device)
+				}
+			}
+		})
+	}
+}
+
+func TestDeleteDeviceCommandHandler(t *testing.T) {
+	t.Parallel()
+
+	log := logger.NewTestLogger()
+	tp := otelNoop.NewTracerProvider()
+	mc := noop.NewMetricsClient()
+
+	cases := []struct {
+		name        string
+		setupSvc    func(*mocks.FakeDevicesService) model.DeviceID
+		expectError bool
+		expectedErr error
+	}{
+		{
+			name: "successfully delete device",
+			setupSvc: func(fake *mocks.FakeDevicesService) model.DeviceID {
+				id := model.NewDeviceID()
+				fake.DeleteDeviceReturns(nil)
+
+				return id
+			},
+			expectError: false,
+		},
+		{
+			name: "cannot delete device",
+			setupSvc: func(fake *mocks.FakeDevicesService) model.DeviceID {
+				fake.DeleteDeviceReturns(model.ErrDeviceNotFound)
+
+				return model.NewDeviceID()
+			},
+			expectError: true,
+			expectedErr: model.ErrDeviceNotFound,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			svc := &mocks.FakeDevicesService{}
+			deviceID := tc.setupSvc(svc)
+
+			handler := commands.NewDeleteDeviceCommandHandler(svc, log, tp, mc)
+
+			cmd := commands.DeleteDeviceCommand{ID: deviceID}
+
+			result, err := handler.Handle(t.Context(), cmd)
+
+			if tc.expectError {
+				require.Error(t, err)
+				require.False(t, result.Success)
+				if tc.expectedErr != nil {
+					require.ErrorIs(t, err, tc.expectedErr)
+				}
+			} else {
+				require.NoError(t, err)
+				require.True(t, result.Success)
+			}
+		})
+	}
 }

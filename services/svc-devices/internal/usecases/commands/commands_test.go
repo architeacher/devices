@@ -8,79 +8,10 @@ import (
 	"github.com/architeacher/devices/pkg/metrics/noop"
 	"github.com/architeacher/devices/services/svc-devices/internal/domain/model"
 	"github.com/architeacher/devices/services/svc-devices/internal/infrastructure/telemetry"
+	"github.com/architeacher/devices/services/svc-devices/internal/mocks"
 	"github.com/architeacher/devices/services/svc-devices/internal/usecases/commands"
 	"github.com/stretchr/testify/require"
 )
-
-type mockDevicesService struct {
-	createDeviceFn func(ctx context.Context, name, brand string, state model.State) (*model.Device, error)
-	getDeviceFn    func(ctx context.Context, id model.DeviceID) (*model.Device, error)
-	listDevicesFn  func(ctx context.Context, filter model.DeviceFilter) (*model.DeviceList, error)
-	updateDeviceFn func(ctx context.Context, id model.DeviceID, name, brand string, state model.State) (*model.Device, error)
-	patchDeviceFn  func(ctx context.Context, id model.DeviceID, updates map[string]any) (*model.Device, error)
-	deleteDeviceFn func(ctx context.Context, id model.DeviceID) error
-}
-
-func newMockDevicesService() *mockDevicesService {
-	return &mockDevicesService{}
-}
-
-func (m *mockDevicesService) CreateDevice(ctx context.Context, name, brand string, state model.State) (*model.Device, error) {
-	if m.createDeviceFn != nil {
-		return m.createDeviceFn(ctx, name, brand, state)
-	}
-
-	return model.NewDevice(name, brand, state), nil
-}
-
-func (m *mockDevicesService) GetDevice(ctx context.Context, id model.DeviceID) (*model.Device, error) {
-	if m.getDeviceFn != nil {
-		return m.getDeviceFn(ctx, id)
-	}
-
-	return nil, model.ErrDeviceNotFound
-}
-
-func (m *mockDevicesService) ListDevices(ctx context.Context, filter model.DeviceFilter) (*model.DeviceList, error) {
-	if m.listDevicesFn != nil {
-		return m.listDevicesFn(ctx, filter)
-	}
-
-	return &model.DeviceList{
-		Devices: []*model.Device{},
-		Pagination: model.Pagination{
-			Page:       filter.Page,
-			Size:       filter.Size,
-			TotalItems: 0,
-			TotalPages: 1,
-		},
-		Filters: filter,
-	}, nil
-}
-
-func (m *mockDevicesService) UpdateDevice(ctx context.Context, id model.DeviceID, name, brand string, state model.State) (*model.Device, error) {
-	if m.updateDeviceFn != nil {
-		return m.updateDeviceFn(ctx, id, name, brand, state)
-	}
-
-	return nil, model.ErrDeviceNotFound
-}
-
-func (m *mockDevicesService) PatchDevice(ctx context.Context, id model.DeviceID, updates map[string]any) (*model.Device, error) {
-	if m.patchDeviceFn != nil {
-		return m.patchDeviceFn(ctx, id, updates)
-	}
-
-	return nil, model.ErrDeviceNotFound
-}
-
-func (m *mockDevicesService) DeleteDevice(ctx context.Context, id model.DeviceID) error {
-	if m.deleteDeviceFn != nil {
-		return m.deleteDeviceFn(ctx, id)
-	}
-
-	return model.ErrDeviceNotFound
-}
 
 func TestCreateDeviceCommandHandler(t *testing.T) {
 	t.Parallel()
@@ -92,7 +23,7 @@ func TestCreateDeviceCommandHandler(t *testing.T) {
 	cases := []struct {
 		name        string
 		cmd         commands.CreateDeviceCommand
-		setupSvc    func(*mockDevicesService)
+		setupSvc    func(*mocks.FakeDevicesService)
 		expectError bool
 	}{
 		{
@@ -101,6 +32,11 @@ func TestCreateDeviceCommandHandler(t *testing.T) {
 				Name:  "Test Device",
 				Brand: "Test Brand",
 				State: model.StateAvailable,
+			},
+			setupSvc: func(fake *mocks.FakeDevicesService) {
+				fake.CreateDeviceStub = func(_ context.Context, name, brand string, state model.State) (*model.Device, error) {
+					return model.NewDevice(name, brand, state), nil
+				}
 			},
 			expectError: false,
 		},
@@ -111,10 +47,8 @@ func TestCreateDeviceCommandHandler(t *testing.T) {
 				Brand: "Test Brand",
 				State: model.StateAvailable,
 			},
-			setupSvc: func(m *mockDevicesService) {
-				m.createDeviceFn = func(_ context.Context, _, _ string, _ model.State) (*model.Device, error) {
-					return nil, model.ErrDuplicateDevice
-				}
+			setupSvc: func(fake *mocks.FakeDevicesService) {
+				fake.CreateDeviceReturns(nil, model.ErrDuplicateDevice)
 			},
 			expectError: true,
 		},
@@ -124,15 +58,14 @@ func TestCreateDeviceCommandHandler(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			svc := newMockDevicesService()
+			svc := &mocks.FakeDevicesService{}
 			if tc.setupSvc != nil {
 				tc.setupSvc(svc)
 			}
 
 			handler := commands.NewCreateDeviceCommandHandler(svc, log, tp, mc)
-			ctx := context.Background()
 
-			device, err := handler.Handle(ctx, tc.cmd)
+			device, err := handler.Handle(t.Context(), tc.cmd)
 
 			if tc.expectError {
 				require.Error(t, err)
@@ -158,7 +91,7 @@ func TestUpdateDeviceCommandHandler(t *testing.T) {
 
 	cases := []struct {
 		name        string
-		setupSvc    func(*mockDevicesService) model.DeviceID
+		setupSvc    func(*mocks.FakeDevicesService) model.DeviceID
 		newName     string
 		newBrand    string
 		newState    model.State
@@ -166,9 +99,9 @@ func TestUpdateDeviceCommandHandler(t *testing.T) {
 	}{
 		{
 			name: "successfully update available device",
-			setupSvc: func(m *mockDevicesService) model.DeviceID {
+			setupSvc: func(fake *mocks.FakeDevicesService) model.DeviceID {
 				device := model.NewDevice("Original", "Original Brand", model.StateAvailable)
-				m.updateDeviceFn = func(_ context.Context, id model.DeviceID, name, brand string, state model.State) (*model.Device, error) {
+				fake.UpdateDeviceStub = func(_ context.Context, id model.DeviceID, name, brand string, state model.State) (*model.Device, error) {
 					return &model.Device{
 						ID:    id,
 						Name:  name,
@@ -186,11 +119,9 @@ func TestUpdateDeviceCommandHandler(t *testing.T) {
 		},
 		{
 			name: "cannot update name of in-use device",
-			setupSvc: func(m *mockDevicesService) model.DeviceID {
+			setupSvc: func(fake *mocks.FakeDevicesService) model.DeviceID {
 				device := model.NewDevice("Original", "Original Brand", model.StateInUse)
-				m.updateDeviceFn = func(_ context.Context, _ model.DeviceID, _, _ string, _ model.State) (*model.Device, error) {
-					return nil, model.ErrCannotUpdateInUseDevice
-				}
+				fake.UpdateDeviceReturns(nil, model.ErrCannotUpdateInUseDevice)
 
 				return device.ID
 			},
@@ -201,10 +132,8 @@ func TestUpdateDeviceCommandHandler(t *testing.T) {
 		},
 		{
 			name: "device not found",
-			setupSvc: func(m *mockDevicesService) model.DeviceID {
-				m.updateDeviceFn = func(_ context.Context, _ model.DeviceID, _, _ string, _ model.State) (*model.Device, error) {
-					return nil, model.ErrDeviceNotFound
-				}
+			setupSvc: func(fake *mocks.FakeDevicesService) model.DeviceID {
+				fake.UpdateDeviceReturns(nil, model.ErrDeviceNotFound)
 
 				return model.NewDeviceID()
 			},
@@ -219,11 +148,10 @@ func TestUpdateDeviceCommandHandler(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			svc := newMockDevicesService()
+			svc := &mocks.FakeDevicesService{}
 			deviceID := tc.setupSvc(svc)
 
 			handler := commands.NewUpdateDeviceCommandHandler(svc, log, tp, mc)
-			ctx := context.Background()
 
 			cmd := commands.UpdateDeviceCommand{
 				ID:    deviceID,
@@ -232,7 +160,7 @@ func TestUpdateDeviceCommandHandler(t *testing.T) {
 				State: tc.newState,
 			}
 
-			device, err := handler.Handle(ctx, cmd)
+			device, err := handler.Handle(t.Context(), cmd)
 
 			if tc.expectError {
 				require.Error(t, err)
@@ -256,17 +184,15 @@ func TestDeleteDeviceCommandHandler(t *testing.T) {
 
 	cases := []struct {
 		name        string
-		setupSvc    func(*mockDevicesService) model.DeviceID
+		setupSvc    func(*mocks.FakeDevicesService) model.DeviceID
 		expectError bool
 		expectedErr error
 	}{
 		{
 			name: "successfully delete available device",
-			setupSvc: func(m *mockDevicesService) model.DeviceID {
+			setupSvc: func(fake *mocks.FakeDevicesService) model.DeviceID {
 				device := model.NewDevice("Test", "Brand", model.StateAvailable)
-				m.deleteDeviceFn = func(_ context.Context, _ model.DeviceID) error {
-					return nil
-				}
+				fake.DeleteDeviceReturns(nil)
 
 				return device.ID
 			},
@@ -274,11 +200,9 @@ func TestDeleteDeviceCommandHandler(t *testing.T) {
 		},
 		{
 			name: "cannot delete in-use device",
-			setupSvc: func(m *mockDevicesService) model.DeviceID {
+			setupSvc: func(fake *mocks.FakeDevicesService) model.DeviceID {
 				device := model.NewDevice("Test", "Brand", model.StateInUse)
-				m.deleteDeviceFn = func(_ context.Context, _ model.DeviceID) error {
-					return model.ErrCannotDeleteInUseDevice
-				}
+				fake.DeleteDeviceReturns(model.ErrCannotDeleteInUseDevice)
 
 				return device.ID
 			},
@@ -287,10 +211,8 @@ func TestDeleteDeviceCommandHandler(t *testing.T) {
 		},
 		{
 			name: "device not found",
-			setupSvc: func(m *mockDevicesService) model.DeviceID {
-				m.deleteDeviceFn = func(_ context.Context, _ model.DeviceID) error {
-					return model.ErrDeviceNotFound
-				}
+			setupSvc: func(fake *mocks.FakeDevicesService) model.DeviceID {
+				fake.DeleteDeviceReturns(model.ErrDeviceNotFound)
 
 				return model.NewDeviceID()
 			},
@@ -303,15 +225,14 @@ func TestDeleteDeviceCommandHandler(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			svc := newMockDevicesService()
+			svc := &mocks.FakeDevicesService{}
 			deviceID := tc.setupSvc(svc)
 
 			handler := commands.NewDeleteDeviceCommandHandler(svc, log, tp, mc)
-			ctx := context.Background()
 
 			cmd := commands.DeleteDeviceCommand{ID: deviceID}
 
-			_, err := handler.Handle(ctx, cmd)
+			_, err := handler.Handle(t.Context(), cmd)
 
 			if tc.expectError {
 				require.Error(t, err)
@@ -334,16 +255,16 @@ func TestPatchDeviceCommandHandler(t *testing.T) {
 
 	cases := []struct {
 		name        string
-		setupSvc    func(*mockDevicesService) model.DeviceID
+		setupSvc    func(*mocks.FakeDevicesService) model.DeviceID
 		updates     map[string]any
 		expectError bool
 		validate    func(*testing.T, *model.Device)
 	}{
 		{
 			name: "patch name of available device",
-			setupSvc: func(m *mockDevicesService) model.DeviceID {
+			setupSvc: func(fake *mocks.FakeDevicesService) model.DeviceID {
 				device := model.NewDevice("Original", "Brand", model.StateAvailable)
-				m.patchDeviceFn = func(_ context.Context, id model.DeviceID, _ map[string]any) (*model.Device, error) {
+				fake.PatchDeviceStub = func(_ context.Context, id model.DeviceID, _ map[string]any) (*model.Device, error) {
 					return &model.Device{
 						ID:    id,
 						Name:  "Patched Name",
@@ -365,9 +286,9 @@ func TestPatchDeviceCommandHandler(t *testing.T) {
 		},
 		{
 			name: "patch state only of in-use device",
-			setupSvc: func(m *mockDevicesService) model.DeviceID {
+			setupSvc: func(fake *mocks.FakeDevicesService) model.DeviceID {
 				device := model.NewDevice("Original", "Brand", model.StateInUse)
-				m.patchDeviceFn = func(_ context.Context, id model.DeviceID, _ map[string]any) (*model.Device, error) {
+				fake.PatchDeviceStub = func(_ context.Context, id model.DeviceID, _ map[string]any) (*model.Device, error) {
 					return &model.Device{
 						ID:    id,
 						Name:  "Original",
@@ -392,18 +313,17 @@ func TestPatchDeviceCommandHandler(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			svc := newMockDevicesService()
+			svc := &mocks.FakeDevicesService{}
 			deviceID := tc.setupSvc(svc)
 
 			handler := commands.NewPatchDeviceCommandHandler(svc, log, tp, mc)
-			ctx := context.Background()
 
 			cmd := commands.PatchDeviceCommand{
 				ID:      deviceID,
 				Updates: tc.updates,
 			}
 
-			device, err := handler.Handle(ctx, cmd)
+			device, err := handler.Handle(t.Context(), cmd)
 
 			if tc.expectError {
 				require.Error(t, err)

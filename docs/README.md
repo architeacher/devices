@@ -180,7 +180,7 @@ curl -s -X PUT https://api.devices.dev/v1/devices/019b3915-3302-7a6b-843b-9cca83
 ### List Devices
 
 ```bash
-curl -s https://api.devices.dev/v1/devices \
+curl -s "https://api.devices.dev/v1/devices?brand=Apple&state=available&sort=-createdAt&page=1&size=20" \
   -H "Authorization: Bearer v4.public.test-token" | jq
 ```
 
@@ -377,16 +377,12 @@ api-version: v1
 | **Parameter Validation** | ✅ Full | Deep request validation using OpenAPI 3.0.3 schema via `kin-openapi/openapi3filter` (query params, path params, request body) with sanitized error messages |
 | **Dynamic Request Routing** | ⚠️ Partial | Path-based routing with Chi router v5; service discovery not yet integrated |
 | **Protocol Conversion** | ✅ Full | HTTP/1.1 → gRPC translation with bidirectional message mapping and error code translation |
-| **SSE→gRPC Streaming** | ❌ Planned | Convert gRPC server streams to Server-Sent Events for real-time updates |
 
 #### Security & Access Control
 
 | Feature | Status | Description |
 |---------|--------|-------------|
 | **Authentication** | ⚠️ Partial | PASETO v4 token format validation; cryptographic verification pending |
-| **Authorization** | ❌ Planned | Claims structure with roles exists; RBAC enforcement not implemented |
-| **Request Signing** | ❌ Planned | HTTP message signature verification (RFC 9421) for request integrity |
-| **Allow/Deny List (ACL)** | ❌ Planned | IP/CIDR/user-agent filtering with whitelist/blacklist support |
 | **Data Encryption** | ⚠️ Partial | TLS 1.2+ with mTLS for gRPC backend; HTTP TLS via Traefik reverse proxy |
 | **Security Headers** | ✅ Full | CORS, CSP, HSTS, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy |
 
@@ -394,18 +390,13 @@ api-version: v1
 
 | Feature | Status | Description |
 |---------|--------|-------------|
-| **Rate Limiting** | ❌ Planned | Token bucket algorithm with KeyDB backend (per client/endpoint/global limits) |
-| **Load Shedding** | ❌ Planned | Adaptive probabilistic request dropping under overload |
 | **Circuit Breaker** | ✅ Full | Per-service failure detection using `sony/gobreaker/v2` with half-open state recovery |
-| **Load Balancing** | ❌ Planned | Multiple strategies (round-robin, weighted, least-connections, consistent hashing) |
-| **Service Discovery** | ❌ Planned | Dynamic backend service registration and health-aware routing |
 
 #### Performance Optimization
 
 | Feature | Status | Description |
 |---------|--------|-------------|
 | **Response Caching** | ⚠️ Partial | ETag/If-None-Match headers supported; KeyDB-backed caching not implemented |
-| **API Composition** | ❌ Planned | Combine multiple gRPC calls into single HTTP response (scatter-gather pattern) |
 
 #### Observability & Operations
 
@@ -416,11 +407,16 @@ api-version: v1
 | **Metrics** | ✅ Full | OpenTelemetry metrics (latency, throughput, errors, request/response sizes) with decorator pattern |
 | **Distributed Tracing** | ✅ Full | OpenTelemetry tracing with Jaeger integration, span propagation, and command/query instrumentation |
 
+#### Developer Experience
+
+| Feature | Status | Description |
+|---------|--------|-------------|
+| **Hot Reload** | ✅ Full | Air-based live reloading for both services - automatically rebuilds and restarts on source file changes |
+
 ### Legend
 
 - ✅ **Full** - Feature is production-ready
 - ⚠️ **Partial** - Core functionality exists, enhancements planned
-- ❌ **Planned** - Not yet implemented
 
 ### Future Improvements
 
@@ -439,14 +435,14 @@ The following features are planned for future releases:
 
 #### Traffic Management
 
-| Feature | Priority | Description |
-|---------|----------|-------------|
+| Feature | Priority | Description                                                            |
+|---------|----------|------------------------------------------------------------------------|
 | Rate Limiting | High | Token bucket algorithm with KeyDB backend (per client/endpoint/global) |
-| Service Discovery | High | Dynamic backend registration with Consul/etcd integration |
-| Load Balancing | Medium | Round-robin, weighted, least-connections, consistent hashing |
-| SSE Streaming | Low | Convert gRPC server streams to Server-Sent Events |
-| API Composition | Low | Scatter-gather pattern for multi-service aggregation |
-| Load Shedding | Low | Adaptive probabilistic request dropping under overload |
+| Service Discovery | High | Dynamic backend registration with Consul/etcd integration              |
+| Load Balancing | Medium |  Multiple strategies (round-robin, weighted, least-connections, consistent hashing)           |
+| SSE Streaming | Low | Convert gRPC server streams to Server-Sent Events for real-time updates |
+| API Composition | Low | Combine multiple gRPC calls into single HTTP response (scatter-gather pattern)                   |
+| Load Shedding | Low | Adaptive probabilistic request dropping under overload                 |
 
 #### DevOps & Infrastructure
 
@@ -483,7 +479,6 @@ The following features are planned for future releases:
 | Feature | Priority | Description |
 |---------|----------|-------------|
 | SDK Generation | Medium | Auto-generated Go/TypeScript clients from OpenAPI spec |
-| Hot Reload | Low | Air/Watchexec for faster local development |
 | Dev Containers | Low | VS Code devcontainer for consistent environments |
 | API Mocking | Low | Prism/WireMock for frontend development |
 

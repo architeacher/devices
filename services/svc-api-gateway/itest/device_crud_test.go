@@ -1,53 +1,29 @@
+//go:build integration
+
 package itest
 
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"testing"
-	"time"
 
 	"github.com/architeacher/devices/services/svc-api-gateway/internal/domain/model"
 	"github.com/stretchr/testify/suite"
 )
 
 type DeviceCRUDTestSuite struct {
-	suite.Suite
+	BaseTestSuite
 }
 
 func TestDeviceCRUDTestSuite(t *testing.T) {
-	t.Parallel()
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
 	suite.Run(t, new(DeviceCRUDTestSuite))
 }
 
-func (s *DeviceCRUDTestSuite) devicePath(id string) string {
-	return fmt.Sprintf("/v1/devices/%s", id)
-}
-
-func (s *DeviceCRUDTestSuite) setupDevice(server *TestServer, state model.State) *model.Device {
-	device := &model.Device{
-		ID:        model.NewDeviceID(),
-		Name:      "Test Device",
-		Brand:     "Test Brand",
-		State:     state,
-		CreatedAt: time.Now().UTC(),
-		UpdatedAt: time.Now().UTC(),
-	}
-	server.DeviceService.AddDevice(device)
-
-	return device
-}
-
-func (s *DeviceCRUDTestSuite) getDeviceID(server *TestServer, setup bool, state model.State) string {
-	if setup {
-		return s.setupDevice(server, state).ID.String()
-	}
-
-	return model.NewDeviceID().String()
-}
-
-func (s *DeviceCRUDTestSuite) doRequest(server *TestServer, method, path string, body map[string]any) (map[string]any, *http.Response) {
+func (s *DeviceCRUDTestSuite) doRequest(method, path string, body map[string]any) (map[string]any, *http.Response) {
 	var opts []RequestOption
 	if body != nil {
 		bodyBytes, err := json.Marshal(body)
@@ -58,7 +34,7 @@ func (s *DeviceCRUDTestSuite) doRequest(server *TestServer, method, path string,
 		opts = append(opts, WithIdempotencyKey())
 	}
 
-	resp, err := server.DoRequest(s.T().Context(), method, path, opts...)
+	resp, err := s.Server.DoRequest(s.T().Context(), method, path, opts...)
 	s.Require().NoError(err)
 
 	var response map[string]any
@@ -106,10 +82,7 @@ func (s *DeviceCRUDTestSuite) TestCreateDevice() {
 
 	for _, tc := range cases {
 		s.Run(tc.name, func() {
-			server := NewTestServer()
-			defer server.Close()
-
-			response, resp := s.doRequest(server, http.MethodPost, "/v1/devices", tc.body)
+			response, resp := s.doRequest(http.MethodPost, "/v1/devices", tc.body)
 			defer resp.Body.Close()
 
 			s.Require().Equal(tc.expectedStatus, resp.StatusCode)
@@ -128,10 +101,7 @@ func (s *DeviceCRUDTestSuite) TestCreateDevice() {
 }
 
 func (s *DeviceCRUDTestSuite) TestCreateDeviceInvalidJSON() {
-	server := NewTestServer()
-	defer server.Close()
-
-	resp, err := server.Post(s.T().Context(), "/v1/devices", bytes.NewReader([]byte("invalid json")))
+	resp, err := s.Server.Post(s.T().Context(), "/v1/devices", bytes.NewReader([]byte("invalid json")))
 	s.Require().NoError(err)
 	defer resp.Body.Close()
 
@@ -139,209 +109,169 @@ func (s *DeviceCRUDTestSuite) TestCreateDeviceInvalidJSON() {
 }
 
 func (s *DeviceCRUDTestSuite) TestGetDevice() {
-	cases := []struct {
-		name           string
-		setupDevice    bool
-		expectedStatus int
-		expectFound    bool
-	}{
-		{name: "get existing device", setupDevice: true, expectedStatus: http.StatusOK, expectFound: true},
-		{name: "get non-existent device", setupDevice: false, expectedStatus: http.StatusNotFound, expectFound: false},
-	}
+	deviceID := s.CreateDevice("Test Device", "Test Brand", model.StateAvailable)
 
-	for _, tc := range cases {
-		s.Run(tc.name, func() {
-			server := NewTestServer()
-			defer server.Close()
+	response, resp := s.doRequest(http.MethodGet, s.DevicePath(deviceID), nil)
+	defer resp.Body.Close()
 
-			deviceID := s.getDeviceID(server, tc.setupDevice, model.StateAvailable)
+	s.Require().Equal(http.StatusOK, resp.StatusCode)
 
-			response, resp := s.doRequest(server, http.MethodGet, s.devicePath(deviceID), nil)
-			defer resp.Body.Close()
+	data := s.getData(response)
+	s.Require().Equal(deviceID, data["id"])
+	s.Require().Equal("Test Device", data["name"])
+	s.Require().Equal("Test Brand", data["brand"])
+}
 
-			s.Require().Equal(tc.expectedStatus, resp.StatusCode)
+func (s *DeviceCRUDTestSuite) TestGetDeviceNotFound() {
+	nonExistentID := model.NewDeviceID().String()
 
-			if tc.expectFound {
-				data := s.getData(response)
-				s.Require().Equal(deviceID, data["id"])
-				s.Require().Equal("Test Device", data["name"])
-				s.Require().Equal("Test Brand", data["brand"])
-			}
-		})
-	}
+	_, resp := s.doRequest(http.MethodGet, s.DevicePath(nonExistentID), nil)
+	defer resp.Body.Close()
+
+	s.Require().Equal(http.StatusNotFound, resp.StatusCode)
 }
 
 func (s *DeviceCRUDTestSuite) TestGetDeviceInvalidID() {
-	server := NewTestServer()
-	defer server.Close()
-
-	_, resp := s.doRequest(server, http.MethodGet, "/v1/devices/invalid-uuid", nil)
+	_, resp := s.doRequest(http.MethodGet, "/v1/devices/invalid-uuid", nil)
 	defer resp.Body.Close()
 
 	s.Require().Equal(http.StatusBadRequest, resp.StatusCode)
 }
 
 func (s *DeviceCRUDTestSuite) TestUpdateDevice() {
-	cases := []struct {
-		name           string
-		setupDevice    bool
-		body           map[string]any
-		expectedStatus int
-	}{
-		{
-			name:           "update device successfully",
-			setupDevice:    true,
-			body:           map[string]any{"name": "Updated Name", "brand": "Updated Brand", "state": string(model.StateInactive)},
-			expectedStatus: http.StatusOK,
-		},
-		{
-			name:           "update non-existent device",
-			setupDevice:    false,
-			body:           map[string]any{"name": "New Name", "brand": "New Brand", "state": string(model.StateAvailable)},
-			expectedStatus: http.StatusNotFound,
-		},
-	}
+	deviceID := s.CreateDevice("Original Name", "Original Brand", model.StateAvailable)
 
-	for _, tc := range cases {
-		s.Run(tc.name, func() {
-			server := NewTestServer()
-			defer server.Close()
+	body := map[string]any{"name": "Updated Name", "brand": "Updated Brand", "state": string(model.StateInactive)}
+	response, resp := s.doRequest(http.MethodPut, s.DevicePath(deviceID), body)
+	defer resp.Body.Close()
 
-			deviceID := s.getDeviceID(server, tc.setupDevice, model.StateAvailable)
+	s.Require().Equal(http.StatusOK, resp.StatusCode)
 
-			response, resp := s.doRequest(server, http.MethodPut, s.devicePath(deviceID), tc.body)
-			defer resp.Body.Close()
+	data := s.getData(response)
+	s.Require().Equal("Updated Name", data["name"])
+	s.Require().Equal("Updated Brand", data["brand"])
+	s.Require().Equal(string(model.StateInactive), data["state"])
+}
 
-			s.Require().Equal(tc.expectedStatus, resp.StatusCode)
+func (s *DeviceCRUDTestSuite) TestUpdateDeviceNotFound() {
+	nonExistentID := model.NewDeviceID().String()
 
-			if tc.expectedStatus == http.StatusOK {
-				data := s.getData(response)
-				s.Require().Equal(tc.body["name"], data["name"])
-				s.Require().Equal(tc.body["brand"], data["brand"])
-				s.Require().Equal(tc.body["state"], data["state"])
-			}
-		})
-	}
+	body := map[string]any{"name": "New Name", "brand": "New Brand", "state": string(model.StateAvailable)}
+	_, resp := s.doRequest(http.MethodPut, s.DevicePath(nonExistentID), body)
+	defer resp.Body.Close()
+
+	s.Require().Equal(http.StatusNotFound, resp.StatusCode)
 }
 
 func (s *DeviceCRUDTestSuite) TestPatchDevice() {
 	cases := []struct {
-		name           string
-		setupDevice    bool
-		body           map[string]any
-		expectedStatus int
-		expectedName   string
-		expectedBrand  string
-		expectedState  string
+		name          string
+		initialState  model.State
+		body          map[string]any
+		expectedName  string
+		expectedBrand string
+		expectedState string
 	}{
 		{
-			name:           "patch device name only",
-			setupDevice:    true,
-			body:           map[string]any{"name": "Patched Name"},
-			expectedStatus: http.StatusOK,
-			expectedName:   "Patched Name",
-			expectedBrand:  "Test Brand",
-			expectedState:  string(model.StateAvailable),
+			name:          "patch device name only",
+			initialState:  model.StateAvailable,
+			body:          map[string]any{"name": "Patched Name"},
+			expectedName:  "Patched Name",
+			expectedBrand: "Test Brand",
+			expectedState: string(model.StateAvailable),
 		},
 		{
-			name:           "patch device state only",
-			setupDevice:    true,
-			body:           map[string]any{"state": string(model.StateInactive)},
-			expectedStatus: http.StatusOK,
-			expectedName:   "Test Device",
-			expectedBrand:  "Test Brand",
-			expectedState:  string(model.StateInactive),
-		},
-		{
-			name:           "patch non-existent device",
-			setupDevice:    false,
-			body:           map[string]any{"name": "New Name"},
-			expectedStatus: http.StatusNotFound,
+			name:          "patch device state only",
+			initialState:  model.StateAvailable,
+			body:          map[string]any{"state": string(model.StateInactive)},
+			expectedName:  "Test Device",
+			expectedBrand: "Test Brand",
+			expectedState: string(model.StateInactive),
 		},
 	}
 
 	for _, tc := range cases {
 		s.Run(tc.name, func() {
-			server := NewTestServer()
-			defer server.Close()
+			deviceID := s.CreateDevice("Test Device", "Test Brand", tc.initialState)
 
-			deviceID := s.getDeviceID(server, tc.setupDevice, model.StateAvailable)
-
-			response, resp := s.doRequest(server, http.MethodPatch, s.devicePath(deviceID), tc.body)
+			response, resp := s.doRequest(http.MethodPatch, s.DevicePath(deviceID), tc.body)
 			defer resp.Body.Close()
 
-			s.Require().Equal(tc.expectedStatus, resp.StatusCode)
+			s.Require().Equal(http.StatusOK, resp.StatusCode)
 
-			if tc.expectedStatus == http.StatusOK {
-				data := s.getData(response)
-				s.Require().Equal(tc.expectedName, data["name"])
-				s.Require().Equal(tc.expectedBrand, data["brand"])
-				s.Require().Equal(tc.expectedState, data["state"])
-			}
+			data := s.getData(response)
+			s.Require().Equal(tc.expectedName, data["name"])
+			s.Require().Equal(tc.expectedBrand, data["brand"])
+			s.Require().Equal(tc.expectedState, data["state"])
 		})
 	}
+}
+
+func (s *DeviceCRUDTestSuite) TestPatchDeviceNotFound() {
+	nonExistentID := model.NewDeviceID().String()
+
+	body := map[string]any{"name": "New Name"}
+	_, resp := s.doRequest(http.MethodPatch, s.DevicePath(nonExistentID), body)
+	defer resp.Body.Close()
+
+	s.Require().Equal(http.StatusNotFound, resp.StatusCode)
 }
 
 func (s *DeviceCRUDTestSuite) TestDeleteDevice() {
-	cases := []struct {
-		name           string
-		deviceState    model.State
-		setupDevice    bool
-		expectedStatus int
-	}{
-		{name: "delete available device", deviceState: model.StateAvailable, setupDevice: true, expectedStatus: http.StatusNoContent},
-		{name: "delete in-use device should fail", deviceState: model.StateInUse, setupDevice: true, expectedStatus: http.StatusConflict},
-		{name: "delete non-existent device", setupDevice: false, expectedStatus: http.StatusNotFound},
-	}
+	deviceID := s.CreateDevice("Test Device", "Test Brand", model.StateAvailable)
 
-	for _, tc := range cases {
-		s.Run(tc.name, func() {
-			server := NewTestServer()
-			defer server.Close()
+	_, resp := s.doRequest(http.MethodDelete, s.DevicePath(deviceID), nil)
+	defer resp.Body.Close()
 
-			deviceID := s.getDeviceID(server, tc.setupDevice, tc.deviceState)
+	s.Require().Equal(http.StatusNoContent, resp.StatusCode)
 
-			_, resp := s.doRequest(server, http.MethodDelete, s.devicePath(deviceID), nil)
-			defer resp.Body.Close()
+	_, getResp := s.doRequest(http.MethodGet, s.DevicePath(deviceID), nil)
+	defer getResp.Body.Close()
+	s.Require().Equal(http.StatusNotFound, getResp.StatusCode)
+}
 
-			s.Require().Equal(tc.expectedStatus, resp.StatusCode)
-		})
-	}
+func (s *DeviceCRUDTestSuite) TestDeleteInUseDeviceFails() {
+	deviceID := s.CreateDevice("Test Device", "Test Brand", model.StateInUse)
+
+	_, resp := s.doRequest(http.MethodDelete, s.DevicePath(deviceID), nil)
+	defer resp.Body.Close()
+
+	s.Require().Equal(http.StatusConflict, resp.StatusCode)
+}
+
+func (s *DeviceCRUDTestSuite) TestDeleteDeviceNotFound() {
+	nonExistentID := model.NewDeviceID().String()
+
+	_, resp := s.doRequest(http.MethodDelete, s.DevicePath(nonExistentID), nil)
+	defer resp.Body.Close()
+
+	s.Require().Equal(http.StatusNotFound, resp.StatusCode)
 }
 
 func (s *DeviceCRUDTestSuite) TestHeadDevice() {
-	cases := []struct {
-		name           string
-		setupDevice    bool
-		expectedStatus int
-	}{
-		{name: "head existing device", setupDevice: true, expectedStatus: http.StatusOK},
-		{name: "head non-existent device", setupDevice: false, expectedStatus: http.StatusNotFound},
-	}
+	deviceID := s.CreateDevice("Test Device", "Test Brand", model.StateAvailable)
 
-	for _, tc := range cases {
-		s.Run(tc.name, func() {
-			server := NewTestServer()
-			defer server.Close()
+	resp, err := s.Server.Head(s.T().Context(), s.DevicePath(deviceID))
+	s.Require().NoError(err)
+	defer resp.Body.Close()
 
-			deviceID := s.getDeviceID(server, tc.setupDevice, model.StateAvailable)
+	s.Require().Equal(http.StatusOK, resp.StatusCode)
+}
 
-			resp, err := server.Head(s.T().Context(), s.devicePath(deviceID))
-			s.Require().NoError(err)
-			defer resp.Body.Close()
+func (s *DeviceCRUDTestSuite) TestHeadDeviceNotFound() {
+	nonExistentID := model.NewDeviceID().String()
 
-			s.Require().Equal(tc.expectedStatus, resp.StatusCode)
-		})
-	}
+	resp, err := s.Server.Head(s.T().Context(), s.DevicePath(nonExistentID))
+	s.Require().NoError(err)
+	defer resp.Body.Close()
+
+	s.Require().Equal(http.StatusNotFound, resp.StatusCode)
 }
 
 func (s *DeviceCRUDTestSuite) TestOptionsDevice() {
-	server := NewTestServer()
-	defer server.Close()
+	deviceID := s.CreateDevice("Test Device", "Test Brand", model.StateAvailable)
 
-	deviceID := s.getDeviceID(server, true, model.StateAvailable)
-
-	resp, err := server.Options(s.T().Context(), s.devicePath(deviceID))
+	resp, err := s.Server.Options(s.T().Context(), s.DevicePath(deviceID))
 	s.Require().NoError(err)
 	defer resp.Body.Close()
 
@@ -357,14 +287,10 @@ func (s *DeviceCRUDTestSuite) TestOptionsDevice() {
 }
 
 func (s *DeviceCRUDTestSuite) TestUpdateInUseDeviceConflict() {
-	server := NewTestServer()
-	defer server.Close()
-
-	deviceID := s.getDeviceID(server, true, model.StateInUse)
+	deviceID := s.CreateDevice("Original Name", "Original Brand", model.StateInUse)
 
 	body := map[string]any{"name": "Changed Name", "brand": "Changed Brand", "state": string(model.StateInUse)}
-
-	response, resp := s.doRequest(server, http.MethodPut, s.devicePath(deviceID), body)
+	response, resp := s.doRequest(http.MethodPut, s.DevicePath(deviceID), body)
 	defer resp.Body.Close()
 
 	s.Require().Equal(http.StatusConflict, resp.StatusCode)
