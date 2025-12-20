@@ -1,151 +1,168 @@
-package devices_test
+package devices
 
 import (
-	"context"
 	"testing"
+	"time"
 
-	"github.com/architeacher/devices/services/svc-api-gateway/internal/adapters/outbound/devices"
-	"github.com/architeacher/devices/services/svc-api-gateway/internal/domain/model"
-	"github.com/stretchr/testify/suite"
+	"github.com/architeacher/devices/services/svc-api-gateway/internal/config"
+	"github.com/stretchr/testify/require"
 )
 
-type ClientTestSuite struct {
-	suite.Suite
-	client *devices.Client
-	ctx    context.Context
-}
-
-func TestClientTestSuite(t *testing.T) {
+func TestNewClient(t *testing.T) {
 	t.Parallel()
-	suite.Run(t, new(ClientTestSuite))
-}
-
-func (s *ClientTestSuite) SetupTest() {
-	s.client = devices.NewClient()
-	s.ctx = context.Background()
-}
-
-func (s *ClientTestSuite) TestNewClient() {
-	s.T().Parallel()
-
-	client := devices.NewClient()
-
-	s.Require().NotNil(client)
-}
-
-func (s *ClientTestSuite) TestCreateDevice() {
-	s.T().Parallel()
 
 	cases := []struct {
-		name  string
-		dName string
-		brand string
-		state model.State
+		name      string
+		cfg       config.DevicesConfig
+		backoff   config.BackoffConfig
+		wantErr   bool
+		errSubstr string
 	}{
 		{
-			name:  "create available device",
-			dName: "iPhone",
-			brand: "Apple",
-			state: model.StateAvailable,
+			name: "creates client with valid config",
+			cfg: config.DevicesConfig{
+				Address:    "localhost:9090",
+				Timeout:    30 * time.Second,
+				MaxRetries: 3,
+				CircuitBreaker: config.CircuitBreakerConfig{
+					Enabled:          false,
+					MaxRequests:      5,
+					Interval:         60 * time.Second,
+					Timeout:          30 * time.Second,
+					FailureThreshold: 5,
+				},
+				TLS: config.TLSConfig{
+					Enabled: false,
+				},
+			},
+			backoff: config.BackoffConfig{
+				BaseDelay:  1 * time.Second,
+				Multiplier: 1.6,
+				Jitter:     0.2,
+				MaxDelay:   10 * time.Second,
+			},
+			wantErr: false,
 		},
 		{
-			name:  "create in-use device",
-			dName: "Pixel",
-			brand: "Google",
-			state: model.StateInUse,
+			name: "creates client with circuit breaker enabled",
+			cfg: config.DevicesConfig{
+				Address:    "localhost:9090",
+				Timeout:    30 * time.Second,
+				MaxRetries: 3,
+				CircuitBreaker: config.CircuitBreakerConfig{
+					Enabled:          true,
+					MaxRequests:      5,
+					Interval:         60 * time.Second,
+					Timeout:          30 * time.Second,
+					FailureThreshold: 5,
+				},
+				TLS: config.TLSConfig{
+					Enabled: false,
+				},
+			},
+			backoff: config.BackoffConfig{
+				BaseDelay:  1 * time.Second,
+				Multiplier: 1.6,
+				Jitter:     0.2,
+				MaxDelay:   10 * time.Second,
+			},
+			wantErr: false,
 		},
 		{
-			name:  "create inactive device",
-			dName: "Galaxy",
-			brand: "Samsung",
-			state: model.StateInactive,
+			name: "creates client with TLS enabled but no CA file",
+			cfg: config.DevicesConfig{
+				Address:    "localhost:9090",
+				Timeout:    30 * time.Second,
+				MaxRetries: 3,
+				CircuitBreaker: config.CircuitBreakerConfig{
+					Enabled: false,
+				},
+				TLS: config.TLSConfig{
+					Enabled: true,
+				},
+			},
+			backoff: config.BackoffConfig{
+				BaseDelay:  1 * time.Second,
+				Multiplier: 1.6,
+				Jitter:     0.2,
+				MaxDelay:   10 * time.Second,
+			},
+			wantErr: false,
+		},
+		{
+			name: "fails with non-existent CA file",
+			cfg: config.DevicesConfig{
+				Address:    "localhost:9090",
+				Timeout:    30 * time.Second,
+				MaxRetries: 3,
+				CircuitBreaker: config.CircuitBreakerConfig{
+					Enabled: false,
+				},
+				TLS: config.TLSConfig{
+					Enabled: true,
+					CAFile:  "/non/existent/ca.pem",
+				},
+			},
+			backoff: config.BackoffConfig{
+				BaseDelay:  1 * time.Second,
+				Multiplier: 1.6,
+				Jitter:     0.2,
+				MaxDelay:   10 * time.Second,
+			},
+			wantErr:   true,
+			errSubstr: "loading TLS credentials",
 		},
 	}
 
 	for _, tc := range cases {
-		s.Run(tc.name, func() {
-			device, err := s.client.CreateDevice(s.ctx, tc.dName, tc.brand, tc.state)
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 
-			s.Require().NoError(err)
-			s.Require().NotNil(device)
-			s.Require().False(device.ID.IsZero())
-			s.Require().Equal(tc.dName, device.Name)
-			s.Require().Equal(tc.brand, device.Brand)
-			s.Require().Equal(tc.state, device.State)
-			s.Require().False(device.CreatedAt.IsZero())
-			s.Require().False(device.UpdatedAt.IsZero())
+			client, err := NewClient(tc.cfg, tc.backoff)
+
+			if tc.wantErr {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), tc.errSubstr)
+				require.Nil(t, client)
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.NotNil(t, client)
+			require.NoError(t, client.Close())
 		})
 	}
 }
 
-func (s *ClientTestSuite) TestGetDevice() {
-	s.T().Parallel()
+func TestClientClose(t *testing.T) {
+	t.Parallel()
 
-	id := model.NewDeviceID()
+	cfg := config.DevicesConfig{
+		Address:    "localhost:9090",
+		Timeout:    30 * time.Second,
+		MaxRetries: 3,
+		CircuitBreaker: config.CircuitBreakerConfig{
+			Enabled: false,
+		},
+		TLS: config.TLSConfig{
+			Enabled: false,
+		},
+	}
+	backoff := config.BackoffConfig{
+		BaseDelay:  1 * time.Second,
+		Multiplier: 1.6,
+		Jitter:     0.2,
+		MaxDelay:   10 * time.Second,
+	}
 
-	device, err := s.client.GetDevice(s.ctx, id)
+	client, err := NewClient(cfg, backoff)
+	require.NoError(t, err)
+	require.NotNil(t, client)
 
-	s.Require().NoError(err)
-	s.Require().NotNil(device)
-	s.Require().Equal(id, device.ID)
-	s.Require().Equal(model.StateAvailable, device.State)
-}
+	err = client.Close()
+	require.NoError(t, err)
 
-func (s *ClientTestSuite) TestListDevices() {
-	s.T().Parallel()
-
-	filter := model.DefaultDeviceFilter()
-
-	result, err := s.client.ListDevices(s.ctx, filter)
-
-	s.Require().NoError(err)
-	s.Require().NotNil(result)
-	s.Require().Empty(result.Devices)
-	s.Require().Equal(filter.Page, result.Pagination.Page)
-	s.Require().Equal(filter.Size, result.Pagination.Size)
-	s.Require().Equal(uint(0), result.Pagination.TotalItems)
-	s.Require().Equal(uint(1), result.Pagination.TotalPages)
-	s.Require().False(result.Pagination.HasNext)
-	s.Require().False(result.Pagination.HasPrevious)
-}
-
-func (s *ClientTestSuite) TestUpdateDevice() {
-	s.T().Parallel()
-
-	id := model.NewDeviceID()
-	name := "Updated Device"
-	brand := "Updated Brand"
-	state := model.StateInUse
-
-	device, err := s.client.UpdateDevice(s.ctx, id, name, brand, state)
-
-	s.Require().NoError(err)
-	s.Require().NotNil(device)
-	s.Require().Equal(id, device.ID)
-	s.Require().Equal(name, device.Name)
-	s.Require().Equal(brand, device.Brand)
-	s.Require().Equal(state, device.State)
-}
-
-func (s *ClientTestSuite) TestPatchDevice() {
-	s.T().Parallel()
-
-	id := model.NewDeviceID()
-	updates := map[string]any{"name": "Patched"}
-
-	device, err := s.client.PatchDevice(s.ctx, id, updates)
-
-	s.Require().NoError(err)
-	s.Require().NotNil(device)
-	s.Require().Equal(id, device.ID)
-}
-
-func (s *ClientTestSuite) TestDeleteDevice() {
-	s.T().Parallel()
-
-	id := model.NewDeviceID()
-
-	err := s.client.DeleteDevice(s.ctx, id)
-
-	s.Require().NoError(err)
+	err = client.Close()
+	require.NoError(t, err)
 }

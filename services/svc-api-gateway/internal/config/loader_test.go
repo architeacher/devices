@@ -12,7 +12,7 @@ func TestInit(t *testing.T) {
 	t.Setenv("APP_COMMIT_SHA", "1234xwz")
 	t.Setenv("LOG_LEVEL", "debug")
 	t.Setenv("AUTH_SECRET_KEY", "test-secret-key")
-	t.Setenv("DEVICES_BASE_URL", "http://localhost:8081")
+	t.Setenv("DEVICES_GRPC_ADDRESS", "localhost:9090")
 
 	cfg, err := Init()
 	assert.NoError(t, err)
@@ -24,7 +24,7 @@ func TestInit(t *testing.T) {
 	assert.Equal(t, "1234xwz", cfg.App.CommitSHA)
 	assert.Equal(t, "debug", cfg.Logging.Level)
 	assert.Equal(t, "test-secret-key", cfg.Auth.SecretKey)
-	assert.Equal(t, "http://localhost:8081", cfg.Devices.BaseURL)
+	assert.Equal(t, "localhost:9090", cfg.Devices.Address)
 }
 
 func TestInit_DefaultValues(t *testing.T) {

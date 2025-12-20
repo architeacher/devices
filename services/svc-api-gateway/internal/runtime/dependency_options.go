@@ -104,9 +104,14 @@ func WithLogger() DependencyOption {
 
 func WithDeviceService() DependencyOption {
 	return func(d *dependencies) error {
-		client := devices.NewClient()
+		client, err := devices.NewClient(d.config.Devices, d.config.Backoff)
+		if err != nil {
+			return fmt.Errorf("creating devices gRPC client: %w", err)
+		}
+
 		d.devicesService = client
 		d.healthChecker = client
+		d.grpcCleanup = append(d.grpcCleanup, client.Close)
 
 		return nil
 	}

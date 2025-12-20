@@ -6,6 +6,9 @@ var (
 	ErrDeviceNotFound          = errors.New("device not found")
 	ErrCannotUpdateInUseDevice = errors.New("cannot update name or brand of in-use device")
 	ErrCannotDeleteInUseDevice = errors.New("cannot delete in-use device")
+	ErrServiceUnavailable      = errors.New("service unavailable")
+	ErrTimeout                 = errors.New("request timeout")
+	ErrCircuitOpen             = errors.New("circuit breaker is open")
 )
 
 type ValidationError struct {

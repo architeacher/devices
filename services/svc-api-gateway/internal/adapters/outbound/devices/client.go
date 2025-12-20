@@ -2,125 +2,405 @@ package devices
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
+	"fmt"
+	"os"
 	"time"
 
+	devicev1 "github.com/architeacher/devices/pkg/proto/device/v1"
+	"github.com/architeacher/devices/services/svc-api-gateway/internal/config"
 	"github.com/architeacher/devices/services/svc-api-gateway/internal/domain/model"
+	"github.com/architeacher/devices/services/svc-api-gateway/internal/ports"
+	"github.com/sony/gobreaker/v2"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
-// TODO: Replace with gRPC client when svc-devices is ready.
-type Client struct{}
+type (
+	// Client implements the DevicesService and HealthChecker interfaces using gRPC.
+	Client struct {
+		deviceClient devicev1.DeviceServiceClient
+		healthClient devicev1.HealthServiceClient
+		conn         *grpc.ClientConn
+		cb           *gobreaker.CircuitBreaker[any]
+		config       config.DevicesConfig
+	}
 
-func NewClient() *Client {
-	return &Client{}
+	// ClientOption configures the Client.
+	ClientOption func(*Client) error
+)
+
+var (
+	_ ports.DevicesService = (*Client)(nil)
+	_ ports.HealthChecker  = (*Client)(nil)
+)
+
+// NewClient creates a new gRPC client for the devices service.
+func NewClient(cfg config.DevicesConfig, backoffCfg config.BackoffConfig, opts ...ClientOption) (*Client, error) {
+	dialOpts := []grpc.DialOption{
+		grpc.WithDefaultCallOptions(
+			grpc.MaxCallRecvMsgSize(4*1024*1024),
+			grpc.MaxCallSendMsgSize(4*1024*1024),
+		),
+	}
+
+	if cfg.TLS.Enabled {
+		creds, err := loadTLSCredentials(cfg.TLS)
+		if err != nil {
+			return nil, fmt.Errorf("loading TLS credentials: %w", err)
+		}
+		dialOpts = append(dialOpts, grpc.WithTransportCredentials(creds))
+	} else {
+		dialOpts = append(dialOpts, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	}
+
+	dialOpts = append(dialOpts, grpc.WithChainUnaryInterceptor(
+		timeoutInterceptor(cfg.Timeout),
+		retryInterceptor(cfg.MaxRetries, backoffCfg),
+	))
+
+	conn, err := grpc.NewClient(cfg.Address, dialOpts...)
+	if err != nil {
+		return nil, fmt.Errorf("creating gRPC connection: %w", err)
+	}
+
+	client := &Client{
+		deviceClient: devicev1.NewDeviceServiceClient(conn),
+		healthClient: devicev1.NewHealthServiceClient(conn),
+		conn:         conn,
+		config:       cfg,
+	}
+
+	if cfg.CircuitBreaker.Enabled {
+		client.cb = gobreaker.NewCircuitBreaker[any](gobreaker.Settings{
+			Name:        "devices-service",
+			MaxRequests: uint32(cfg.CircuitBreaker.MaxRequests),
+			Interval:    cfg.CircuitBreaker.Interval,
+			Timeout:     cfg.CircuitBreaker.Timeout,
+			ReadyToTrip: func(counts gobreaker.Counts) bool {
+				return counts.ConsecutiveFailures >= uint32(cfg.CircuitBreaker.FailureThreshold)
+			},
+		})
+	}
+
+	for _, opt := range opts {
+		if err := opt(client); err != nil {
+			conn.Close()
+
+			return nil, fmt.Errorf("applying client option: %w", err)
+		}
+	}
+
+	return client, nil
 }
 
-func (c *Client) CreateDevice(_ context.Context, name, brand string, state model.State) (*model.Device, error) {
-	return &model.Device{
-		ID:        model.NewDeviceID(),
-		Name:      name,
-		Brand:     brand,
-		State:     state,
-		CreatedAt: time.Now().UTC(),
-		UpdatedAt: time.Now().UTC(),
-	}, nil
+// Close closes the gRPC connection.
+func (c *Client) Close() error {
+	if c.conn == nil {
+		return nil
+	}
+
+	err := c.conn.Close()
+	c.conn = nil
+
+	return err
 }
 
-func (c *Client) GetDevice(_ context.Context, id model.DeviceID) (*model.Device, error) {
-	return &model.Device{
-		ID:        id,
-		Name:      "",
-		Brand:     "",
-		State:     model.StateAvailable,
-		CreatedAt: time.Now().UTC(),
-		UpdatedAt: time.Now().UTC(),
-	}, nil
+// CreateDevice creates a new device.
+func (c *Client) CreateDevice(ctx context.Context, name, brand string, state model.State) (*model.Device, error) {
+	req := &devicev1.CreateDeviceRequest{
+		Name:  name,
+		Brand: brand,
+		State: toProtoState(state),
+	}
+
+	result, err := c.executeWithCircuitBreaker(ctx, func() (any, error) {
+		return c.deviceClient.CreateDevice(ctx, req)
+	})
+	if err != nil {
+		return nil, mapGRPCError(err)
+	}
+
+	resp, ok := result.(*devicev1.CreateDeviceResponse)
+	if !ok {
+		return nil, fmt.Errorf("unexpected response type")
+	}
+
+	return toDomainDevice(resp.GetDevice()), nil
 }
 
-func (c *Client) ListDevices(_ context.Context, filter model.DeviceFilter) (*model.DeviceList, error) {
+// GetDevice retrieves a device by ID.
+func (c *Client) GetDevice(ctx context.Context, id model.DeviceID) (*model.Device, error) {
+	req := &devicev1.GetDeviceRequest{
+		Id: id.String(),
+	}
+
+	result, err := c.executeWithCircuitBreaker(ctx, func() (any, error) {
+		return c.deviceClient.GetDevice(ctx, req)
+	})
+	if err != nil {
+		return nil, mapGRPCError(err)
+	}
+
+	resp, ok := result.(*devicev1.GetDeviceResponse)
+	if !ok {
+		return nil, fmt.Errorf("unexpected response type")
+	}
+
+	return toDomainDevice(resp.GetDevice()), nil
+}
+
+// ListDevices retrieves a paginated list of devices with optional filters.
+func (c *Client) ListDevices(ctx context.Context, filter model.DeviceFilter) (*model.DeviceList, error) {
+	req := toProtoListRequest(filter)
+
+	result, err := c.executeWithCircuitBreaker(ctx, func() (any, error) {
+		return c.deviceClient.ListDevices(ctx, req)
+	})
+	if err != nil {
+		return nil, mapGRPCError(err)
+	}
+
+	resp, ok := result.(*devicev1.ListDevicesResponse)
+	if !ok {
+		return nil, fmt.Errorf("unexpected response type")
+	}
+
 	return &model.DeviceList{
-		Devices: []*model.Device{},
-		Pagination: model.Pagination{
-			Page:        filter.Page,
-			Size:        filter.Size,
-			TotalItems:  0,
-			TotalPages:  1,
-			HasNext:     false,
-			HasPrevious: false,
-		},
-		Filters: filter,
+		Devices:    toDomainDevices(resp.GetDevices()),
+		Pagination: toDomainPagination(resp.GetPagination()),
+		Filters:    filter,
 	}, nil
 }
 
-func (c *Client) UpdateDevice(_ context.Context, id model.DeviceID, name, brand string, state model.State) (*model.Device, error) {
-	return &model.Device{
-		ID:        id,
-		Name:      name,
-		Brand:     brand,
-		State:     state,
-		CreatedAt: time.Now().UTC(),
-		UpdatedAt: time.Now().UTC(),
-	}, nil
+// UpdateDevice fully updates a device.
+func (c *Client) UpdateDevice(ctx context.Context, id model.DeviceID, name, brand string, state model.State) (*model.Device, error) {
+	req := &devicev1.UpdateDeviceRequest{
+		Id:    id.String(),
+		Name:  name,
+		Brand: brand,
+		State: toProtoState(state),
+	}
+
+	result, err := c.executeWithCircuitBreaker(ctx, func() (any, error) {
+		return c.deviceClient.UpdateDevice(ctx, req)
+	})
+	if err != nil {
+		return nil, mapGRPCError(err)
+	}
+
+	resp, ok := result.(*devicev1.UpdateDeviceResponse)
+	if !ok {
+		return nil, fmt.Errorf("unexpected response type")
+	}
+
+	return toDomainDevice(resp.GetDevice()), nil
 }
 
-func (c *Client) PatchDevice(_ context.Context, id model.DeviceID, _ map[string]any) (*model.Device, error) {
-	return &model.Device{
-		ID:        id,
-		Name:      "",
-		Brand:     "",
-		State:     model.StateAvailable,
-		CreatedAt: time.Now().UTC(),
-		UpdatedAt: time.Now().UTC(),
-	}, nil
+// PatchDevice partially updates a device.
+func (c *Client) PatchDevice(ctx context.Context, id model.DeviceID, updates map[string]any) (*model.Device, error) {
+	req := toProtoPatchRequest(id, updates)
+
+	result, err := c.executeWithCircuitBreaker(ctx, func() (any, error) {
+		return c.deviceClient.PatchDevice(ctx, req)
+	})
+	if err != nil {
+		return nil, mapGRPCError(err)
+	}
+
+	resp, ok := result.(*devicev1.PatchDeviceResponse)
+	if !ok {
+		return nil, fmt.Errorf("unexpected response type")
+	}
+
+	return toDomainDevice(resp.GetDevice()), nil
 }
 
-func (c *Client) DeleteDevice(_ context.Context, _ model.DeviceID) error {
+// DeleteDevice deletes a device by ID.
+func (c *Client) DeleteDevice(ctx context.Context, id model.DeviceID) error {
+	req := &devicev1.DeleteDeviceRequest{
+		Id: id.String(),
+	}
+
+	_, err := c.executeWithCircuitBreaker(ctx, func() (any, error) {
+		return c.deviceClient.DeleteDevice(ctx, req)
+	})
+	if err != nil {
+		return mapGRPCError(err)
+	}
+
 	return nil
 }
 
-func (c *Client) Liveness(_ context.Context) (*model.LivenessReport, error) {
+// Liveness returns the liveness status.
+func (c *Client) Liveness(ctx context.Context) (*model.LivenessReport, error) {
+	resp, err := c.healthClient.Check(ctx, &devicev1.HealthCheckRequest{})
+	if err != nil {
+		return &model.LivenessReport{
+			Status:    model.HealthStatusDown,
+			Timestamp: time.Now().UTC(),
+			Version:   config.ServiceVersion,
+		}, nil
+	}
+
+	status := model.HealthStatusOK
+	if resp.GetStatus() != devicev1.HealthCheckResponse_SERVING_STATUS_SERVING {
+		status = model.HealthStatusDown
+	}
+
 	return &model.LivenessReport{
-		Status:    model.HealthStatusOK,
+		Status:    status,
 		Timestamp: time.Now().UTC(),
-		Version:   "1.0.0",
+		Version:   config.ServiceVersion,
 	}, nil
 }
 
-func (c *Client) Readiness(_ context.Context) (*model.ReadinessReport, error) {
+// Readiness returns the readiness status including dependency checks.
+func (c *Client) Readiness(ctx context.Context) (*model.ReadinessReport, error) {
+	checks := make(map[string]model.DependencyCheck)
+	now := time.Now().UTC()
+
+	resp, err := c.healthClient.Check(ctx, &devicev1.HealthCheckRequest{})
+	if err != nil {
+		checks["svc-devices"] = model.DependencyCheck{
+			Status:      model.DependencyStatusDown,
+			Message:     err.Error(),
+			LastChecked: now,
+		}
+
+		return &model.ReadinessReport{
+			Status:    model.HealthStatusDown,
+			Timestamp: now,
+			Version:   config.ServiceVersion,
+			Checks:    checks,
+		}, nil
+	}
+
+	depStatus := model.DependencyStatusUp
+	if resp.GetStatus() != devicev1.HealthCheckResponse_SERVING_STATUS_SERVING {
+		depStatus = model.DependencyStatusDown
+	}
+
+	checks["svc-devices"] = model.DependencyCheck{
+		Status:      depStatus,
+		Message:     "ok",
+		LastChecked: now,
+	}
+
+	overallStatus := model.HealthStatusOK
+	if depStatus == model.DependencyStatusDown {
+		overallStatus = model.HealthStatusDown
+	}
+
 	return &model.ReadinessReport{
-		Status:    model.HealthStatusOK,
-		Timestamp: time.Now().UTC(),
-		Version:   "1.0.0",
-		Checks: map[string]model.DependencyCheck{
-			"storage": {
-				Status:      model.DependencyStatusUp,
-				LatencyMs:   0,
-				Message:     "ok",
-				LastChecked: time.Now().UTC(),
-			},
-		},
+		Status:    overallStatus,
+		Timestamp: now,
+		Version:   config.ServiceVersion,
+		Checks:    checks,
 	}, nil
 }
 
-func (c *Client) Health(_ context.Context) (*model.HealthReport, error) {
-	return &model.HealthReport{
-		Status:    model.HealthStatusOK,
-		Timestamp: time.Now().UTC(),
-		Version: model.VersionInfo{
-			API:   "1.0.0",
-			Build: "development",
-			Go:    "1.23",
-		},
-		Checks: map[string]model.DependencyCheck{
-			"storage": {
-				Status:      model.DependencyStatusUp,
-				LatencyMs:   0,
-				Message:     "ok",
-				LastChecked: time.Now().UTC(),
+// Health returns a comprehensive health report.
+func (c *Client) Health(ctx context.Context) (*model.HealthReport, error) {
+	checks := make(map[string]model.DependencyCheck)
+	now := time.Now().UTC()
+
+	resp, err := c.healthClient.Check(ctx, &devicev1.HealthCheckRequest{})
+	if err != nil {
+		checks["svc-devices"] = model.DependencyCheck{
+			Status:      model.DependencyStatusDown,
+			Message:     err.Error(),
+			LastChecked: now,
+		}
+
+		return &model.HealthReport{
+			Status:    model.HealthStatusDown,
+			Timestamp: now,
+			Version: model.VersionInfo{
+				API:   config.APIVersion,
+				Build: config.CommitSHA,
 			},
+			Checks: checks,
+		}, nil
+	}
+
+	depStatus := model.DependencyStatusUp
+	if resp.GetStatus() != devicev1.HealthCheckResponse_SERVING_STATUS_SERVING {
+		depStatus = model.DependencyStatusDown
+	}
+
+	checks["svc-devices"] = model.DependencyCheck{
+		Status:      depStatus,
+		Message:     "ok",
+		LastChecked: now,
+	}
+
+	overallStatus := model.HealthStatusOK
+	if depStatus == model.DependencyStatusDown {
+		overallStatus = model.HealthStatusDown
+	}
+
+	return &model.HealthReport{
+		Status:    overallStatus,
+		Timestamp: now,
+		Version: model.VersionInfo{
+			API:   config.APIVersion,
+			Build: config.CommitSHA,
 		},
-		System: model.SystemInfo{
-			Goroutines: 1,
-			CPUCores:   1,
-		},
+		Checks: checks,
 	}, nil
+}
+
+func (c *Client) executeWithCircuitBreaker(ctx context.Context, fn func() (any, error)) (any, error) {
+	if c.cb == nil {
+		return fn()
+	}
+
+	result, err := c.cb.Execute(func() (any, error) {
+		return fn()
+	})
+	if err != nil {
+		if err == gobreaker.ErrOpenState || err == gobreaker.ErrTooManyRequests {
+			return nil, model.ErrCircuitOpen
+		}
+
+		return nil, err
+	}
+
+	return result, nil
+}
+
+func loadTLSCredentials(cfg config.TLSConfig) (credentials.TransportCredentials, error) {
+	if cfg.CAFile == "" {
+		return credentials.NewTLS(&tls.Config{
+			MinVersion: tls.VersionTLS12,
+		}), nil
+	}
+
+	caCert, err := os.ReadFile(cfg.CAFile)
+	if err != nil {
+		return nil, fmt.Errorf("reading CA file: %w", err)
+	}
+
+	certPool := x509.NewCertPool()
+	if !certPool.AppendCertsFromPEM(caCert) {
+		return nil, fmt.Errorf("failed to add CA certificate")
+	}
+
+	tlsConfig := &tls.Config{
+		RootCAs:    certPool,
+		MinVersion: tls.VersionTLS12,
+	}
+
+	if cfg.CertFile != "" {
+		cert, err := tls.LoadX509KeyPair(cfg.CertFile, cfg.CertFile)
+		if err != nil {
+			return nil, fmt.Errorf("loading client certificate: %w", err)
+		}
+		tlsConfig.Certificates = []tls.Certificate{cert}
+	}
+
+	return credentials.NewTLS(tlsConfig), nil
 }

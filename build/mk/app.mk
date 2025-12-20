@@ -89,6 +89,11 @@ generate-api: ## 🤖 Generate API specs from OpenAPI definition.
 	&& \
 	cd services/svc-api-gateway/internal/tools && go generate .
 
+.PHONY: create-migration
+create-migration: ## 🗂️ Creates migration files based on a passed argument "migration_name".
+	$(call printMessage,"🗃️  Creating migration",$(INFO_CLR))
+	docker compose run --name migrate-this --rm -it migrate create -ext sql -dir migrations "${migration_name}"
+
 $(MOCKS_DIR):
 	$(call printMessage,"🎭  Generating mocks",$(INFO_CLR))
 	GOFLAGS="-mod=mod" go generate ./...
@@ -102,7 +107,22 @@ generate-mocks-force: ## 🎭 Force regenerate test mocks from interfaces.
 	rm -rf "${MOCKS_DIR}"
 	$(MAKE) generate-mocks
 
-.PHONY: test
-test: generate-mocks ## 🏃Run tests with race flag 🏁
-	$(call printMessage,"🕸️  Running tests",$(INFO_CLR))
-	GOFLAGS="-mod=mod" go test -v -race ./...
+.PHONY: test-unit
+test-unit: generate-mocks ## 🧪 Run unit tests with race detection.
+	$(call printMessage,"🧪  Running unit tests",$(INFO_CLR))
+	for dir in ${SERVICES_DIR}/*/; do \
+		if [ -f "$${dir}go.mod" ]; then \
+			echo "Testing $${dir}..."; \
+			(cd "$${dir}" && go test -v -race ./...) || exit 1; \
+		fi \
+	done
+
+.PHONY: test-integration
+test-integration: generate-mocks ## 🔗 Run integration tests with race detection (requires Docker).
+	$(call printMessage,"🔗  Running integration tests",$(INFO_CLR))
+	for dir in ${SERVICES_DIR}/*/; do \
+		if [ -f "$${dir}go.mod" ]; then \
+			echo "Testing $${dir}..."; \
+			(cd "$${dir}" && go test -v -race -tags=integration ./...) || exit 1; \
+		fi \
+	done

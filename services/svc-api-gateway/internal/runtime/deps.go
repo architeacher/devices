@@ -36,6 +36,7 @@ type (
 		app            *usecases.WebApplication
 		devicesService ports.DevicesService
 		healthChecker  ports.HealthChecker
+		grpcCleanup    []func() error
 	}
 
 	DependencyOption func(*dependencies) error

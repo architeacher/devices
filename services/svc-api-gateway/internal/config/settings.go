@@ -104,10 +104,17 @@ type (
 	}
 
 	DevicesConfig struct {
-		BaseURL        string               `envconfig:"DEVICES_BASE_URL" default:"http://svc-devices:8081" json:"base_url"`
+		Address        string               `envconfig:"DEVICES_GRPC_ADDRESS" default:"svc-devices:9090" json:"address"`
 		Timeout        time.Duration        `envconfig:"DEVICES_TIMEOUT" default:"30s" json:"timeout"`
 		MaxRetries     uint                 `envconfig:"DEVICES_MAX_RETRIES" default:"3" json:"max_retries"`
 		CircuitBreaker CircuitBreakerConfig `json:"circuit_breaker"`
+		TLS            TLSConfig            `json:"tls"`
+	}
+
+	TLSConfig struct {
+		Enabled  bool   `envconfig:"DEVICES_TLS_ENABLED" default:"false" json:"enabled"`
+		CertFile string `envconfig:"DEVICES_TLS_CERT_FILE" default:"" json:"cert_file,omitempty"`
+		CAFile   string `envconfig:"DEVICES_TLS_CA_FILE" default:"" json:"ca_file,omitempty"`
 	}
 
 	CircuitBreakerConfig struct {

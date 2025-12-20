@@ -28,6 +28,10 @@ func (d commandTracingDecorator[C, R]) Handle(ctx context.Context, cmd C) (resul
 	start := time.Now()
 
 	defer func() {
+		if d.tracerProvider == nil {
+			return
+		}
+
 		actionName := strings.ToLower(generateActionName(cmd))
 
 		_, span := d.tracerProvider.Tracer(fmt.Sprintf("commands.%s", actionName)).Start(ctx, "Handle")

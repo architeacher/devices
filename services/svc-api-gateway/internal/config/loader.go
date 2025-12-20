@@ -305,8 +305,8 @@ func (l *Loader) applySecretToConfig(cfg *ServiceConfig, key, value string) erro
 		cfg.Auth.SecretKey = value
 	case "AUTH_FALLBACK_KEY_HEX":
 		cfg.Auth.FallbackKeyHex = value
-	case "DEVICES_BASE_URL":
-		cfg.Devices.BaseURL = value
+	case "DEVICES_GRPC_ADDRESS":
+		cfg.Devices.Address = value
 	}
 
 	return nil

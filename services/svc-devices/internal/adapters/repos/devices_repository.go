@@ -10,7 +10,6 @@ import (
 	"github.com/architeacher/devices/services/svc-devices/internal/domain/model"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 const devicesTable = "devices"
@@ -18,8 +17,17 @@ const devicesTable = "devices"
 var psql = sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
 
 type (
+	// PoolOps defines the interface for database operations.
+	// This allows injecting mock implementations for testing.
+	PoolOps interface {
+		QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+		Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+		Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+		Ping(ctx context.Context) error
+	}
+
 	DevicesRepository struct {
-		pool *pgxpool.Pool
+		pool PoolOps
 	}
 
 	deviceRow struct {
@@ -30,15 +38,9 @@ type (
 		CreatedAt time.Time `db:"created_at"`
 		UpdatedAt time.Time `db:"updated_at"`
 	}
-
-	queryExecutor interface {
-		QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
-		Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
-		Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
-	}
 )
 
-func NewDevicesRepository(pool *pgxpool.Pool) *DevicesRepository {
+func NewDevicesRepository(pool PoolOps) *DevicesRepository {
 	return &DevicesRepository{pool: pool}
 }
 
@@ -73,7 +75,6 @@ func (r *DevicesRepository) Create(ctx context.Context, device *model.Device) er
 func (r *DevicesRepository) GetByID(ctx context.Context, id model.DeviceID) (*model.Device, error) {
 	return r.findByCriteria(
 		ctx,
-		r.pool,
 		sq.Eq{"id": id.String()},
 		fmt.Sprintf("device with ID %s not found", id.String()),
 	)
@@ -189,7 +190,6 @@ func (r *DevicesRepository) Ping(ctx context.Context) error {
 
 func (r *DevicesRepository) findByCriteria(
 	ctx context.Context,
-	exec queryExecutor,
 	criteria sq.Sqlizer,
 	errorContext string,
 ) (*model.Device, error) {
@@ -201,7 +201,7 @@ func (r *DevicesRepository) findByCriteria(
 		return nil, fmt.Errorf("failed to build select query: %w", err)
 	}
 
-	row := exec.QueryRow(ctx, query, args...)
+	row := r.pool.QueryRow(ctx, query, args...)
 
 	device, err := r.scanDevice(row)
 	if err != nil {

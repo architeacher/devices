@@ -27,6 +27,10 @@ func (d commandMetricsDecorator[C, R]) Handle(ctx context.Context, cmd C) (resul
 	actionName := strings.ToLower(generateActionName(cmd))
 
 	defer func() {
+		if d.client == nil {
+			return
+		}
+
 		end := time.Since(start)
 
 		d.client.Inc(ctx, fmt.Sprintf("commands.%s.duration", actionName), int64(end.Seconds()))
