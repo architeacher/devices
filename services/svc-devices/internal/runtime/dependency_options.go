@@ -14,6 +14,7 @@ import (
 	"github.com/architeacher/devices/services/svc-devices/internal/infrastructure/telemetry"
 	"github.com/architeacher/devices/services/svc-devices/internal/services"
 	"github.com/architeacher/devices/services/svc-devices/internal/usecases"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 )
@@ -22,13 +23,13 @@ func defaultOptions(ctx context.Context) []DependencyOption {
 	return []DependencyOption{
 		WithConfig(),
 		WithLogger(),
-		WithTracing(ctx),
-		WithMetrics(ctx),
 		WithDatabase(ctx),
 		WithDevicesRepository(),
 		WithDevicesService(),
 		WithApplication(),
 		WithGRPCServer(),
+		WithMetrics(),
+		WithTracing(),
 	}
 }
 
@@ -53,7 +54,7 @@ func WithLogger() DependencyOption {
 	}
 }
 
-func WithTracing(ctx context.Context) DependencyOption {
+func WithTracing() DependencyOption {
 	return func(d *dependencies) error {
 		if d.config.Telemetry.OTLPEndpoint == "" {
 			d.infra.tracerProvider = telemetry.NewNoopTracerProvider()
@@ -77,7 +78,7 @@ func WithTracing(ctx context.Context) DependencyOption {
 	}
 }
 
-func WithMetrics(_ context.Context) DependencyOption {
+func WithMetrics() DependencyOption {
 	return func(d *dependencies) error {
 		d.infra.metricsClient = noop.NewMetricsClient()
 
@@ -133,6 +134,10 @@ func WithGRPCServer() DependencyOption {
 		opts := []grpc.ServerOption{
 			grpc.MaxRecvMsgSize(d.config.GRPCServer.MaxRecvMsgSize),
 			grpc.MaxSendMsgSize(d.config.GRPCServer.MaxSendMsgSize),
+			grpc.StatsHandler(otelgrpc.NewServerHandler()),
+			grpc.ChainUnaryInterceptor(
+				inboundgrpc.ContextExtractorInterceptor(),
+			),
 		}
 
 		server := grpc.NewServer(opts...)

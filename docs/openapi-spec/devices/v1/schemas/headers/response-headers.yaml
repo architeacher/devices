@@ -13,7 +13,14 @@ LocationHeader:
   example: "/devices/019234a5-6b7c-8d9e-0f12-34567890abcd"
 
 RequestIdHeader:
-  description: Unique request identifier for tracing
+  description: Unique request identifier for tracing (per-request, always generated server-side)
+  schema:
+    type: string
+    format: uuid
+  example: "019234a5-6b7c-8d9e-0f12-34567890abcd"
+
+CorrelationIdHeader:
+  description: Correlation identifier for tracing requests across multiple services (can be provided by client or generated server-side)
   schema:
     type: string
     format: uuid
@@ -45,19 +52,19 @@ LastModifiedHeader:
   example: "Wed, 15 Jan 2024 14:45:00 GMT"
 
 RateLimitLimitHeader:
-  description: Maximum number of requests allowed per time window
+  description: Maximum number of requests allowed per time window (RFC 6648 compliant)
   schema:
     type: integer
   example: 100
 
 RateLimitRemainingHeader:
-  description: Number of requests remaining in the current time window
+  description: Number of requests remaining in the current time window (RFC 6648 compliant)
   schema:
     type: integer
   example: 95
 
 RateLimitResetHeader:
-  description: Unix timestamp (seconds) when the rate limit window resets
+  description: Unix timestamp (seconds) when the rate limit window resets (RFC 6648 compliant)
   schema:
     type: integer
   example: 1705320000

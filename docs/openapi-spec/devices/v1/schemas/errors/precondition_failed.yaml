@@ -2,8 +2,10 @@ description: Precondition Failed - The If-Match header condition was not met
 headers:
   API-Version:
     $ref: "../headers/response-headers.yaml#/ApiVersionHeader"
-  X-Request-Id:
+  Request-Id:
     $ref: "../headers/response-headers.yaml#/RequestIdHeader"
+  Correlation-Id:
+    $ref: "../headers/response-headers.yaml#/CorrelationIdHeader"
   traceparent:
     $ref: "../headers/response-headers.yaml#/TraceparentResponseHeader"
   tracestate:

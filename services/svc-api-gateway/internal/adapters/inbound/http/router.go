@@ -30,14 +30,13 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	router := chi.NewRouter()
 
 	// Core middlewares - always applied
-	router.Use(chimiddleware.RequestID)
+	router.Use(middleware.RequestID())
 	router.Use(chimiddleware.RealIP)
 	router.Use(middleware.Recovery(cfg.Logger))
 	router.Use(chimiddleware.Timeout(cfg.Config.HTTPServer.WriteTimeout))
 	router.Use(middleware.SecurityHeaders())
 	router.Use(middleware.CORS([]string{"*"}))
 
-	// Tracing middleware
 	if cfg.Config.Telemetry.Traces.Enabled {
 		router.Use(middleware.Tracer())
 		cfg.Logger.Info().Msg("distributed tracing enabled")
@@ -68,7 +67,6 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	)
 	router.Use(requestValidator)
 
-	// Metrics middleware
 	if cfg.Config.Telemetry.Metrics.Enabled {
 		metricsMiddleware := middleware.NewMetricsMiddleware(cfg.MetricsClient)
 		router.Use(metricsMiddleware.Middleware)

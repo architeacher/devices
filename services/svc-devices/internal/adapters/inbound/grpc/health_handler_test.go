@@ -1,12 +1,12 @@
 package grpc_test
 
 import (
-	"context"
 	"testing"
 
 	devicev1 "github.com/architeacher/devices/pkg/proto/device/v1"
 	inboundgrpc "github.com/architeacher/devices/services/svc-devices/internal/adapters/inbound/grpc"
 	"github.com/architeacher/devices/services/svc-devices/internal/domain/model"
+	"github.com/architeacher/devices/services/svc-devices/internal/mocks"
 	"github.com/stretchr/testify/require"
 )
 
@@ -15,17 +15,21 @@ func TestHealthHandler_Check(t *testing.T) {
 
 	cases := []struct {
 		name           string
-		dbHealthy      bool
+		setupChecker   func(*mocks.FakeDatabaseHealthChecker)
 		expectedStatus devicev1.HealthCheckResponse_ServingStatus
 	}{
 		{
-			name:           "service is serving when db is healthy",
-			dbHealthy:      true,
+			name: "service is serving when db is healthy",
+			setupChecker: func(fake *mocks.FakeDatabaseHealthChecker) {
+				fake.PingReturns(nil)
+			},
 			expectedStatus: devicev1.HealthCheckResponse_SERVING_STATUS_SERVING,
 		},
 		{
-			name:           "service is not serving when db is unhealthy",
-			dbHealthy:      false,
+			name: "service is not serving when db is unhealthy",
+			setupChecker: func(fake *mocks.FakeDatabaseHealthChecker) {
+				fake.PingReturns(model.ErrDatabaseConnection)
+			},
 			expectedStatus: devicev1.HealthCheckResponse_SERVING_STATUS_NOT_SERVING,
 		},
 	}
@@ -34,7 +38,8 @@ func TestHealthHandler_Check(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			dbChecker := &mockHealthChecker{healthy: tc.dbHealthy}
+			dbChecker := &mocks.FakeDatabaseHealthChecker{}
+			tc.setupChecker(dbChecker)
 			handler := inboundgrpc.NewHealthHandler(dbChecker)
 
 			resp, err := handler.Check(t.Context(), &devicev1.HealthCheckRequest{})
@@ -44,16 +49,4 @@ func TestHealthHandler_Check(t *testing.T) {
 			require.Equal(t, tc.expectedStatus, resp.Status)
 		})
 	}
-}
-
-type mockHealthChecker struct {
-	healthy bool
-}
-
-func (m *mockHealthChecker) Ping(_ context.Context) error {
-	if !m.healthy {
-		return model.ErrDatabaseConnection
-	}
-
-	return nil
 }

@@ -114,13 +114,15 @@ paths:
               $ref: "#/components/headers/ApiVersionHeader"
             Location:
               $ref: "#/components/headers/LocationHeader"
-            X-Request-Id:
+            Request-Id:
               $ref: "#/components/headers/RequestIdHeader"
-            X-RateLimit-Limit:
+            Correlation-Id:
+              $ref: "#/components/headers/CorrelationIdHeader"
+            RateLimit-Limit:
               $ref: "#/components/headers/RateLimitLimitHeader"
-            X-RateLimit-Remaining:
+            RateLimit-Remaining:
               $ref: "#/components/headers/RateLimitRemainingHeader"
-            X-RateLimit-Reset:
+            RateLimit-Reset:
               $ref: "#/components/headers/RateLimitResetHeader"
             Content-Encoding:
               $ref: "#/components/headers/ContentEncodingHeader"
@@ -180,17 +182,19 @@ paths:
           headers:
             API-Version:
               $ref: "#/components/headers/ApiVersionHeader"
-            X-Request-Id:
+            Request-Id:
               $ref: "#/components/headers/RequestIdHeader"
+            Correlation-Id:
+              $ref: "#/components/headers/CorrelationIdHeader"
             ETag:
               $ref: "#/components/headers/ETagHeader"
             Cache-Control:
               $ref: "#/components/headers/CacheControlHeader"
-            X-RateLimit-Limit:
+            RateLimit-Limit:
               $ref: "#/components/headers/RateLimitLimitHeader"
-            X-RateLimit-Remaining:
+            RateLimit-Remaining:
               $ref: "#/components/headers/RateLimitRemainingHeader"
-            X-RateLimit-Reset:
+            RateLimit-Reset:
               $ref: "#/components/headers/RateLimitResetHeader"
             Content-Encoding:
               $ref: "#/components/headers/ContentEncodingHeader"
@@ -259,8 +263,10 @@ paths:
           headers:
             API-Version:
               $ref: "#/components/headers/ApiVersionHeader"
-            X-Request-Id:
+            Request-Id:
               $ref: "#/components/headers/RequestIdHeader"
+            Correlation-Id:
+              $ref: "#/components/headers/CorrelationIdHeader"
             ETag:
               $ref: "#/components/headers/ETagHeader"
             Cache-Control:
@@ -324,7 +330,7 @@ paths:
               description: CORS allowed headers
               schema:
                 type: string
-              example: "Authorization, Content-Type, X-Request-Id, API-Version, If-None-Match, traceparent, tracestate"
+              example: "Authorization, Content-Type, Request-Id, Correlation-Id, API-Version, If-None-Match, traceparent, tracestate"
             Access-Control-Max-Age:
               description: CORS preflight cache duration in seconds
               schema:
@@ -357,19 +363,21 @@ paths:
           headers:
             API-Version:
               $ref: "#/components/headers/ApiVersionHeader"
-            X-Request-Id:
+            Request-Id:
               $ref: "#/components/headers/RequestIdHeader"
+            Correlation-Id:
+              $ref: "#/components/headers/CorrelationIdHeader"
             ETag:
               $ref: "#/components/headers/ETagHeader"
             Cache-Control:
               $ref: "#/components/headers/CacheControlHeader"
             Last-Modified:
               $ref: "#/components/headers/LastModifiedHeader"
-            X-RateLimit-Limit:
+            RateLimit-Limit:
               $ref: "#/components/headers/RateLimitLimitHeader"
-            X-RateLimit-Remaining:
+            RateLimit-Remaining:
               $ref: "#/components/headers/RateLimitRemainingHeader"
-            X-RateLimit-Reset:
+            RateLimit-Reset:
               $ref: "#/components/headers/RateLimitResetHeader"
             Content-Encoding:
               $ref: "#/components/headers/ContentEncodingHeader"
@@ -447,15 +455,17 @@ paths:
           headers:
             API-Version:
               $ref: "#/components/headers/ApiVersionHeader"
-            X-Request-Id:
+            Request-Id:
               $ref: "#/components/headers/RequestIdHeader"
+            Correlation-Id:
+              $ref: "#/components/headers/CorrelationIdHeader"
             ETag:
               $ref: "#/components/headers/ETagHeader"
-            X-RateLimit-Limit:
+            RateLimit-Limit:
               $ref: "#/components/headers/RateLimitLimitHeader"
-            X-RateLimit-Remaining:
+            RateLimit-Remaining:
               $ref: "#/components/headers/RateLimitRemainingHeader"
-            X-RateLimit-Reset:
+            RateLimit-Reset:
               $ref: "#/components/headers/RateLimitResetHeader"
             Content-Encoding:
               $ref: "#/components/headers/ContentEncodingHeader"
@@ -530,15 +540,17 @@ paths:
           headers:
             API-Version:
               $ref: "#/components/headers/ApiVersionHeader"
-            X-Request-Id:
+            Request-Id:
               $ref: "#/components/headers/RequestIdHeader"
+            Correlation-Id:
+              $ref: "#/components/headers/CorrelationIdHeader"
             ETag:
               $ref: "#/components/headers/ETagHeader"
-            X-RateLimit-Limit:
+            RateLimit-Limit:
               $ref: "#/components/headers/RateLimitLimitHeader"
-            X-RateLimit-Remaining:
+            RateLimit-Remaining:
               $ref: "#/components/headers/RateLimitRemainingHeader"
-            X-RateLimit-Reset:
+            RateLimit-Reset:
               $ref: "#/components/headers/RateLimitResetHeader"
             Content-Encoding:
               $ref: "#/components/headers/ContentEncodingHeader"
@@ -599,13 +611,15 @@ paths:
           headers:
             API-Version:
               $ref: "#/components/headers/ApiVersionHeader"
-            X-Request-Id:
+            Request-Id:
               $ref: "#/components/headers/RequestIdHeader"
-            X-RateLimit-Limit:
+            Correlation-Id:
+              $ref: "#/components/headers/CorrelationIdHeader"
+            RateLimit-Limit:
               $ref: "#/components/headers/RateLimitLimitHeader"
-            X-RateLimit-Remaining:
+            RateLimit-Remaining:
               $ref: "#/components/headers/RateLimitRemainingHeader"
-            X-RateLimit-Reset:
+            RateLimit-Reset:
               $ref: "#/components/headers/RateLimitResetHeader"
             traceparent:
               $ref: "#/components/headers/TraceparentResponseHeader"
@@ -646,8 +660,10 @@ paths:
           headers:
             API-Version:
               $ref: "#/components/headers/ApiVersionHeader"
-            X-Request-Id:
+            Request-Id:
               $ref: "#/components/headers/RequestIdHeader"
+            Correlation-Id:
+              $ref: "#/components/headers/CorrelationIdHeader"
             ETag:
               $ref: "#/components/headers/ETagHeader"
             Cache-Control:
@@ -712,7 +728,7 @@ paths:
               description: CORS allowed headers
               schema:
                 type: string
-              example: "Authorization, Content-Type, X-Request-Id, API-Version, If-Match, If-None-Match, traceparent, tracestate"
+              example: "Authorization, Content-Type, Request-Id, Correlation-Id, API-Version, If-Match, If-None-Match, traceparent, tracestate"
             Access-Control-Max-Age:
               description: CORS preflight cache duration in seconds
               schema:
@@ -830,12 +846,25 @@ components:
       example: v1
 
     RequestIdHeader:
-      name: X-Request-Id
+      name: Request-Id
       in: header
       required: false
       description: |
-        Unique request identifier for tracing and debugging purposes.
-        If not provided, the server will generate one.
+        Unique request identifier for tracing and debugging purposes (per-request, always generated server-side).
+        RFC 6648 compliant (no X- prefix).
+      schema:
+        type: string
+        format: uuid
+      example: "019234a5-6b7c-8d9e-0f12-34567890abcd"
+
+    CorrelationIdHeader:
+      name: Correlation-Id
+      in: header
+      required: false
+      description: |
+        Correlation identifier for tracing requests across multiple services.
+        Can be provided by client or generated server-side if not provided.
+        RFC 6648 compliant (no X- prefix).
       schema:
         type: string
         format: uuid
@@ -991,13 +1020,13 @@ components:
         the server returns the cached response instead of creating a duplicate.
 
         **Requirements:**
-        - Must be a valid UUID v4
+        - Must be a valid UUID v7
         - Must be unique per logical operation
         - Cached for 24 hours
       schema:
         type: string
         format: uuid
-      example: "550e8400-e29b-41d4-a716-446655440000"
+      example: "019234a5-6b7c-8d9e-0f12-34567890abcd"
 
     AcceptEncodingHeader:
       name: Accept-Encoding
@@ -1064,6 +1093,9 @@ components:
 
     RequestIdHeader:
       $ref: "schemas/headers/response-headers.yaml#/RequestIdHeader"
+
+    CorrelationIdHeader:
+      $ref: "schemas/headers/response-headers.yaml#/CorrelationIdHeader"
 
     ETagHeader:
       $ref: "schemas/headers/response-headers.yaml#/ETagHeader"

@@ -4,12 +4,64 @@ import (
 	"context"
 	"time"
 
+	"github.com/architeacher/devices/services/svc-api-gateway/internal/adapters/inbound/http/middleware"
 	"github.com/architeacher/devices/services/svc-api-gateway/internal/config"
 	"github.com/cenkalti/backoff/v4"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
+
+const (
+	MetadataKeyRequestID     = "request-id"
+	MetadataKeyCorrelationID = "correlation-id"
+	maxIDLength              = 128
+)
+
+func correlationIDInterceptor() grpc.UnaryClientInterceptor {
+	return func(
+		ctx context.Context,
+		method string,
+		req, reply any,
+		cc *grpc.ClientConn,
+		invoker grpc.UnaryInvoker,
+		opts ...grpc.CallOption,
+	) error {
+		correlationID := middleware.GetCorrelationID(ctx)
+		if correlationID != "" {
+			if len(correlationID) > maxIDLength {
+				correlationID = correlationID[:maxIDLength]
+			}
+
+			ctx = metadata.AppendToOutgoingContext(ctx, MetadataKeyCorrelationID, correlationID)
+		}
+
+		return invoker(ctx, method, req, reply, cc, opts...)
+	}
+}
+
+func requestIDInterceptor() grpc.UnaryClientInterceptor {
+	return func(
+		ctx context.Context,
+		method string,
+		req, reply any,
+		cc *grpc.ClientConn,
+		invoker grpc.UnaryInvoker,
+		opts ...grpc.CallOption,
+	) error {
+		requestID := middleware.GetRequestID(ctx)
+		if requestID != "" {
+			if len(requestID) > maxIDLength {
+				requestID = requestID[:maxIDLength]
+			}
+
+			ctx = metadata.AppendToOutgoingContext(ctx, MetadataKeyRequestID, requestID)
+		}
+
+		return invoker(ctx, method, req, reply, cc, opts...)
+	}
+}
 
 func timeoutInterceptor(timeout time.Duration) grpc.UnaryClientInterceptor {
 	return func(

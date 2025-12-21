@@ -34,8 +34,7 @@ type BaseTestSuite struct {
 
 // SetupSuite initializes the integration test server.
 func (s *BaseTestSuite) SetupSuite() {
-	ctx := context.Background()
-	server, err := NewIntegrationTestServer(ctx)
+	server, err := NewIntegrationTestServer(s.T().Context())
 	s.Require().NoError(err)
 	s.Server = server
 }

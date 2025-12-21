@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -13,6 +14,7 @@ import (
 	"github.com/architeacher/devices/services/svc-api-gateway/internal/domain/model"
 	"github.com/architeacher/devices/services/svc-api-gateway/internal/ports"
 	"github.com/sony/gobreaker/v2"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
@@ -28,7 +30,6 @@ type (
 		config       config.DevicesConfig
 	}
 
-	// ClientOption configures the Client.
 	ClientOption func(*Client) error
 )
 
@@ -56,10 +57,15 @@ func NewClient(cfg config.DevicesConfig, backoffCfg config.BackoffConfig, opts .
 		dialOpts = append(dialOpts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	}
 
-	dialOpts = append(dialOpts, grpc.WithChainUnaryInterceptor(
-		timeoutInterceptor(cfg.Timeout),
-		retryInterceptor(cfg.MaxRetries, backoffCfg),
-	))
+	dialOpts = append(dialOpts,
+		grpc.WithStatsHandler(otelgrpc.NewClientHandler()),
+		grpc.WithChainUnaryInterceptor(
+			correlationIDInterceptor(),
+			requestIDInterceptor(),
+			timeoutInterceptor(cfg.Timeout),
+			retryInterceptor(cfg.MaxRetries, backoffCfg),
+		),
+	)
 
 	conn, err := grpc.NewClient(cfg.Address, dialOpts...)
 	if err != nil {
@@ -353,7 +359,7 @@ func (c *Client) Health(ctx context.Context) (*model.HealthReport, error) {
 	}, nil
 }
 
-func (c *Client) executeWithCircuitBreaker(ctx context.Context, fn func() (any, error)) (any, error) {
+func (c *Client) executeWithCircuitBreaker(_ context.Context, fn func() (any, error)) (any, error) {
 	if c.cb == nil {
 		return fn()
 	}
@@ -362,7 +368,7 @@ func (c *Client) executeWithCircuitBreaker(ctx context.Context, fn func() (any, 
 		return fn()
 	})
 	if err != nil {
-		if err == gobreaker.ErrOpenState || err == gobreaker.ErrTooManyRequests {
+		if errors.Is(err, gobreaker.ErrOpenState) || errors.Is(err, gobreaker.ErrTooManyRequests) {
 			return nil, model.ErrCircuitOpen
 		}
 
@@ -370,6 +376,21 @@ func (c *Client) executeWithCircuitBreaker(ctx context.Context, fn func() (any, 
 	}
 
 	return result, nil
+}
+
+// WithConnection allows injecting an existing gRPC connection for testing.
+func WithConnection(conn *grpc.ClientConn) ClientOption {
+	return func(c *Client) error {
+		if c.conn != nil {
+			c.conn.Close()
+		}
+
+		c.conn = conn
+		c.deviceClient = devicev1.NewDeviceServiceClient(conn)
+		c.healthClient = devicev1.NewHealthServiceClient(conn)
+
+		return nil
+	}
 }
 
 func loadTLSCredentials(cfg config.TLSConfig) (credentials.TransportCredentials, error) {
