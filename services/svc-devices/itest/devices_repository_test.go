@@ -5,21 +5,26 @@ package itest
 import (
 	"context"
 	"fmt"
-	"io/fs"
 	"path/filepath"
-	"sort"
-	"strings"
+	"runtime"
 	"testing"
 	"time"
 
 	"github.com/architeacher/devices/services/svc-devices/internal/adapters/repos"
 	"github.com/architeacher/devices/services/svc-devices/internal/domain/model"
-	"github.com/architeacher/devices/services/svc-devices/migrations"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/suite"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
+)
+
+const (
+	postgresImage    = "postgres:18-alpine"
+	postgresDatabase = "devices_test"
+	postgresUsername = "test"
+	postgresPassword = "test"
+	migrateImage     = "migrate/migrate:v4.19.1"
 )
 
 type DevicesRepositoryIntegrationTestSuite struct {
@@ -42,10 +47,10 @@ func (s *DevicesRepositoryIntegrationTestSuite) SetupSuite() {
 	s.suiteCtx, s.suiteCancel = context.WithTimeout(context.Background(), 5*time.Minute)
 
 	container, err := postgres.Run(s.suiteCtx,
-		"postgres:18-alpine",
-		postgres.WithDatabase("devices_test"),
-		postgres.WithUsername("test"),
-		postgres.WithPassword("test"),
+		postgresImage,
+		postgres.WithDatabase(postgresDatabase),
+		postgres.WithUsername(postgresUsername),
+		postgres.WithPassword(postgresPassword),
 		testcontainers.WithWaitStrategy(
 			wait.ForLog("database system is ready to accept connections").
 				WithOccurrence(2).
@@ -86,31 +91,56 @@ func (s *DevicesRepositoryIntegrationTestSuite) SetupTest() {
 }
 
 func (s *DevicesRepositoryIntegrationTestSuite) runMigrations() {
-	var migrationFiles []string
-
-	err := fs.WalkDir(migrations.FS, ".", func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if !d.IsDir() && strings.HasSuffix(path, ".up.sql") {
-			migrationFiles = append(migrationFiles, path)
-		}
-
-		return nil
-	})
+	postgresHost, err := s.container.Host(s.suiteCtx)
 	s.Require().NoError(err)
 
-	sort.Slice(migrationFiles, func(i, j int) bool {
-		return filepath.Base(migrationFiles[i]) < filepath.Base(migrationFiles[j])
+	postgresPort, err := s.container.MappedPort(s.suiteCtx, "5432/tcp")
+	s.Require().NoError(err)
+
+	dbURL := fmt.Sprintf(
+		"postgres://%s:%s@%s:%s/%s?sslmode=disable",
+		postgresUsername,
+		postgresPassword,
+		postgresHost,
+		postgresPort.Port(),
+		postgresDatabase,
+	)
+
+	migrationsPath, err := getMigrationsPath()
+	s.Require().NoError(err)
+
+	migrateContainer, err := testcontainers.GenericContainer(s.suiteCtx, testcontainers.GenericContainerRequest{
+		ContainerRequest: testcontainers.ContainerRequest{
+			Image: migrateImage,
+			Cmd: []string{
+				"-path", "/migrations",
+				"-database", dbURL,
+				"up",
+			},
+			Mounts: testcontainers.Mounts(
+				testcontainers.BindMount(migrationsPath, "/migrations"),
+			),
+			WaitingFor: wait.ForExit().WithExitTimeout(30 * time.Second),
+		},
+		Started: true,
 	})
+	s.Require().NoError(err)
+	defer migrateContainer.Terminate(s.suiteCtx)
 
-	for _, file := range migrationFiles {
-		content, err := migrations.FS.ReadFile(file)
-		s.Require().NoError(err)
+	state, err := migrateContainer.State(s.suiteCtx)
+	s.Require().NoError(err)
+	s.Require().Equal(0, state.ExitCode, "migrations failed")
+}
 
-		_, err = s.pool.Exec(s.suiteCtx, string(content))
-		s.Require().NoError(err, "failed to execute migration %s", file)
+func getMigrationsPath() (string, error) {
+	_, currentFile, _, ok := runtime.Caller(0)
+	if !ok {
+		return "", fmt.Errorf("failed to get current file path")
 	}
+
+	serviceRoot := filepath.Dir(filepath.Dir(currentFile))
+
+	return filepath.Join(serviceRoot, "migrations"), nil
 }
 
 func (s *DevicesRepositoryIntegrationTestSuite) seedDevice(ctx context.Context, device *model.Device) {
@@ -711,8 +741,6 @@ func (s *DevicesRepositoryIntegrationTestSuite) TestDelete_VerifyCount() {
 	s.Require().NoError(err)
 	s.Require().Equal(uint(2), finalCount)
 }
-
-// Exists tests
 
 func (s *DevicesRepositoryIntegrationTestSuite) TestExists_True() {
 	ctx := s.T().Context()

@@ -9,7 +9,7 @@ import (
 	devicev1 "github.com/architeacher/devices/pkg/proto/device/v1"
 	inboundgrpc "github.com/architeacher/devices/services/svc-devices/internal/adapters/inbound/grpc"
 	"github.com/architeacher/devices/services/svc-devices/internal/domain/model"
-	"github.com/architeacher/devices/services/svc-devices/internal/infrastructure/telemetry"
+	"github.com/architeacher/devices/services/svc-devices/internal/infrastructure"
 	"github.com/architeacher/devices/services/svc-devices/internal/mocks"
 	"github.com/architeacher/devices/services/svc-devices/internal/usecases"
 	"github.com/stretchr/testify/require"
@@ -19,7 +19,7 @@ import (
 
 func createTestApp(svc *mocks.FakeDevicesService, dbChecker *mocks.FakeDatabaseHealthChecker) *usecases.Application {
 	log := logger.New("debug", "console")
-	tp := telemetry.NewNoopTracerProvider()
+	tp := infrastructure.NewNoopTracerProvider()
 	mc := noop.NewMetricsClient()
 
 	return usecases.NewApplication(svc, dbChecker, log, tp, mc)

@@ -637,7 +637,7 @@ type HealthResponse struct {
 
 		// Services Service dependencies (downstream services)
 		Services struct {
-			// Devices Status of a single dependency
+			// DevicesGRPCClient Status of a single dependency
 			Devices struct {
 				// Details Additional dependency-specific details
 				Details *map[string]interface{} `json:"details,omitempty"`
@@ -938,7 +938,7 @@ type ReadinessResponse struct {
 
 		// Services Service dependencies (downstream services)
 		Services struct {
-			// Devices Status of a single dependency
+			// DevicesGRPCClient Status of a single dependency
 			Devices struct {
 				// Details Additional dependency-specific details
 				Details *map[string]interface{} `json:"details,omitempty"`

@@ -9,7 +9,7 @@ import (
 type FlushableResponseWriter struct {
 	http.ResponseWriter
 	statusCode   int
-	bytesWritten int64
+	bytesWritten uint64
 	wroteHeader  bool
 	flusher      http.Flusher
 	hijacker     http.Hijacker
@@ -53,7 +53,7 @@ func (w *FlushableResponseWriter) Write(b []byte) (int, error) {
 	}
 
 	n, err := w.ResponseWriter.Write(b)
-	w.bytesWritten += int64(n)
+	w.bytesWritten += uint64(n)
 
 	return n, err
 }
@@ -62,7 +62,7 @@ func (w *FlushableResponseWriter) StatusCode() int {
 	return w.statusCode
 }
 
-func (w *FlushableResponseWriter) BytesWritten() int64 {
+func (w *FlushableResponseWriter) BytesWritten() uint64 {
 	return w.bytesWritten
 }
 

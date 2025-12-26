@@ -6,7 +6,7 @@ import (
 	"github.com/architeacher/devices/pkg/logger"
 	"github.com/architeacher/devices/pkg/metrics/noop"
 	"github.com/architeacher/devices/services/svc-devices/internal/domain/model"
-	"github.com/architeacher/devices/services/svc-devices/internal/infrastructure/telemetry"
+	"github.com/architeacher/devices/services/svc-devices/internal/infrastructure"
 	"github.com/architeacher/devices/services/svc-devices/internal/mocks"
 	"github.com/architeacher/devices/services/svc-devices/internal/usecases/queries"
 	"github.com/stretchr/testify/require"
@@ -16,7 +16,7 @@ func TestGetDeviceQueryHandler(t *testing.T) {
 	t.Parallel()
 
 	log := logger.New("debug", "console")
-	tp := telemetry.NewNoopTracerProvider()
+	tp := infrastructure.NewNoopTracerProvider()
 	mc := noop.NewMetricsClient()
 
 	cases := []struct {
@@ -52,7 +52,7 @@ func TestGetDeviceQueryHandler(t *testing.T) {
 			svc := &mocks.FakeDevicesService{}
 			deviceID := tc.setupSvc(svc)
 
-			handler := queries.NewGetDeviceQueryHandler(svc, log, tp, mc)
+			handler := queries.NewGetDeviceQueryHandler(svc, log, mc, tp)
 
 			query := queries.GetDeviceQuery{ID: deviceID}
 
@@ -74,7 +74,7 @@ func TestListDevicesQueryHandler(t *testing.T) {
 	t.Parallel()
 
 	log := logger.New("debug", "console")
-	tp := telemetry.NewNoopTracerProvider()
+	tp := infrastructure.NewNoopTracerProvider()
 	mc := noop.NewMetricsClient()
 
 	cases := []struct {
@@ -179,7 +179,7 @@ func TestListDevicesQueryHandler(t *testing.T) {
 			svc := &mocks.FakeDevicesService{}
 			tc.setupSvc(svc)
 
-			handler := queries.NewListDevicesQueryHandler(svc, log, tp, mc)
+			handler := queries.NewListDevicesQueryHandler(svc, log, mc, tp)
 
 			query := queries.ListDevicesQuery{Filter: tc.filter}
 
@@ -196,10 +196,10 @@ func TestFetchLivenessQueryHandler(t *testing.T) {
 	t.Parallel()
 
 	log := logger.New("debug", "console")
-	tp := telemetry.NewNoopTracerProvider()
+	tp := infrastructure.NewNoopTracerProvider()
 	mc := noop.NewMetricsClient()
 
-	handler := queries.NewFetchLivenessQueryHandler(log, tp, mc)
+	handler := queries.NewFetchLivenessQueryHandler(log, mc, tp)
 
 	result, err := handler.Execute(t.Context(), queries.FetchLivenessQuery{})
 
@@ -212,7 +212,7 @@ func TestFetchReadinessQueryHandler(t *testing.T) {
 	t.Parallel()
 
 	log := logger.New("debug", "console")
-	tp := telemetry.NewNoopTracerProvider()
+	tp := infrastructure.NewNoopTracerProvider()
 	mc := noop.NewMetricsClient()
 
 	cases := []struct {
@@ -243,7 +243,7 @@ func TestFetchReadinessQueryHandler(t *testing.T) {
 			dbChecker := &mocks.FakeDatabaseHealthChecker{}
 			tc.setupChecker(dbChecker)
 
-			handler := queries.NewFetchReadinessQueryHandler(dbChecker, log, tp, mc)
+			handler := queries.NewFetchReadinessQueryHandler(dbChecker, log, mc, tp)
 
 			result, err := handler.Execute(t.Context(), queries.FetchReadinessQuery{})
 

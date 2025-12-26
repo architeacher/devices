@@ -2,7 +2,7 @@
 
 set -e
 
-SERVICES="${VAULT_SERVICES:-svc-devices,api-gateway}"
+SERVICES="${VAULT_SERVICES:-svc-devices,svc-api-gateway}"
 SECRET_ENGINE_PATH="${VAULT_SECRET_ENGINE_PATH:-apps}"
 SERVICES_CONFIG_DIR="${SERVICES_CONFIG_DIR:-/app/services}"
 MAX_WAIT_ATTEMPTS=30

@@ -21,43 +21,39 @@ const (
 	httpResponseSize    = "http_response_size_bytes"
 )
 
-type MetricsMiddleware struct {
-	metricsClient metrics.Client
-}
+func MetricsMiddleware(metricsClient metrics.Client) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			startTime := time.Now()
 
-func NewMetricsMiddleware(metricsClient metrics.Client) *MetricsMiddleware {
-	return &MetricsMiddleware{
-		metricsClient: metricsClient,
+			wrapped := NewFlushableResponseWriter(w)
+
+			next.ServeHTTP(wrapped, r)
+
+			duration := time.Since(startTime)
+
+			requestSize := clampToUint64(r.ContentLength)
+			responseSize := uint64(wrapped.BytesWritten())
+
+			recordHTTPRequest(
+				r.Context(),
+				metricsClient,
+				r.Method,
+				r.URL.Path,
+				uint(wrapped.StatusCode()),
+				duration,
+				requestSize,
+				responseSize,
+			)
+
+			next.ServeHTTP(w, r)
+		})
 	}
 }
 
-func (m *MetricsMiddleware) Middleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		startTime := time.Now()
-
-		wrapped := NewFlushableResponseWriter(w)
-
-		next.ServeHTTP(wrapped, r)
-
-		duration := time.Since(startTime)
-
-		requestSize := clampToUint64(r.ContentLength)
-		responseSize := uint64(wrapped.BytesWritten())
-
-		m.recordHTTPRequest(
-			r.Context(),
-			r.Method,
-			r.URL.Path,
-			uint(wrapped.StatusCode()),
-			duration,
-			requestSize,
-			responseSize,
-		)
-	})
-}
-
-func (m *MetricsMiddleware) recordHTTPRequest(
+func recordHTTPRequest(
 	ctx context.Context,
+	metricsClient metrics.Client,
 	method, path string,
 	statusCode uint,
 	duration time.Duration,
@@ -69,10 +65,10 @@ func (m *MetricsMiddleware) recordHTTPRequest(
 		attribute.String(httpStatusCodeKey, fmt.Sprintf("%d", statusCode)),
 	}
 
-	m.metricsClient.Inc(ctx, httpRequestTotal, int64(1), attrs...)
-	m.metricsClient.Inc(ctx, httpRequestDuration, duration.Seconds(), attrs...)
+	metricsClient.Inc(ctx, httpRequestTotal, int64(1), attrs...)
+	metricsClient.Inc(ctx, httpRequestDuration, duration.Seconds(), attrs...)
 
-	m.metricsClient.Inc(
+	metricsClient.Inc(
 		ctx,
 		httpRequestSize,
 		int64(requestSize),
@@ -80,7 +76,7 @@ func (m *MetricsMiddleware) recordHTTPRequest(
 		attribute.String(httpPathKey, path),
 	)
 
-	m.metricsClient.Inc(ctx, httpResponseSize, int64(responseSize), attrs...)
+	metricsClient.Inc(ctx, httpResponseSize, int64(responseSize), attrs...)
 }
 
 func clampToUint64(value int64) uint64 {

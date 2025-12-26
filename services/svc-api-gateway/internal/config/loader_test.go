@@ -8,8 +8,7 @@ import (
 
 func TestInit(t *testing.T) {
 	t.Setenv("APP_ENVIRONMENT", "sandbox")
-	t.Setenv("APP_SERVICE_VERSION", "1.0.0")
-	t.Setenv("APP_COMMIT_SHA", "1234xwz")
+	t.Setenv("APP_SERVICE_NAME", "svc-api-gateway")
 	t.Setenv("LOG_LEVEL", "debug")
 	t.Setenv("AUTH_SECRET_KEY", "test-secret-key")
 	t.Setenv("DEVICES_GRPC_ADDRESS", "localhost:9090")
@@ -18,13 +17,11 @@ func TestInit(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, cfg)
 
-	assert.Equal(t, "sandbox", cfg.App.Env)
-	assert.Equal(t, "api-gateway", cfg.App.ServiceName)
-	assert.Equal(t, "1.0.0", cfg.App.ServiceVersion)
-	assert.Equal(t, "1234xwz", cfg.App.CommitSHA)
+	assert.Equal(t, "sandbox", cfg.App.Env.Name)
+	assert.Equal(t, "svc-api-gateway", cfg.App.ServiceName)
 	assert.Equal(t, "debug", cfg.Logging.Level)
 	assert.Equal(t, "test-secret-key", cfg.Auth.SecretKey)
-	assert.Equal(t, "localhost:9090", cfg.Devices.Address)
+	assert.Equal(t, "localhost:9090", cfg.DevicesGRPCClient.Address)
 }
 
 func TestInit_DefaultValues(t *testing.T) {
@@ -33,7 +30,7 @@ func TestInit_DefaultValues(t *testing.T) {
 	assert.NotNil(t, cfg)
 
 	// App defaults
-	assert.Equal(t, "api-gateway", cfg.App.ServiceName)
+	assert.Equal(t, "svc-api-gateway", cfg.App.ServiceName)
 	assert.Equal(t, "v1", cfg.App.APIVersion)
 
 	// HTTPServer defaults
@@ -42,14 +39,14 @@ func TestInit_DefaultValues(t *testing.T) {
 
 	// Auth defaults
 	assert.True(t, cfg.Auth.Enabled)
-	assert.Contains(t, cfg.Auth.ValidIssuers, "api-gateway")
+	assert.Contains(t, cfg.Auth.ValidIssuers, "svc-api-gateway")
 	assert.Contains(t, cfg.Auth.ValidIssuers, "auth-service")
 
 	// Vault defaults
-	assert.True(t, cfg.SecretStorage.Enabled)
-	assert.Equal(t, "http://vault:8200", cfg.SecretStorage.Address)
-	assert.Equal(t, "token", cfg.SecretStorage.AuthMethod)
-	assert.Equal(t, "api-gateway", cfg.SecretStorage.MountPath)
+	assert.True(t, cfg.SecretsStorage.Enabled)
+	assert.Equal(t, "http://vault:8200", cfg.SecretsStorage.Address)
+	assert.Equal(t, "token", cfg.SecretsStorage.AuthMethod)
+	assert.Equal(t, "svc-api-gateway", cfg.SecretsStorage.MountPath)
 }
 
 func TestGetEnvironment(t *testing.T) {
@@ -103,7 +100,7 @@ func TestGetEnvironment(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := &ServiceConfig{
-				App: AppConfig{Env: tc.env},
+				App: App{Env: Environment{Name: tc.env}},
 			}
 
 			assert.Equal(t, tc.expected, cfg.GetEnvironment())
@@ -142,7 +139,7 @@ func TestIsProduction(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := &ServiceConfig{
-				App: AppConfig{Env: tc.env},
+				App: App{Env: Environment{Name: tc.env}},
 			}
 
 			assert.Equal(t, tc.expected, cfg.IsProduction())

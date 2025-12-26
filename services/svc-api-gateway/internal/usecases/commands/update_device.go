@@ -3,11 +3,11 @@ package commands
 import (
 	"context"
 
+	"github.com/architeacher/devices/pkg/decorator"
 	"github.com/architeacher/devices/pkg/logger"
 	"github.com/architeacher/devices/pkg/metrics"
 	"github.com/architeacher/devices/services/svc-api-gateway/internal/domain/model"
 	"github.com/architeacher/devices/services/svc-api-gateway/internal/ports"
-	"github.com/architeacher/devices/services/svc-api-gateway/shared/decorator"
 	otelTrace "go.opentelemetry.io/otel/trace"
 )
 
@@ -29,14 +29,14 @@ type (
 func NewUpdateDeviceCommandHandler(
 	svc ports.DevicesService,
 	log logger.Logger,
-	tracerProvider otelTrace.TracerProvider,
 	metricsClient metrics.Client,
+	tracerProvider otelTrace.TracerProvider,
 ) UpdateDeviceCommandHandler {
 	return decorator.ApplyCommandDecorators[UpdateDeviceCommand, *model.Device](
 		updateDeviceCommandHandler{deviceService: svc},
 		log,
-		tracerProvider,
 		metricsClient,
+		tracerProvider,
 	)
 }
 
@@ -60,14 +60,14 @@ type (
 func NewPatchDeviceCommandHandler(
 	svc ports.DevicesService,
 	log logger.Logger,
-	tracerProvider otelTrace.TracerProvider,
 	metricsClient metrics.Client,
+	tracerProvider otelTrace.TracerProvider,
 ) PatchDeviceCommandHandler {
 	return decorator.ApplyCommandDecorators[PatchDeviceCommand, *model.Device](
 		patchDeviceCommandHandler{deviceService: svc},
 		log,
-		tracerProvider,
 		metricsClient,
+		tracerProvider,
 	)
 }
 

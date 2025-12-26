@@ -122,17 +122,12 @@ func (c *ServiceCtx) WaitForServer() {
 func (c *ServiceCtx) cleanup(shutdownCtx context.Context) {
 	c.deps.infra.logger.Info().Msg("cleaning up resources...")
 
-	c.deps.infra.grpcServer.GracefulStop()
-	c.deps.infra.logger.Info().Msg("gRPC server stopped")
-
-	if c.deps.infra.dbPool != nil {
-		c.deps.infra.dbPool.Close()
-		c.deps.infra.logger.Info().Msg("database connection closed")
-	}
-
-	if c.deps.infra.tracerShutdown != nil {
-		if err := c.deps.infra.tracerShutdown(shutdownCtx); err != nil {
-			c.deps.infra.logger.Error().Err(err).Msg("failed to shutdown tracer")
+	for resource, cleanupFn := range c.deps.cleanupFuncs {
+		if err := cleanupFn(shutdownCtx); err != nil {
+			c.deps.infra.logger.Error().
+				Err(err).
+				Str("resource", resource).
+				Msg("failed to shutdown the resource gracefully")
 		}
 	}
 

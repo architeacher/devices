@@ -21,7 +21,7 @@ import (
 )
 
 func newTestApp(deviceSvc *mocks.FakeDevicesService, healthChecker *mocks.FakeHealthChecker) *usecases.WebApplication {
-	return usecases.NewWebApplication(deviceSvc, healthChecker, logger.NewTestLogger(), otelNoop.NewTracerProvider(), noop.NewMetricsClient())
+	return usecases.NewWebApplication(deviceSvc, healthChecker, logger.NewTestLogger(), noop.NewMetricsClient(), otelNoop.NewTracerProvider())
 }
 
 func newDefaultHealthChecker() *mocks.FakeHealthChecker {

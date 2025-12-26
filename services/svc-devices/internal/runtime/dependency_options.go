@@ -9,11 +9,11 @@ import (
 	devicev1 "github.com/architeacher/devices/pkg/proto/device/v1"
 	inboundgrpc "github.com/architeacher/devices/services/svc-devices/internal/adapters/inbound/grpc"
 	"github.com/architeacher/devices/services/svc-devices/internal/adapters/repos"
+	"github.com/architeacher/devices/services/svc-devices/internal/adapters/services"
 	"github.com/architeacher/devices/services/svc-devices/internal/config"
-	infraPostgres "github.com/architeacher/devices/services/svc-devices/internal/infrastructure/postgres"
-	"github.com/architeacher/devices/services/svc-devices/internal/infrastructure/telemetry"
-	"github.com/architeacher/devices/services/svc-devices/internal/services"
+	"github.com/architeacher/devices/services/svc-devices/internal/infrastructure"
 	"github.com/architeacher/devices/services/svc-devices/internal/usecases"
+	"github.com/hashicorp/vault/api"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
@@ -22,10 +22,12 @@ import (
 func defaultOptions(ctx context.Context) []DependencyOption {
 	return []DependencyOption{
 		WithConfig(),
+		WithConfigLoader(ctx),
+		WithSecretsRepository(),
 		WithLogger(),
 		WithDatabase(ctx),
-		WithDevicesRepository(),
-		WithDevicesService(),
+		WithDataRepositories(),
+		WithServices(),
 		WithApplication(),
 		WithGRPCServer(),
 		WithMetrics(),
@@ -46,41 +48,56 @@ func WithConfig() DependencyOption {
 	}
 }
 
-func WithLogger() DependencyOption {
+func WithConfigLoader(ctx context.Context) DependencyOption {
 	return func(d *dependencies) error {
-		d.infra.logger = logger.New(d.config.Logging.Level, d.config.Logging.Format)
-
-		return nil
-	}
-}
-
-func WithTracing() DependencyOption {
-	return func(d *dependencies) error {
-		if d.config.Telemetry.OTLPEndpoint == "" {
-			d.infra.tracerProvider = telemetry.NewNoopTracerProvider()
-
+		if !d.config.SecretsStorage.Enabled || d.repos.secretsRepo == nil {
 			return nil
 		}
 
-		tp, shutdown, err := telemetry.NewTracerProvider(
-			d.config.Telemetry.ServiceName,
-			d.config.Telemetry.ServiceVersion,
-			d.config.Telemetry.OTLPEndpoint,
-		)
+		loader := config.NewLoader(d.config, d.repos.secretsRepo, 0)
+
+		version, err := loader.Load(ctx, d.repos.secretsRepo, d.config)
 		if err != nil {
-			return fmt.Errorf("initializing tracer: %w", err)
+			return fmt.Errorf("loading secrets from Vault: %w", err)
 		}
 
-		d.infra.tracerProvider = tp
-		d.infra.tracerShutdown = shutdown
+		d.configLoader = config.NewLoader(d.config, d.repos.secretsRepo, version)
 
 		return nil
 	}
 }
 
-func WithMetrics() DependencyOption {
+func WithSecretsRepository() DependencyOption {
 	return func(d *dependencies) error {
-		d.infra.metricsClient = noop.NewMetricsClient()
+		if !d.config.SecretsStorage.Enabled {
+			return nil
+		}
+
+		cfg := d.config.SecretsStorage
+
+		vaultConfig := api.DefaultConfig()
+		vaultConfig.Address = cfg.Address
+		vaultConfig.Timeout = cfg.Timeout
+
+		if cfg.TLSSkipVerify {
+			tlsConfig := &api.TLSConfig{
+				Insecure: true,
+			}
+			if err := vaultConfig.ConfigureTLS(tlsConfig); err != nil {
+				return fmt.Errorf("failed to configure TLS: %w", err)
+			}
+		}
+
+		client, err := api.NewClient(vaultConfig)
+		if err != nil {
+			return fmt.Errorf("creating Vault client: %w", err)
+		}
+
+		if cfg.Namespace != "" {
+			client.SetNamespace(cfg.Namespace)
+		}
+
+		d.repos.secretsRepo = repos.NewVaultRepository(client)
 
 		return nil
 	}
@@ -88,18 +105,24 @@ func WithMetrics() DependencyOption {
 
 func WithDatabase(ctx context.Context) DependencyOption {
 	return func(d *dependencies) error {
-		pool, err := infraPostgres.NewPool(ctx, d.config.Database)
+		pool, err := infrastructure.NewPool(ctx, d.config.Database)
 		if err != nil {
 			return fmt.Errorf("connecting to database: %w", err)
 		}
 
 		d.infra.dbPool = pool
 
+		d.cleanupFuncs["DB server"] = func(ctx context.Context) error {
+			d.infra.dbPool.Close()
+
+			return nil
+		}
+
 		return nil
 	}
 }
 
-func WithDevicesRepository() DependencyOption {
+func WithDataRepositories() DependencyOption {
 	return func(d *dependencies) error {
 		d.repos.deviceRepo = repos.NewDevicesRepository(d.infra.dbPool)
 
@@ -107,9 +130,11 @@ func WithDevicesRepository() DependencyOption {
 	}
 }
 
-func WithDevicesService() DependencyOption {
+func WithServices() DependencyOption {
 	return func(d *dependencies) error {
-		d.devicesService = services.NewDevicesService(d.repos.deviceRepo)
+		d.services = servicesDep{
+			devices: services.NewDevicesService(d.repos.deviceRepo),
+		}
 
 		return nil
 	}
@@ -117,13 +142,17 @@ func WithDevicesService() DependencyOption {
 
 func WithApplication() DependencyOption {
 	return func(d *dependencies) error {
-		d.app = usecases.NewApplication(
-			d.devicesService,
+		grpcApp := usecases.NewApplication(
+			d.services.devices,
 			d.getDBHealthChecker(),
 			d.infra.logger,
 			d.infra.tracerProvider,
 			d.infra.metricsClient,
 		)
+
+		d.apps = applications{
+			grpcApp: grpcApp,
+		}
 
 		return nil
 	}
@@ -137,12 +166,13 @@ func WithGRPCServer() DependencyOption {
 			grpc.StatsHandler(otelgrpc.NewServerHandler()),
 			grpc.ChainUnaryInterceptor(
 				inboundgrpc.ContextExtractorInterceptor(),
+				inboundgrpc.AccessLogInterceptor(d.infra.logger, d.config.Logging.AccessLog),
 			),
 		}
 
 		server := grpc.NewServer(opts...)
 
-		deviceHandler := inboundgrpc.NewDevicesHandler(d.app)
+		deviceHandler := inboundgrpc.NewDevicesHandler(d.apps.grpcApp)
 		devicev1.RegisterDeviceServiceServer(server, deviceHandler)
 
 		healthHandler := inboundgrpc.NewHealthHandler(d.getDBHealthChecker())
@@ -151,6 +181,53 @@ func WithGRPCServer() DependencyOption {
 		reflection.Register(server)
 
 		d.infra.grpcServer = server
+
+		d.cleanupFuncs["GRPC server"] = func(ctx context.Context) error {
+			d.infra.grpcServer.GracefulStop()
+
+			return nil
+		}
+
+		return nil
+	}
+}
+
+func WithLogger() DependencyOption {
+	return func(d *dependencies) error {
+		d.infra.logger = logger.New(d.config.Logging.Level, d.config.Logging.Format)
+
+		return nil
+	}
+}
+
+func WithMetrics() DependencyOption {
+	return func(d *dependencies) error {
+		d.infra.metricsClient = noop.NewMetricsClient()
+
+		return nil
+	}
+}
+
+func WithTracing() DependencyOption {
+	return func(d *dependencies) error {
+		if d.config.Telemetry.OTLPEndpoint == "" {
+			d.infra.tracerProvider = infrastructure.NewNoopTracerProvider()
+
+			return nil
+		}
+
+		tp, shutdown, err := infrastructure.NewTracerProvider(
+			d.config.Telemetry.ServiceName,
+			d.config.Telemetry.ServiceVersion,
+			d.config.Telemetry.OTLPEndpoint,
+		)
+		if err != nil {
+			return fmt.Errorf("initializing tracer: %w", err)
+		}
+
+		d.infra.tracerProvider = tp
+
+		d.cleanupFuncs["tracer"] = shutdown
 
 		return nil
 	}

@@ -18,18 +18,19 @@ func TestGetDeviceQueryHandler(t *testing.T) {
 	t.Parallel()
 
 	log := logger.NewTestLogger()
-	tp := otelNoop.NewTracerProvider()
 	mc := noop.NewMetricsClient()
+	tp := otelNoop.NewTracerProvider()
 
 	cases := []struct {
 		name        string
-		setupSvc    func(*mocks.FakeDevicesService) model.DeviceID
+		setupSvc    func() (*mocks.FakeDevicesService, model.DeviceID)
 		expectError bool
 		expectedErr error
 	}{
 		{
 			name: "successfully get device",
-			setupSvc: func(fake *mocks.FakeDevicesService) model.DeviceID {
+			setupSvc: func() (*mocks.FakeDevicesService, model.DeviceID) {
+				fake := &mocks.FakeDevicesService{}
 				id := model.NewDeviceID()
 				expectedDevice := &model.Device{
 					ID:    id,
@@ -39,16 +40,17 @@ func TestGetDeviceQueryHandler(t *testing.T) {
 				}
 				fake.GetDeviceReturns(expectedDevice, nil)
 
-				return id
+				return fake, id
 			},
 			expectError: false,
 		},
 		{
 			name: "device not found",
-			setupSvc: func(fake *mocks.FakeDevicesService) model.DeviceID {
+			setupSvc: func() (*mocks.FakeDevicesService, model.DeviceID) {
+				fake := &mocks.FakeDevicesService{}
 				fake.GetDeviceReturns(nil, model.ErrDeviceNotFound)
 
-				return model.NewDeviceID()
+				return fake, model.NewDeviceID()
 			},
 			expectError: true,
 			expectedErr: model.ErrDeviceNotFound,
@@ -59,10 +61,9 @@ func TestGetDeviceQueryHandler(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			svc := &mocks.FakeDevicesService{}
-			deviceID := tc.setupSvc(svc)
+			svc, deviceID := tc.setupSvc()
 
-			handler := queries.NewGetDeviceQueryHandler(svc, log, tp, mc)
+			handler := queries.NewGetDeviceQueryHandler(svc, log, mc, tp)
 			query := queries.GetDeviceQuery{ID: deviceID}
 
 			result, err := handler.Execute(t.Context(), query)
@@ -86,8 +87,8 @@ func TestListDevicesQueryHandler(t *testing.T) {
 	t.Parallel()
 
 	log := logger.NewTestLogger()
-	tp := otelNoop.NewTracerProvider()
 	mc := noop.NewMetricsClient()
+	tp := otelNoop.NewTracerProvider()
 
 	brand := "Apple"
 	state := model.StateAvailable
@@ -95,13 +96,14 @@ func TestListDevicesQueryHandler(t *testing.T) {
 	cases := []struct {
 		name     string
 		filter   model.DeviceFilter
-		setupSvc func(*mocks.FakeDevicesService)
+		setupSvc func() *mocks.FakeDevicesService
 		validate func(*testing.T, *model.DeviceList)
 	}{
 		{
 			name:   "list with default filter",
 			filter: model.DefaultDeviceFilter(),
-			setupSvc: func(fake *mocks.FakeDevicesService) {
+			setupSvc: func() *mocks.FakeDevicesService {
+				fake := &mocks.FakeDevicesService{}
 				fake.ListDevicesStub = func(_ context.Context, filter model.DeviceFilter) (*model.DeviceList, error) {
 					return &model.DeviceList{
 						Devices: []*model.Device{},
@@ -114,6 +116,8 @@ func TestListDevicesQueryHandler(t *testing.T) {
 						Filters: filter,
 					}, nil
 				}
+
+				return fake
 			},
 			validate: func(t *testing.T, result *model.DeviceList) {
 				require.NotNil(t, result)
@@ -128,7 +132,8 @@ func TestListDevicesQueryHandler(t *testing.T) {
 				Page:  1,
 				Size:  10,
 			},
-			setupSvc: func(fake *mocks.FakeDevicesService) {
+			setupSvc: func() *mocks.FakeDevicesService {
+				fake := &mocks.FakeDevicesService{}
 				fake.ListDevicesStub = func(_ context.Context, filter model.DeviceFilter) (*model.DeviceList, error) {
 					return &model.DeviceList{
 						Devices: []*model.Device{},
@@ -141,6 +146,8 @@ func TestListDevicesQueryHandler(t *testing.T) {
 						Filters: filter,
 					}, nil
 				}
+
+				return fake
 			},
 			validate: func(t *testing.T, result *model.DeviceList) {
 				require.NotNil(t, result)
@@ -154,12 +161,9 @@ func TestListDevicesQueryHandler(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			svc := &mocks.FakeDevicesService{}
-			if tc.setupSvc != nil {
-				tc.setupSvc(svc)
-			}
+			svc := tc.setupSvc()
 
-			handler := queries.NewListDevicesQueryHandler(svc, log, tp, mc)
+			handler := queries.NewListDevicesQueryHandler(svc, log, mc, tp)
 			query := queries.ListDevicesQuery{Filter: tc.filter}
 
 			result, err := handler.Execute(t.Context(), query)
@@ -174,22 +178,25 @@ func TestFetchLivenessQueryHandler(t *testing.T) {
 	t.Parallel()
 
 	log := logger.NewTestLogger()
-	tp := otelNoop.NewTracerProvider()
 	mc := noop.NewMetricsClient()
+	tp := otelNoop.NewTracerProvider()
 
 	cases := []struct {
 		name     string
-		setupSvc func(*mocks.FakeHealthChecker)
+		setupSvc func() *mocks.FakeHealthChecker
 		validate func(*testing.T, *model.LivenessReport)
 	}{
 		{
 			name: "healthy liveness",
-			setupSvc: func(fake *mocks.FakeHealthChecker) {
+			setupSvc: func() *mocks.FakeHealthChecker {
+				fake := &mocks.FakeHealthChecker{}
 				fake.LivenessReturns(&model.LivenessReport{
 					Status:    model.HealthStatusOK,
 					Timestamp: time.Now().UTC(),
 					Version:   "1.0.0",
 				}, nil)
+
+				return fake
 			},
 			validate: func(t *testing.T, result *model.LivenessReport) {
 				require.NotNil(t, result)
@@ -204,12 +211,9 @@ func TestFetchLivenessQueryHandler(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			healthChecker := &mocks.FakeHealthChecker{}
-			if tc.setupSvc != nil {
-				tc.setupSvc(healthChecker)
-			}
+			healthChecker := tc.setupSvc()
 
-			handler := queries.NewFetchLivenessQueryHandler(healthChecker, log, tp, mc)
+			handler := queries.NewFetchLivenessQueryHandler(healthChecker, log, mc, tp)
 			query := queries.FetchLivenessQuery{}
 
 			result, err := handler.Execute(t.Context(), query)
@@ -224,17 +228,18 @@ func TestFetchReadinessQueryHandler(t *testing.T) {
 	t.Parallel()
 
 	log := logger.NewTestLogger()
-	tp := otelNoop.NewTracerProvider()
 	mc := noop.NewMetricsClient()
+	tp := otelNoop.NewTracerProvider()
 
 	cases := []struct {
 		name     string
-		setupSvc func(*mocks.FakeHealthChecker)
+		setupSvc func() *mocks.FakeHealthChecker
 		validate func(*testing.T, *model.ReadinessReport)
 	}{
 		{
 			name: "healthy readiness",
-			setupSvc: func(fake *mocks.FakeHealthChecker) {
+			setupSvc: func() *mocks.FakeHealthChecker {
+				fake := &mocks.FakeHealthChecker{}
 				fake.ReadinessReturns(&model.ReadinessReport{
 					Status:    model.HealthStatusOK,
 					Timestamp: time.Now().UTC(),
@@ -248,6 +253,8 @@ func TestFetchReadinessQueryHandler(t *testing.T) {
 						},
 					},
 				}, nil)
+
+				return fake
 			},
 			validate: func(t *testing.T, result *model.ReadinessReport) {
 				require.NotNil(t, result)
@@ -258,7 +265,8 @@ func TestFetchReadinessQueryHandler(t *testing.T) {
 		},
 		{
 			name: "unhealthy readiness",
-			setupSvc: func(fake *mocks.FakeHealthChecker) {
+			setupSvc: func() *mocks.FakeHealthChecker {
+				fake := &mocks.FakeHealthChecker{}
 				fake.ReadinessReturns(&model.ReadinessReport{
 					Status:    model.HealthStatusDown,
 					Timestamp: time.Now().UTC(),
@@ -273,6 +281,8 @@ func TestFetchReadinessQueryHandler(t *testing.T) {
 						},
 					},
 				}, nil)
+
+				return fake
 			},
 			validate: func(t *testing.T, result *model.ReadinessReport) {
 				require.NotNil(t, result)
@@ -287,12 +297,9 @@ func TestFetchReadinessQueryHandler(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			healthChecker := &mocks.FakeHealthChecker{}
-			if tc.setupSvc != nil {
-				tc.setupSvc(healthChecker)
-			}
+			healthChecker := tc.setupSvc()
 
-			handler := queries.NewFetchReadinessQueryHandler(healthChecker, log, tp, mc)
+			handler := queries.NewFetchReadinessQueryHandler(healthChecker, log, mc, tp)
 			query := queries.FetchReadinessQuery{}
 
 			result, err := handler.Execute(t.Context(), query)
@@ -307,17 +314,18 @@ func TestFetchHealthReportQueryHandler(t *testing.T) {
 	t.Parallel()
 
 	log := logger.NewTestLogger()
-	tp := otelNoop.NewTracerProvider()
 	mc := noop.NewMetricsClient()
+	tp := otelNoop.NewTracerProvider()
 
 	cases := []struct {
 		name     string
-		setupSvc func(*mocks.FakeHealthChecker)
+		setupSvc func() *mocks.FakeHealthChecker
 		validate func(*testing.T, *model.HealthReport)
 	}{
 		{
 			name: "healthy report",
-			setupSvc: func(fake *mocks.FakeHealthChecker) {
+			setupSvc: func() *mocks.FakeHealthChecker {
+				fake := &mocks.FakeHealthChecker{}
 				fake.HealthReturns(&model.HealthReport{
 					Status:    model.HealthStatusOK,
 					Timestamp: time.Now().UTC(),
@@ -339,6 +347,8 @@ func TestFetchHealthReportQueryHandler(t *testing.T) {
 						CPUCores:   1,
 					},
 				}, nil)
+
+				return fake
 			},
 			validate: func(t *testing.T, result *model.HealthReport) {
 				require.NotNil(t, result)
@@ -351,7 +361,8 @@ func TestFetchHealthReportQueryHandler(t *testing.T) {
 		},
 		{
 			name: "unhealthy report",
-			setupSvc: func(fake *mocks.FakeHealthChecker) {
+			setupSvc: func() *mocks.FakeHealthChecker {
+				fake := &mocks.FakeHealthChecker{}
 				fake.HealthReturns(&model.HealthReport{
 					Status:    model.HealthStatusDown,
 					Timestamp: time.Now().UTC(),
@@ -374,6 +385,8 @@ func TestFetchHealthReportQueryHandler(t *testing.T) {
 						CPUCores:   1,
 					},
 				}, nil)
+
+				return fake
 			},
 			validate: func(t *testing.T, result *model.HealthReport) {
 				require.NotNil(t, result)
@@ -388,12 +401,9 @@ func TestFetchHealthReportQueryHandler(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			healthChecker := &mocks.FakeHealthChecker{}
-			if tc.setupSvc != nil {
-				tc.setupSvc(healthChecker)
-			}
+			healthChecker := tc.setupSvc()
 
-			handler := queries.NewFetchHealthReportQueryHandler(healthChecker, log, tp, mc)
+			handler := queries.NewFetchHealthReportQueryHandler(healthChecker, log, mc, tp)
 			query := queries.FetchHealthReportQuery{}
 
 			result, err := handler.Execute(t.Context(), query)

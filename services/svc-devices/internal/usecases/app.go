@@ -40,17 +40,17 @@ func NewApplication(
 ) *Application {
 	return &Application{
 		Commands: Commands{
-			CreateDevice: commands.NewCreateDeviceCommandHandler(devicesSvc, log, tracerProvider, metricsClient),
-			UpdateDevice: commands.NewUpdateDeviceCommandHandler(devicesSvc, log, tracerProvider, metricsClient),
-			PatchDevice:  commands.NewPatchDeviceCommandHandler(devicesSvc, log, tracerProvider, metricsClient),
-			DeleteDevice: commands.NewDeleteDeviceCommandHandler(devicesSvc, log, tracerProvider, metricsClient),
+			CreateDevice: commands.NewCreateDeviceCommandHandler(devicesSvc, log, metricsClient, tracerProvider),
+			UpdateDevice: commands.NewUpdateDeviceCommandHandler(devicesSvc, log, metricsClient, tracerProvider),
+			PatchDevice:  commands.NewPatchDeviceCommandHandler(devicesSvc, log, metricsClient, tracerProvider),
+			DeleteDevice: commands.NewDeleteDeviceCommandHandler(devicesSvc, log, metricsClient, tracerProvider),
 		},
 		Queries: Queries{
-			GetDevice:         queries.NewGetDeviceQueryHandler(devicesSvc, log, tracerProvider, metricsClient),
-			ListDevices:       queries.NewListDevicesQueryHandler(devicesSvc, log, tracerProvider, metricsClient),
-			FetchLiveness:     queries.NewFetchLivenessQueryHandler(log, tracerProvider, metricsClient),
-			FetchReadiness:    queries.NewFetchReadinessQueryHandler(dbHealthChecker, log, tracerProvider, metricsClient),
-			FetchHealthReport: queries.NewFetchHealthReportQueryHandler(dbHealthChecker, log, tracerProvider, metricsClient),
+			GetDevice:         queries.NewGetDeviceQueryHandler(devicesSvc, log, metricsClient, tracerProvider),
+			ListDevices:       queries.NewListDevicesQueryHandler(devicesSvc, log, metricsClient, tracerProvider),
+			FetchLiveness:     queries.NewFetchLivenessQueryHandler(log, metricsClient, tracerProvider),
+			FetchReadiness:    queries.NewFetchReadinessQueryHandler(dbHealthChecker, log, metricsClient, tracerProvider),
+			FetchHealthReport: queries.NewFetchHealthReportQueryHandler(dbHealthChecker, log, metricsClient, tracerProvider),
 		},
 	}
 }

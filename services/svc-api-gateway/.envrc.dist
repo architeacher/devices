@@ -10,8 +10,8 @@ AUTH_ENABLED="true"
 # | Cache |
 # +-------+
 
-KEYDB_ADDR="keydb:6379"
-KEYDB_PASSWORD="bottom.Secret"
+CACHE_ADDRESS="keydb:6379"
+CACHE_PASSWORD="bottom.Secret"
 
 # +-------+
 # | Vault |

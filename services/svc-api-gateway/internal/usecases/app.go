@@ -35,22 +35,22 @@ func NewWebApplication(
 	deviceSvc ports.DevicesService,
 	healthChecker ports.HealthChecker,
 	log logger.Logger,
-	tracerProvider otelTrace.TracerProvider,
 	metricsClient metrics.Client,
+	tracerProvider otelTrace.TracerProvider,
 ) *WebApplication {
 	return &WebApplication{
 		Commands: Commands{
-			CreateDevice: commands.NewCreateDeviceCommandHandler(deviceSvc, log, tracerProvider, metricsClient),
-			UpdateDevice: commands.NewUpdateDeviceCommandHandler(deviceSvc, log, tracerProvider, metricsClient),
-			PatchDevice:  commands.NewPatchDeviceCommandHandler(deviceSvc, log, tracerProvider, metricsClient),
-			DeleteDevice: commands.NewDeleteDeviceCommandHandler(deviceSvc, log, tracerProvider, metricsClient),
+			CreateDevice: commands.NewCreateDeviceCommandHandler(deviceSvc, log, metricsClient, tracerProvider),
+			UpdateDevice: commands.NewUpdateDeviceCommandHandler(deviceSvc, log, metricsClient, tracerProvider),
+			PatchDevice:  commands.NewPatchDeviceCommandHandler(deviceSvc, log, metricsClient, tracerProvider),
+			DeleteDevice: commands.NewDeleteDeviceCommandHandler(deviceSvc, log, metricsClient, tracerProvider),
 		},
 		Queries: Queries{
-			GetDevice:         queries.NewGetDeviceQueryHandler(deviceSvc, log, tracerProvider, metricsClient),
-			ListDevices:       queries.NewListDevicesQueryHandler(deviceSvc, log, tracerProvider, metricsClient),
-			FetchLiveness:     queries.NewFetchLivenessQueryHandler(healthChecker, log, tracerProvider, metricsClient),
-			FetchReadiness:    queries.NewFetchReadinessQueryHandler(healthChecker, log, tracerProvider, metricsClient),
-			FetchHealthReport: queries.NewFetchHealthReportQueryHandler(healthChecker, log, tracerProvider, metricsClient),
+			GetDevice:         queries.NewGetDeviceQueryHandler(deviceSvc, log, metricsClient, tracerProvider),
+			ListDevices:       queries.NewListDevicesQueryHandler(deviceSvc, log, metricsClient, tracerProvider),
+			FetchLiveness:     queries.NewFetchLivenessQueryHandler(healthChecker, log, metricsClient, tracerProvider),
+			FetchReadiness:    queries.NewFetchReadinessQueryHandler(healthChecker, log, metricsClient, tracerProvider),
+			FetchHealthReport: queries.NewFetchHealthReportQueryHandler(healthChecker, log, metricsClient, tracerProvider),
 		},
 	}
 }

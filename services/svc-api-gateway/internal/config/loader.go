@@ -37,8 +37,8 @@ func NewLoader(cfg *ServiceConfig, secretsRepo ports.SecretsRepository, initialV
 func (l *Loader) WatchConfigSignals(ctx context.Context) <-chan error {
 	signal.Notify(l.configSignalChan, syscall.SIGHUP, syscall.SIGUSR1)
 
-	if l.cfg.SecretStorage.Enabled && l.cfg.SecretStorage.PollInterval > 0 {
-		l.ticker = time.NewTicker(l.cfg.SecretStorage.PollInterval)
+	if l.cfg.SecretsStorage.Enabled && l.cfg.SecretsStorage.PollInterval > 0 {
+		l.ticker = time.NewTicker(l.cfg.SecretsStorage.PollInterval)
 	}
 
 	go func() {
@@ -90,11 +90,11 @@ func (l *Loader) DumpConfig() {
 }
 
 func (l *Loader) Load(ctx context.Context, secretsRepo ports.SecretsRepository, cfg *ServiceConfig) (uint, error) {
-	if !cfg.SecretStorage.Enabled {
+	if !cfg.SecretsStorage.Enabled {
 		return 0, fmt.Errorf("secret storage is not enabled")
 	}
 
-	if err := l.authenticateVault(ctx, secretsRepo, cfg.SecretStorage); err != nil {
+	if err := l.authenticateVault(ctx, secretsRepo, cfg.SecretsStorage); err != nil {
 		return 0, fmt.Errorf("failed to authenticate with Vault: %w", err)
 	}
 
@@ -128,22 +128,10 @@ func Init() (*ServiceConfig, error) {
 		return nil, fmt.Errorf("unable to parse service configuration: %w", err)
 	}
 
-	if len(ServiceVersion) != 0 {
-		cfg.App.ServiceVersion = ServiceVersion
-	}
-
-	if len(CommitSHA) != 0 {
-		cfg.App.CommitSHA = CommitSHA
-	}
-
-	if len(APIVersion) != 0 {
-		cfg.App.APIVersion = APIVersion
-	}
-
 	return cfg, nil
 }
 
-func (l *Loader) authenticateVault(ctx context.Context, client ports.SecretsRepository, config SecretStorageConfig) error {
+func (l *Loader) authenticateVault(ctx context.Context, client ports.SecretsRepository, config SecretsStorage) error {
 	switch strings.ToLower(config.AuthMethod) {
 	case "token":
 		if config.Token == "" {
@@ -214,25 +202,25 @@ func (l *Loader) handleConfigReload(ctx context.Context) {
 func getSecretsWithRetry(ctx context.Context, secretsRepo ports.SecretsRepository, cfg *ServiceConfig, pathType, mountPath string) (*api.Secret, error) {
 	path := fmt.Sprintf("apps/%s/%s", pathType, mountPath)
 
-	ctx, cancel := context.WithTimeout(ctx, cfg.SecretStorage.Timeout)
+	ctx, cancel := context.WithTimeout(ctx, cfg.SecretsStorage.Timeout)
 	defer cancel()
 
 	var secret *api.Secret
 	var err error
 
-	for attempt := uint(0); attempt <= cfg.SecretStorage.MaxRetries; attempt++ {
+	for attempt := uint(0); attempt <= cfg.SecretsStorage.MaxRetries; attempt++ {
 		secret, err = secretsRepo.GetSecrets(ctx, path)
 		if err == nil {
 			break
 		}
 
-		if attempt < cfg.SecretStorage.MaxRetries {
+		if attempt < cfg.SecretsStorage.MaxRetries {
 			time.Sleep(time.Duration(attempt+1) * time.Second)
 		}
 	}
 
 	if err != nil {
-		return nil, fmt.Errorf("failed to read from path %s after %d retries: %w", path, cfg.SecretStorage.MaxRetries, err)
+		return nil, fmt.Errorf("failed to read from path %s after %d retries: %w", path, cfg.SecretsStorage.MaxRetries, err)
 	}
 
 	return secret, nil
@@ -266,7 +254,7 @@ func (l *Loader) getSecretVersion(metadata map[string]any) (uint, error) {
 }
 
 func (l *Loader) loadSecretsFromPath(ctx context.Context, secretsRepo ports.SecretsRepository, cfg *ServiceConfig, pathType string) (map[string]any, error) {
-	secret, err := getSecretsWithRetry(ctx, secretsRepo, cfg, "data", cfg.SecretStorage.MountPath)
+	secret, err := getSecretsWithRetry(ctx, secretsRepo, cfg, "data", cfg.SecretsStorage.MountPath)
 	if err != nil {
 		return nil, err
 	}
@@ -277,7 +265,7 @@ func (l *Loader) loadSecretsFromPath(ctx context.Context, secretsRepo ports.Secr
 
 	result, ok := secret.Data[pathType].(map[string]any)
 	if !ok {
-		return nil, fmt.Errorf("invalid secret format at path apps/data/%s, missing '%s' key", cfg.SecretStorage.MountPath, pathType)
+		return nil, fmt.Errorf("invalid secret format at path apps/data/%s, missing '%s' key", cfg.SecretsStorage.MountPath, pathType)
 	}
 
 	return result, nil
@@ -306,7 +294,7 @@ func (l *Loader) applySecretToConfig(cfg *ServiceConfig, key, value string) erro
 	case "AUTH_FALLBACK_KEY_HEX":
 		cfg.Auth.FallbackKeyHex = value
 	case "DEVICES_GRPC_ADDRESS":
-		cfg.Devices.Address = value
+		cfg.DevicesGRPCClient.Address = value
 	}
 
 	return nil

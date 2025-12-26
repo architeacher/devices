@@ -18,30 +18,47 @@ import (
 type (
 	infrastructureDep struct {
 		grpcServer     *grpc.Server
-		tracerProvider otelTrace.TracerProvider
-		tracerShutdown func(ctx context.Context) error
-		metricsClient  metrics.Client
-		logger         logger.Logger
 		dbPool         *pgxpool.Pool
+		logger         logger.Logger
+		metricsClient  metrics.Client
+		tracerProvider otelTrace.TracerProvider
 	}
 
 	repositories struct {
-		deviceRepo ports.DeviceRepository
+		secretsRepo ports.SecretsRepository
+		deviceRepo  ports.DeviceRepository
+	}
+
+	servicesDep struct {
+		devices ports.DevicesService
+	}
+
+	applications struct {
+		grpcApp *usecases.Application
 	}
 
 	dependencies struct {
-		config         *config.ServiceConfig
-		infra          infrastructureDep
-		repos          repositories
-		devicesService ports.DevicesService
-		app            *usecases.Application
+		config       *config.ServiceConfig
+		configLoader *config.Loader
+
+		infra infrastructureDep
+
+		repos repositories
+
+		services servicesDep
+
+		apps applications
+
+		cleanupFuncs map[string]func(ctx context.Context) error
 	}
 
 	DependencyOption func(*dependencies) error
 )
 
 func initializeDependencies(ctx context.Context, opts ...DependencyOption) (*dependencies, error) {
-	deps := &dependencies{}
+	deps := &dependencies{
+		cleanupFuncs: make(map[string]func(ctx context.Context) error),
+	}
 
 	allOpts := append(defaultOptions(ctx), opts...)
 

@@ -258,12 +258,12 @@ func (s *ErrorScenariosTestSuite) TestErrorResponseFormat() {
 	s.Require().IsType("", response["timestamp"])
 }
 
-func (s *ErrorScenariosTestSuite) TestUndefinedMethodReturnsNotFound() {
+func (s *ErrorScenariosTestSuite) TestUndefinedMethodReturnsMethodNotAllowed() {
 	resp, err := s.Server.DoRequest(s.T().Context(), "TRACE", "/v1/devices")
 	s.Require().NoError(err)
 	defer resp.Body.Close()
 
-	s.Require().Equal(http.StatusNotFound, resp.StatusCode)
+	s.Require().Equal(http.StatusMethodNotAllowed, resp.StatusCode)
 }
 
 func (s *ErrorScenariosTestSuite) TestCanUpdateStateOfInUseDevice() {

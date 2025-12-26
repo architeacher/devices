@@ -50,7 +50,7 @@ func (s *SecurityHeadersTestSuite) TestSecurityHeaders() {
 		{
 			name:     "Content-Security-Policy",
 			header:   "Content-Security-Policy",
-			expected: "default-src 'self'",
+			expected: "default-src 'self'; connect-src 'self'",
 		},
 		{
 			name:     "Referrer-Policy",
@@ -69,7 +69,7 @@ func (s *SecurityHeadersTestSuite) TestSecurityHeaders() {
 		},
 	}
 
-	handler := middleware.SecurityHeaders()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := middleware.SecurityHeaders("v1")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
@@ -172,20 +172,20 @@ func (s *CORSTestSuite) TestCORS_Preflight() {
 	s.Require().False(handlerCalled)
 }
 
-type RequestIDTestSuite struct {
+type RequestTrackingTestSuite struct {
 	suite.Suite
 }
 
-func TestRequestIDTestSuite(t *testing.T) {
+func TestRequestTrackingTestSuite(t *testing.T) {
 	t.Parallel()
-	suite.Run(t, new(RequestIDTestSuite))
+	suite.Run(t, new(RequestTrackingTestSuite))
 }
 
-func (s *RequestIDTestSuite) TestRequestID_GeneratesNewID() {
+func (s *RequestTrackingTestSuite) TestRequestTracking_GeneratesNewID() {
 	s.T().Parallel()
 
 	var capturedCtx context.Context
-	handler := middleware.RequestID()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := middleware.RequestTracking()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		capturedCtx = r.Context()
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -200,12 +200,12 @@ func (s *RequestIDTestSuite) TestRequestID_GeneratesNewID() {
 	s.Require().Equal(rec.Header().Get(middleware.RequestIDHeader), middleware.GetRequestID(capturedCtx))
 }
 
-func (s *RequestIDTestSuite) TestRequestID_UsesExistingID() {
+func (s *RequestTrackingTestSuite) TestRequestTracking_UsesExistingID() {
 	s.T().Parallel()
 
 	existingID := "existing-request-id-123"
 	var capturedCtx context.Context
-	handler := middleware.RequestID()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := middleware.RequestTracking()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		capturedCtx = r.Context()
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -220,7 +220,7 @@ func (s *RequestIDTestSuite) TestRequestID_UsesExistingID() {
 	s.Require().Equal(existingID, middleware.GetRequestID(capturedCtx))
 }
 
-func (s *RequestIDTestSuite) TestGetRequestID_EmptyContext() {
+func (s *RequestTrackingTestSuite) TestGetRequestID_EmptyContext() {
 	s.T().Parallel()
 
 	ctx := context.Background()

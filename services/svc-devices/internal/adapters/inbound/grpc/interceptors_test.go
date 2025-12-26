@@ -1,10 +1,13 @@
 package grpc_test
 
 import (
+	"bytes"
 	"context"
 	"testing"
 
+	"github.com/architeacher/devices/pkg/logger"
 	inboundgrpc "github.com/architeacher/devices/services/svc-devices/internal/adapters/inbound/grpc"
+	"github.com/architeacher/devices/services/svc-devices/internal/config"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
@@ -208,4 +211,202 @@ func TestGetCorrelationID_EmptyContext(t *testing.T) {
 	ctx := t.Context()
 	correlationID := inboundgrpc.GetCorrelationID(ctx)
 	require.Empty(t, correlationID)
+}
+
+func TestAccessLogInterceptor(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name           string
+		config         config.AccessLog
+		fullMethod     string
+		metadata       metadata.MD
+		handlerErr     error
+		expectLog      bool
+		expectMetadata bool
+		expectErrorLog bool
+	}{
+		{
+			name: "logs request when enabled",
+			config: config.AccessLog{
+				Enabled:         true,
+				LogHealthChecks: true,
+				IncludeMetadata: false,
+			},
+			fullMethod: "/device.v1.DeviceService/GetDevice",
+			expectLog:  true,
+		},
+		{
+			name: "skips logging when disabled",
+			config: config.AccessLog{
+				Enabled: false,
+			},
+			fullMethod: "/device.v1.DeviceService/GetDevice",
+			expectLog:  false,
+		},
+		{
+			name: "skips health check when LogHealthChecks is false",
+			config: config.AccessLog{
+				Enabled:         true,
+				LogHealthChecks: false,
+			},
+			fullMethod: "/device.v1.HealthService/Check",
+			expectLog:  false,
+		},
+		{
+			name: "logs health check when LogHealthChecks is true",
+			config: config.AccessLog{
+				Enabled:         true,
+				LogHealthChecks: true,
+			},
+			fullMethod: "/device.v1.HealthService/Check",
+			expectLog:  true,
+		},
+		{
+			name: "includes metadata when IncludeMetadata is true",
+			config: config.AccessLog{
+				Enabled:         true,
+				LogHealthChecks: true,
+				IncludeMetadata: true,
+			},
+			fullMethod:     "/device.v1.DeviceService/GetDevice",
+			metadata:       metadata.Pairs("x-custom-header", "custom-value"),
+			expectLog:      true,
+			expectMetadata: true,
+		},
+		{
+			name: "logs error when handler returns error",
+			config: config.AccessLog{
+				Enabled:         true,
+				LogHealthChecks: true,
+			},
+			fullMethod:     "/device.v1.DeviceService/GetDevice",
+			handlerErr:     grpc.ErrServerStopped,
+			expectLog:      true,
+			expectErrorLog: true,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			var buf bytes.Buffer
+			log := logger.NewWithWriter("info", "json", &buf)
+
+			interceptor := inboundgrpc.AccessLogInterceptor(log, tc.config)
+
+			ctx := context.WithValue(t.Context(), inboundgrpc.ContextKeyRequestID, "test-request-id")
+			if tc.metadata != nil {
+				ctx = metadata.NewIncomingContext(ctx, tc.metadata)
+			}
+
+			mockHandler := func(ctx context.Context, req any) (any, error) {
+				if tc.handlerErr != nil {
+					return nil, tc.handlerErr
+				}
+
+				return "response", nil
+			}
+
+			info := &grpc.UnaryServerInfo{FullMethod: tc.fullMethod}
+			resp, err := interceptor(ctx, nil, info, mockHandler)
+
+			if tc.handlerErr != nil {
+				require.Error(t, err)
+				require.Nil(t, resp)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, "response", resp)
+			}
+
+			logOutput := buf.String()
+
+			if tc.expectLog {
+				require.Contains(t, logOutput, tc.fullMethod)
+				require.Contains(t, logOutput, "test-request-id")
+			} else {
+				require.Empty(t, logOutput)
+			}
+
+			if tc.expectMetadata {
+				require.Contains(t, logOutput, "metadata")
+				require.Contains(t, logOutput, "x-custom-header")
+			}
+
+			if tc.expectErrorLog {
+				require.Contains(t, logOutput, "grpc_code")
+				require.Contains(t, logOutput, "failed")
+			}
+		})
+	}
+}
+
+func TestAccessLogInterceptor_SanitizesMetadata(t *testing.T) {
+	t.Parallel()
+
+	var buf bytes.Buffer
+	log := logger.NewWithWriter("info", "json", &buf)
+
+	cfg := config.AccessLog{
+		Enabled:         true,
+		LogHealthChecks: true,
+		IncludeMetadata: true,
+	}
+
+	interceptor := inboundgrpc.AccessLogInterceptor(log, cfg)
+
+	ctx := context.WithValue(t.Context(), inboundgrpc.ContextKeyRequestID, "test-request-id")
+	ctx = metadata.NewIncomingContext(ctx, metadata.Pairs(
+		"authorization", "Bearer secret-token",
+		"api-key", "api-key-value",
+		"paseto-token", "paseto-token-value",
+		"cookie", "session=abc123",
+		"x-safe-header", "safe-value",
+	))
+
+	mockHandler := func(ctx context.Context, req any) (any, error) {
+		return "response", nil
+	}
+
+	info := &grpc.UnaryServerInfo{FullMethod: "/device.v1.DeviceService/GetDevice"}
+	_, err := interceptor(ctx, nil, info, mockHandler)
+	require.NoError(t, err)
+
+	logOutput := buf.String()
+
+	require.Contains(t, logOutput, "[REDACTED]")
+	require.NotContains(t, logOutput, "secret-token")
+	require.NotContains(t, logOutput, "api-key-value")
+	require.NotContains(t, logOutput, "paseto-token-value")
+	require.NotContains(t, logOutput, "abc123")
+	require.Contains(t, logOutput, "safe-value")
+}
+
+func TestAccessLogInterceptor_IncludesCorrelationID(t *testing.T) {
+	t.Parallel()
+
+	var buf bytes.Buffer
+	log := logger.NewWithWriter("info", "json", &buf)
+
+	cfg := config.AccessLog{
+		Enabled:         true,
+		LogHealthChecks: true,
+	}
+
+	interceptor := inboundgrpc.AccessLogInterceptor(log, cfg)
+
+	ctx := context.WithValue(t.Context(), inboundgrpc.ContextKeyRequestID, "test-request-id")
+	ctx = context.WithValue(ctx, inboundgrpc.ContextKeyCorrelationID, "test-correlation-id")
+
+	mockHandler := func(ctx context.Context, req any) (any, error) {
+		return "response", nil
+	}
+
+	info := &grpc.UnaryServerInfo{FullMethod: "/device.v1.DeviceService/GetDevice"}
+	_, err := interceptor(ctx, nil, info, mockHandler)
+	require.NoError(t, err)
+
+	logOutput := buf.String()
+	require.Contains(t, logOutput, "test-correlation-id")
 }

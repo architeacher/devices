@@ -3,11 +3,11 @@ package queries
 import (
 	"context"
 
+	"github.com/architeacher/devices/pkg/decorator"
 	"github.com/architeacher/devices/pkg/logger"
 	"github.com/architeacher/devices/pkg/metrics"
 	"github.com/architeacher/devices/services/svc-devices/internal/domain/model"
 	"github.com/architeacher/devices/services/svc-devices/internal/ports"
-	"github.com/architeacher/devices/services/svc-devices/shared/decorator"
 	otelTrace "go.opentelemetry.io/otel/trace"
 )
 
@@ -26,14 +26,14 @@ type (
 func NewListDevicesQueryHandler(
 	svc ports.DevicesService,
 	log logger.Logger,
-	tracerProvider otelTrace.TracerProvider,
 	metricsClient metrics.Client,
+	tracerProvider otelTrace.TracerProvider,
 ) ListDevicesQueryHandler {
 	return decorator.ApplyQueryDecorators[ListDevicesQuery, *model.DeviceList](
 		listDevicesQueryHandler{devicesService: svc},
 		log,
-		tracerProvider,
 		metricsClient,
+		tracerProvider,
 	)
 }
 

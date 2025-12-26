@@ -78,7 +78,7 @@ func TestCreateDeviceCommandHandler(t *testing.T) {
 				tc.setupSvc(svc)
 			}
 
-			handler := commands.NewCreateDeviceCommandHandler(svc, log, tp, mc)
+			handler := commands.NewCreateDeviceCommandHandler(svc, log, mc, tp)
 			device, err := handler.Handle(t.Context(), tc.cmd)
 
 			if tc.expectError {
@@ -151,7 +151,7 @@ func TestUpdateDeviceCommandHandler(t *testing.T) {
 			svc := &mocks.FakeDevicesService{}
 			deviceID := tc.setupSvc(svc)
 
-			handler := commands.NewUpdateDeviceCommandHandler(svc, log, tp, mc)
+			handler := commands.NewUpdateDeviceCommandHandler(svc, log, mc, tp)
 
 			cmd := commands.UpdateDeviceCommand{
 				ID:    deviceID,
@@ -259,7 +259,7 @@ func TestPatchDeviceCommandHandler(t *testing.T) {
 			svc := &mocks.FakeDevicesService{}
 			deviceID := tc.setupSvc(svc)
 
-			handler := commands.NewPatchDeviceCommandHandler(svc, log, tp, mc)
+			handler := commands.NewPatchDeviceCommandHandler(svc, log, mc, tp)
 
 			cmd := commands.PatchDeviceCommand{
 				ID:      deviceID,
@@ -323,7 +323,7 @@ func TestDeleteDeviceCommandHandler(t *testing.T) {
 			svc := &mocks.FakeDevicesService{}
 			deviceID := tc.setupSvc(svc)
 
-			handler := commands.NewDeleteDeviceCommandHandler(svc, log, tp, mc)
+			handler := commands.NewDeleteDeviceCommandHandler(svc, log, mc, tp)
 
 			cmd := commands.DeleteDeviceCommand{ID: deviceID}
 

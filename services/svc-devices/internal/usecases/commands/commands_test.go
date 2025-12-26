@@ -7,7 +7,7 @@ import (
 	"github.com/architeacher/devices/pkg/logger"
 	"github.com/architeacher/devices/pkg/metrics/noop"
 	"github.com/architeacher/devices/services/svc-devices/internal/domain/model"
-	"github.com/architeacher/devices/services/svc-devices/internal/infrastructure/telemetry"
+	"github.com/architeacher/devices/services/svc-devices/internal/infrastructure"
 	"github.com/architeacher/devices/services/svc-devices/internal/mocks"
 	"github.com/architeacher/devices/services/svc-devices/internal/usecases/commands"
 	"github.com/stretchr/testify/require"
@@ -17,7 +17,7 @@ func TestCreateDeviceCommandHandler(t *testing.T) {
 	t.Parallel()
 
 	log := logger.New("debug", "console")
-	tp := telemetry.NewNoopTracerProvider()
+	tp := infrastructure.NewNoopTracerProvider()
 	mc := noop.NewMetricsClient()
 
 	cases := []struct {
@@ -63,7 +63,7 @@ func TestCreateDeviceCommandHandler(t *testing.T) {
 				tc.setupSvc(svc)
 			}
 
-			handler := commands.NewCreateDeviceCommandHandler(svc, log, tp, mc)
+			handler := commands.NewCreateDeviceCommandHandler(svc, log, mc, tp)
 
 			device, err := handler.Handle(t.Context(), tc.cmd)
 
@@ -86,7 +86,7 @@ func TestUpdateDeviceCommandHandler(t *testing.T) {
 	t.Parallel()
 
 	log := logger.New("debug", "console")
-	tp := telemetry.NewNoopTracerProvider()
+	tp := infrastructure.NewNoopTracerProvider()
 	mc := noop.NewMetricsClient()
 
 	cases := []struct {
@@ -151,7 +151,7 @@ func TestUpdateDeviceCommandHandler(t *testing.T) {
 			svc := &mocks.FakeDevicesService{}
 			deviceID := tc.setupSvc(svc)
 
-			handler := commands.NewUpdateDeviceCommandHandler(svc, log, tp, mc)
+			handler := commands.NewUpdateDeviceCommandHandler(svc, log, mc, tp)
 
 			cmd := commands.UpdateDeviceCommand{
 				ID:    deviceID,
@@ -179,7 +179,7 @@ func TestDeleteDeviceCommandHandler(t *testing.T) {
 	t.Parallel()
 
 	log := logger.New("debug", "console")
-	tp := telemetry.NewNoopTracerProvider()
+	tp := infrastructure.NewNoopTracerProvider()
 	mc := noop.NewMetricsClient()
 
 	cases := []struct {
@@ -228,7 +228,7 @@ func TestDeleteDeviceCommandHandler(t *testing.T) {
 			svc := &mocks.FakeDevicesService{}
 			deviceID := tc.setupSvc(svc)
 
-			handler := commands.NewDeleteDeviceCommandHandler(svc, log, tp, mc)
+			handler := commands.NewDeleteDeviceCommandHandler(svc, log, mc, tp)
 
 			cmd := commands.DeleteDeviceCommand{ID: deviceID}
 
@@ -250,7 +250,7 @@ func TestPatchDeviceCommandHandler(t *testing.T) {
 	t.Parallel()
 
 	log := logger.New("debug", "console")
-	tp := telemetry.NewNoopTracerProvider()
+	tp := infrastructure.NewNoopTracerProvider()
 	mc := noop.NewMetricsClient()
 
 	cases := []struct {
@@ -316,7 +316,7 @@ func TestPatchDeviceCommandHandler(t *testing.T) {
 			svc := &mocks.FakeDevicesService{}
 			deviceID := tc.setupSvc(svc)
 
-			handler := commands.NewPatchDeviceCommandHandler(svc, log, tp, mc)
+			handler := commands.NewPatchDeviceCommandHandler(svc, log, mc, tp)
 
 			cmd := commands.PatchDeviceCommand{
 				ID:      deviceID,

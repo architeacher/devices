@@ -13,9 +13,15 @@ func Recovery(log logger.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			defer func() {
-				if rec := recover(); rec != nil {
+				if rvr := recover(); rvr != nil {
+					if rvr == http.ErrAbortHandler {
+						// we don't recover http.ErrAbortHandler, so the response
+						// to the client is aborted, this should not be logged
+						panic(rvr)
+					}
+
 					var errMsg string
-					switch v := rec.(type) {
+					switch v := rvr.(type) {
 					case string:
 						errMsg = v
 					case error:
@@ -32,7 +38,11 @@ func Recovery(log logger.Logger) func(http.Handler) http.Handler {
 						Msg("panic recovered")
 
 					w.Header().Set("Content-Type", "application/json")
-					w.WriteHeader(http.StatusInternalServerError)
+
+					if r.Header.Get("Connection") != "Upgrade" {
+						w.WriteHeader(http.StatusInternalServerError)
+					}
+
 					_, _ = w.Write([]byte(`{"code":"INTERNAL_ERROR","message":"internal server error"}`))
 				}
 			}()

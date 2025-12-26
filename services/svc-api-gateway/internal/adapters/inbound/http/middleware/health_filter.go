@@ -6,10 +6,6 @@ import (
 	"strings"
 )
 
-const (
-	skipAccessLogKey contextKey = "skip_access_log"
-)
-
 var defaultHealthEndpoints = []string{
 	"/health",
 	"/healthz",
@@ -22,51 +18,33 @@ var defaultHealthEndpoints = []string{
 	"/v1/readiness",
 }
 
-type HealthCheckFilter struct {
-	healthEndpoints []string
-	logHealthChecks bool
-}
+func HealthCheckFilter(logHealthChecks bool) func(handler http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if logHealthChecks {
+				next.ServeHTTP(w, r)
 
-func NewHealthCheckFilter(logHealthChecks bool) *HealthCheckFilter {
-	return &HealthCheckFilter{
-		healthEndpoints: defaultHealthEndpoints,
-		logHealthChecks: logHealthChecks,
+				return
+			}
+
+			if isHealthEndpoint(r.URL.Path, defaultHealthEndpoints) {
+				ctx := context.WithValue(r.Context(), skipAccessLogKey, true)
+				next.ServeHTTP(w, r.WithContext(ctx))
+
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
 	}
 }
 
-func (h *HealthCheckFilter) Middleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if h.logHealthChecks {
-			next.ServeHTTP(w, r)
-
-			return
-		}
-
-		if h.isHealthEndpoint(r.URL.Path) {
-			ctx := context.WithValue(r.Context(), skipAccessLogKey, true)
-			next.ServeHTTP(w, r.WithContext(ctx))
-
-			return
-		}
-
-		next.ServeHTTP(w, r)
-	})
-}
-
-func (h *HealthCheckFilter) isHealthEndpoint(path string) bool {
-	normalizedPath := strings.TrimSuffix(path, "/")
-
-	for _, endpoint := range h.healthEndpoints {
-		if normalizedPath == endpoint || normalizedPath == strings.TrimSuffix(endpoint, "/") {
+func isHealthEndpoint(path string, healthEndpoints []string) bool {
+	for _, endpoint := range healthEndpoints {
+		if strings.HasPrefix(path, endpoint) {
 			return true
 		}
 	}
 
 	return false
-}
-
-func ShouldSkipAccessLog(ctx context.Context) bool {
-	skip, ok := ctx.Value(skipAccessLogKey).(bool)
-
-	return ok && skip
 }

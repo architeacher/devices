@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/architeacher/devices/pkg/decorator"
 	"github.com/architeacher/devices/pkg/logger"
 	"github.com/architeacher/devices/pkg/metrics"
 	"github.com/architeacher/devices/services/svc-devices/internal/config"
 	"github.com/architeacher/devices/services/svc-devices/internal/ports"
-	"github.com/architeacher/devices/services/svc-devices/shared/decorator"
 	otelTrace "go.opentelemetry.io/otel/trace"
 )
 
@@ -34,8 +34,8 @@ type (
 func NewFetchHealthReportQueryHandler(
 	dbHealthChecker ports.DatabaseHealthChecker,
 	log logger.Logger,
-	tracerProvider otelTrace.TracerProvider,
 	metricsClient metrics.Client,
+	tracerProvider otelTrace.TracerProvider,
 ) FetchHealthReportQueryHandler {
 	return decorator.ApplyQueryDecorators[FetchHealthReportQuery, *HealthResult](
 		fetchHealthReportQueryHandler{
@@ -43,8 +43,8 @@ func NewFetchHealthReportQueryHandler(
 			startTime:       time.Now(),
 		},
 		log,
-		tracerProvider,
 		metricsClient,
+		tracerProvider,
 	)
 }
 

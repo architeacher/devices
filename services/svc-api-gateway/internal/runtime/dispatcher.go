@@ -156,14 +156,13 @@ func (c *ServiceCtx) WaitForServer() {
 func (c *ServiceCtx) cleanup(shutdownCtx context.Context) {
 	c.deps.infra.logger.Info().Msg("cleaning up resources...")
 
-	for _, cleanupFn := range c.deps.grpcCleanup {
-		if err := cleanupFn(); err != nil {
-			c.deps.infra.logger.Error().Err(err).Msg("failed to close gRPC connection")
+	for resource, cleanupFn := range c.deps.cleanupFuncs {
+		if err := cleanupFn(shutdownCtx); err != nil {
+			c.deps.infra.logger.Error().
+				Err(err).
+				Str("resource", resource).
+				Msg("failed to shutdown the resource gracefully")
 		}
-	}
-
-	if err := c.deps.infra.httpServer.Shutdown(shutdownCtx); err != nil {
-		c.deps.infra.logger.Error().Err(err).Msg("failed to shutdown HTTPServer server gracefully")
 	}
 
 	c.deps.infra.logger.Info().Msg("cleanup completed")
