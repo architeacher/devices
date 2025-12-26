@@ -390,6 +390,7 @@ api-version: v1
 
 | Feature | Status | Description |
 |---------|--------|-------------|
+| **Rate Limiting** | ✅ Full | GCRA-based rate limiting via `throttled/throttled/v2` with KeyDB storage (per IP/user/global), RFC-compliant headers (`RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset`), graceful degradation |
 | **Circuit Breaker** | ✅ Full | Per-service failure detection using `sony/gobreaker/v2` with half-open state recovery |
 
 #### Performance Optimization
@@ -437,7 +438,6 @@ The following features are planned for future releases:
 
 | Feature | Priority | Description                                                            |
 |---------|----------|------------------------------------------------------------------------|
-| Rate Limiting | High | Token bucket algorithm with KeyDB backend (per client/endpoint/global) |
 | Service Discovery | High | Dynamic backend registration with Consul/etcd integration              |
 | Load Balancing | Medium |  Multiple strategies (round-robin, weighted, least-connections, consistent hashing)           |
 | SSE Streaming | Low | Convert gRPC server streams to Server-Sent Events for real-time updates |

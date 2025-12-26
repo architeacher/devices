@@ -83,6 +83,17 @@ func initMiddlewares(cfg RouterConfig) []handlers.MiddlewareFunc {
 		cfg.Logger.Info().Msg("authentication is enabled")
 	}
 
+	if cfg.ServiceConfig.ThrottledRateLimiting.Enabled && cfg.RateLimitStore != nil {
+		rateLimitMiddleware := middleware.ThrottledRateLimitingMiddleware(
+			cfg.ServiceConfig.ThrottledRateLimiting,
+			cfg.RateLimitStore,
+			cfg.Logger,
+		)
+		middlewares = append(middlewares, rateLimitMiddleware)
+
+		cfg.Logger.Info().Msg("rate limiting enabled")
+	}
+
 	if cfg.ServiceConfig.Idempotency.Enabled && cfg.IdempotencyRepo != nil {
 		idempotencyMiddleware := middleware.IdempotencyMiddleware(
 			cfg.IdempotencyRepo,

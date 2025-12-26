@@ -27,7 +27,7 @@ This document describes the features and API best practices implemented in the D
 | Structured Logging | ✅ | Zerolog with request context |
 | Metrics/Telemetry | ✅ | OpenTelemetry (counters, histograms) |
 | OpenAPI Docs | ✅ | Full spec with code generation |
-| Rate Limiting | ⏳ | Headers defined, not implemented |
+| Rate Limiting | ✅ | GCRA algorithm with RFC-compliant headers |
 | Caching | ⏳ | ETag/Cache-Control headers defined |
 | Idempotency | ⏳ | `Idempotency-Key` header defined |
 | Compression | ⏳ | Accept-Encoding headers defined |
@@ -425,17 +425,39 @@ Full OpenAPI 3.0.3 specification with:
 
 ---
 
+### Rate Limiting
+
+Distributed rate limiting using GCRA (Generic Cell Rate Algorithm) with Redis/KeyDB storage:
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `enabled` | true | Enable/disable rate limiting |
+| `requestsPerSecond` | 10 | Request rate quota |
+| `burstSize` | 20 | Burst capacity |
+| `enableIPLimiting` | true | Rate limit by IP address |
+| `enableUserLimiting` | true | Rate limit by user (PASETO claims) |
+| `maxKeys` | 1000 | Maximum keys in store |
+| `skipPaths` | /health | Paths to exclude |
+| `gracefulDegraded` | true | Allow requests on store failure |
+
+RFC-compliant response headers:
+- `RateLimit-Limit`: Maximum requests per window
+- `RateLimit-Remaining`: Remaining requests in window
+- `RateLimit-Reset`: Window reset timestamp (Unix epoch)
+- `Retry-After`: Seconds until retry allowed (on 429 responses)
+
+Key generation strategy (combined IP + user):
+- Authenticated requests: `ip:{addr}|user:{subject}`
+- Unauthenticated requests: `ip:{addr}`
+- Fallback: `global` if neither enabled
+
+**Location**: `services/svc-api-gateway/internal/adapters/inbound/http/middleware/throttled_rate_limiting.go`
+
+---
+
 ## Planned Features
 
 The following features are documented in the OpenAPI specification but not yet implemented:
-
-### Rate Limiting
-
-Headers defined (RFC 6648 compliant):
-- `RateLimit-Limit`: Maximum requests per window
-- `RateLimit-Remaining`: Remaining requests in window
-- `RateLimit-Reset`: Window reset timestamp
-- `Retry-After`: Seconds until retry allowed (HTTP standard)
 
 ### Caching
 
