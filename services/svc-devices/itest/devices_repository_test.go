@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/architeacher/devices/pkg/logger"
 	"github.com/architeacher/devices/services/svc-devices/internal/adapters/repos"
 	"github.com/architeacher/devices/services/svc-devices/internal/domain/model"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -69,7 +70,8 @@ func (s *DevicesRepositoryIntegrationTestSuite) SetupSuite() {
 
 	s.runMigrations()
 
-	s.repo = repos.NewDevicesRepository(s.pool)
+	log := logger.NewTestLogger()
+	s.repo = repos.NewDevicesRepository(s.pool, repos.NewPgxScanner(), repos.NewCriteriaTranslator(&log), log)
 }
 
 func (s *DevicesRepositoryIntegrationTestSuite) TearDownSuite() {
@@ -91,17 +93,13 @@ func (s *DevicesRepositoryIntegrationTestSuite) SetupTest() {
 }
 
 func (s *DevicesRepositoryIntegrationTestSuite) runMigrations() {
-	postgresHost, err := s.container.Host(s.suiteCtx)
-	s.Require().NoError(err)
-
 	postgresPort, err := s.container.MappedPort(s.suiteCtx, "5432/tcp")
 	s.Require().NoError(err)
 
 	dbURL := fmt.Sprintf(
-		"postgres://%s:%s@%s:%s/%s?sslmode=disable",
+		"postgres://%s:%s@host.docker.internal:%s/%s?sslmode=disable",
 		postgresUsername,
 		postgresPassword,
-		postgresHost,
 		postgresPort.Port(),
 		postgresDatabase,
 	)
@@ -278,12 +276,11 @@ func (s *DevicesRepositoryIntegrationTestSuite) TestList_FilterByBrand() {
 	}
 	s.seedDevices(ctx, devices)
 
-	brand := "Apple"
 	filter := model.DeviceFilter{
-		Brand: &brand,
-		Page:  1,
-		Size:  20,
-		Sort:  "-createdAt",
+		Brands: []string{"Apple"},
+		Page:   1,
+		Size:   20,
+		Sort:   []string{"-createdAt"},
 	}
 
 	list, err := s.repo.List(ctx, filter)
@@ -305,12 +302,11 @@ func (s *DevicesRepositoryIntegrationTestSuite) TestList_FilterByState() {
 	}
 	s.seedDevices(ctx, devices)
 
-	state := model.StateAvailable
 	filter := model.DeviceFilter{
-		State: &state,
-		Page:  1,
-		Size:  20,
-		Sort:  "-createdAt",
+		States: []model.State{model.StateAvailable},
+		Page:   1,
+		Size:   20,
+		Sort:   []string{"-createdAt"},
 	}
 
 	list, err := s.repo.List(ctx, filter)
@@ -334,7 +330,7 @@ func (s *DevicesRepositoryIntegrationTestSuite) TestList_Pagination() {
 	filter := model.DeviceFilter{
 		Page: 1,
 		Size: 10,
-		Sort: "-createdAt",
+		Sort: []string{"-createdAt"},
 	}
 
 	list, err := s.repo.List(ctx, filter)
@@ -376,7 +372,7 @@ func (s *DevicesRepositoryIntegrationTestSuite) TestList_SortByName() {
 	filter := model.DeviceFilter{
 		Page: 1,
 		Size: 20,
-		Sort: "name",
+		Sort: []string{"name"},
 	}
 
 	list, err := s.repo.List(ctx, filter)
@@ -401,7 +397,7 @@ func (s *DevicesRepositoryIntegrationTestSuite) TestList_SortByNameDescending() 
 	filter := model.DeviceFilter{
 		Page: 1,
 		Size: 20,
-		Sort: "-name",
+		Sort: []string{"-name"},
 	}
 
 	list, err := s.repo.List(ctx, filter)
@@ -426,7 +422,7 @@ func (s *DevicesRepositoryIntegrationTestSuite) TestList_SortByBrandDescending()
 	filter := model.DeviceFilter{
 		Page: 1,
 		Size: 20,
-		Sort: "-brand",
+		Sort: []string{"-brand"},
 	}
 
 	list, err := s.repo.List(ctx, filter)
@@ -451,7 +447,7 @@ func (s *DevicesRepositoryIntegrationTestSuite) TestList_SortByStateDescending()
 	filter := model.DeviceFilter{
 		Page: 1,
 		Size: 20,
-		Sort: "-state",
+		Sort: []string{"-state"},
 	}
 
 	list, err := s.repo.List(ctx, filter)
@@ -498,7 +494,7 @@ func (s *DevicesRepositoryIntegrationTestSuite) TestList_SortByUpdatedAtDescendi
 	filter := model.DeviceFilter{
 		Page: 1,
 		Size: 20,
-		Sort: "-updatedAt",
+		Sort: []string{"-updatedAt"},
 	}
 
 	list, err := s.repo.List(ctx, filter)
@@ -545,7 +541,7 @@ func (s *DevicesRepositoryIntegrationTestSuite) TestList_InvalidSortFieldFallsBa
 	filter := model.DeviceFilter{
 		Page: 1,
 		Size: 20,
-		Sort: "invalidField",
+		Sort: []string{"invalidField"},
 	}
 
 	list, err := s.repo.List(ctx, filter)
@@ -557,7 +553,7 @@ func (s *DevicesRepositoryIntegrationTestSuite) TestList_InvalidSortFieldFallsBa
 	s.Require().Equal("Third", list.Devices[2].Name)
 }
 
-func (s *DevicesRepositoryIntegrationTestSuite) TestList_EmptyBrandFilterIsIgnored() {
+func (s *DevicesRepositoryIntegrationTestSuite) TestList_EmptyBrandsFilterIsIgnored() {
 	ctx := s.T().Context()
 
 	devices := []*model.Device{
@@ -567,12 +563,11 @@ func (s *DevicesRepositoryIntegrationTestSuite) TestList_EmptyBrandFilterIsIgnor
 	}
 	s.seedDevices(ctx, devices)
 
-	emptyBrand := ""
 	filter := model.DeviceFilter{
-		Brand: &emptyBrand,
-		Page:  1,
-		Size:  20,
-		Sort:  "-createdAt",
+		Brands: []string{},
+		Page:   1,
+		Size:   20,
+		Sort:   []string{"-createdAt"},
 	}
 
 	list, err := s.repo.List(ctx, filter)
@@ -591,12 +586,11 @@ func (s *DevicesRepositoryIntegrationTestSuite) TestList_BrandFilterIsCaseSensit
 	}
 	s.seedDevices(ctx, devices)
 
-	brand := "Apple"
 	filter := model.DeviceFilter{
-		Brand: &brand,
-		Page:  1,
-		Size:  20,
-		Sort:  "-createdAt",
+		Brands: []string{"Apple"},
+		Page:   1,
+		Size:   20,
+		Sort:   []string{"-createdAt"},
 	}
 
 	list, err := s.repo.List(ctx, filter)
@@ -617,14 +611,12 @@ func (s *DevicesRepositoryIntegrationTestSuite) TestList_CombinedFiltersAndSort(
 	}
 	s.seedDevices(ctx, devices)
 
-	brand := "Apple"
-	state := model.StateAvailable
 	filter := model.DeviceFilter{
-		Brand: &brand,
-		State: &state,
-		Page:  1,
-		Size:  20,
-		Sort:  "name",
+		Brands: []string{"Apple"},
+		States: []model.State{model.StateAvailable},
+		Page:   1,
+		Size:   20,
+		Sort:   []string{"name"},
 	}
 
 	list, err := s.repo.List(ctx, filter)
@@ -720,128 +712,6 @@ func (s *DevicesRepositoryIntegrationTestSuite) TestDelete_NotFound() {
 	s.Require().ErrorIs(err, model.ErrDeviceNotFound)
 }
 
-func (s *DevicesRepositoryIntegrationTestSuite) TestDelete_VerifyCount() {
-	ctx := s.T().Context()
-
-	devices := []*model.Device{
-		model.NewDevice("Device 1", "Brand", model.StateAvailable),
-		model.NewDevice("Device 2", "Brand", model.StateAvailable),
-		model.NewDevice("Device 3", "Brand", model.StateAvailable),
-	}
-	s.seedDevices(ctx, devices)
-
-	initialCount, err := s.repo.Count(ctx, model.DeviceFilter{})
-	s.Require().NoError(err)
-	s.Require().Equal(uint(3), initialCount)
-
-	err = s.repo.Delete(ctx, devices[0].ID)
-	s.Require().NoError(err)
-
-	finalCount, err := s.repo.Count(ctx, model.DeviceFilter{})
-	s.Require().NoError(err)
-	s.Require().Equal(uint(2), finalCount)
-}
-
-func (s *DevicesRepositoryIntegrationTestSuite) TestExists_True() {
-	ctx := s.T().Context()
-
-	device := model.NewDevice("Test", "Brand", model.StateAvailable)
-	s.seedDevice(ctx, device)
-
-	exists, err := s.repo.Exists(ctx, device.ID)
-
-	s.Require().NoError(err)
-	s.Require().True(exists)
-}
-
-func (s *DevicesRepositoryIntegrationTestSuite) TestExists_False() {
-	ctx := s.T().Context()
-
-	nonExistentID := model.NewDeviceID()
-
-	exists, err := s.repo.Exists(ctx, nonExistentID)
-
-	s.Require().NoError(err)
-	s.Require().False(exists)
-}
-
-func (s *DevicesRepositoryIntegrationTestSuite) TestExists_AfterDelete() {
-	ctx := s.T().Context()
-
-	device := model.NewDevice("Test", "Brand", model.StateAvailable)
-	s.seedDevice(ctx, device)
-
-	exists, err := s.repo.Exists(ctx, device.ID)
-	s.Require().NoError(err)
-	s.Require().True(exists)
-
-	err = s.repo.Delete(ctx, device.ID)
-	s.Require().NoError(err)
-
-	exists, err = s.repo.Exists(ctx, device.ID)
-	s.Require().NoError(err)
-	s.Require().False(exists)
-}
-
-func (s *DevicesRepositoryIntegrationTestSuite) TestCount_Empty() {
-	ctx := s.T().Context()
-
-	count, err := s.repo.Count(ctx, model.DeviceFilter{})
-
-	s.Require().NoError(err)
-	s.Require().Equal(uint(0), count)
-}
-
-func (s *DevicesRepositoryIntegrationTestSuite) TestCount_All() {
-	ctx := s.T().Context()
-
-	devices := []*model.Device{
-		model.NewDevice("Device 1", "Brand A", model.StateAvailable),
-		model.NewDevice("Device 2", "Brand B", model.StateInUse),
-		model.NewDevice("Device 3", "Brand A", model.StateInactive),
-	}
-	s.seedDevices(ctx, devices)
-
-	count, err := s.repo.Count(ctx, model.DeviceFilter{})
-
-	s.Require().NoError(err)
-	s.Require().Equal(uint(3), count)
-}
-
-func (s *DevicesRepositoryIntegrationTestSuite) TestCount_WithBrandFilter() {
-	ctx := s.T().Context()
-
-	devices := []*model.Device{
-		model.NewDevice("iPhone", "Apple", model.StateAvailable),
-		model.NewDevice("MacBook", "Apple", model.StateInUse),
-		model.NewDevice("Galaxy", "Samsung", model.StateAvailable),
-	}
-	s.seedDevices(ctx, devices)
-
-	brand := "Apple"
-	count, err := s.repo.Count(ctx, model.DeviceFilter{Brand: &brand})
-
-	s.Require().NoError(err)
-	s.Require().Equal(uint(2), count)
-}
-
-func (s *DevicesRepositoryIntegrationTestSuite) TestCount_WithStateFilter() {
-	ctx := s.T().Context()
-
-	devices := []*model.Device{
-		model.NewDevice("Device 1", "Brand", model.StateAvailable),
-		model.NewDevice("Device 2", "Brand", model.StateInUse),
-		model.NewDevice("Device 3", "Brand", model.StateAvailable),
-	}
-	s.seedDevices(ctx, devices)
-
-	state := model.StateAvailable
-	count, err := s.repo.Count(ctx, model.DeviceFilter{State: &state})
-
-	s.Require().NoError(err)
-	s.Require().Equal(uint(2), count)
-}
-
 func (s *DevicesRepositoryIntegrationTestSuite) TestPing_Success() {
 	ctx := s.T().Context()
 
@@ -849,3 +719,188 @@ func (s *DevicesRepositoryIntegrationTestSuite) TestPing_Success() {
 
 	s.Require().NoError(err)
 }
+
+func (s *DevicesRepositoryIntegrationTestSuite) TestList_MultipleBrandsFilter() {
+	ctx := s.T().Context()
+
+	devices := []*model.Device{
+		model.NewDevice("iPhone 15", "Apple", model.StateAvailable),
+		model.NewDevice("iPhone 14", "Apple", model.StateInUse),
+		model.NewDevice("Galaxy S24", "Samsung", model.StateAvailable),
+		model.NewDevice("Galaxy S23", "Samsung", model.StateInactive),
+		model.NewDevice("Pixel 8", "Google", model.StateAvailable),
+	}
+	s.seedDevices(ctx, devices)
+
+	cases := []struct {
+		name          string
+		brands        []string
+		expectedCount int
+	}{
+		{
+			name:          "Apple and Samsung",
+			brands:        []string{"Apple", "Samsung"},
+			expectedCount: 4,
+		},
+		{
+			name:          "Apple and Google",
+			brands:        []string{"Apple", "Google"},
+			expectedCount: 3,
+		},
+		{
+			name:          "Samsung and Google",
+			brands:        []string{"Samsung", "Google"},
+			expectedCount: 3,
+		},
+		{
+			name:          "all brands",
+			brands:        []string{"Apple", "Samsung", "Google"},
+			expectedCount: 5,
+		},
+		{
+			name:          "single brand backward compatible",
+			brands:        []string{"Apple"},
+			expectedCount: 2,
+		},
+	}
+
+	for _, tc := range cases {
+		s.Run(tc.name, func() {
+			filter := model.DeviceFilter{
+				Brands: tc.brands,
+				Page:   1,
+				Size:   20,
+				Sort:   []string{"-createdAt"},
+			}
+
+			list, err := s.repo.List(ctx, filter)
+
+			s.Require().NoError(err)
+			s.Require().Len(list.Devices, tc.expectedCount)
+		})
+	}
+}
+
+func (s *DevicesRepositoryIntegrationTestSuite) TestList_MultipleStatesFilter() {
+	ctx := s.T().Context()
+
+	devices := []*model.Device{
+		model.NewDevice("iPhone 15", "Apple", model.StateAvailable),
+		model.NewDevice("iPhone 14", "Apple", model.StateInUse),
+		model.NewDevice("Galaxy S24", "Samsung", model.StateAvailable),
+		model.NewDevice("Galaxy S23", "Samsung", model.StateInactive),
+		model.NewDevice("Pixel 8", "Google", model.StateAvailable),
+	}
+	s.seedDevices(ctx, devices)
+
+	cases := []struct {
+		name          string
+		states        []model.State
+		expectedCount int
+	}{
+		{
+			name:          "available and in-use",
+			states:        []model.State{model.StateAvailable, model.StateInUse},
+			expectedCount: 4,
+		},
+		{
+			name:          "available and inactive",
+			states:        []model.State{model.StateAvailable, model.StateInactive},
+			expectedCount: 4,
+		},
+		{
+			name:          "in-use and inactive",
+			states:        []model.State{model.StateInUse, model.StateInactive},
+			expectedCount: 2,
+		},
+		{
+			name:          "all states",
+			states:        []model.State{model.StateAvailable, model.StateInUse, model.StateInactive},
+			expectedCount: 5,
+		},
+		{
+			name:          "single state backward compatible",
+			states:        []model.State{model.StateAvailable},
+			expectedCount: 3,
+		},
+	}
+
+	for _, tc := range cases {
+		s.Run(tc.name, func() {
+			filter := model.DeviceFilter{
+				States: tc.states,
+				Page:   1,
+				Size:   20,
+				Sort:   []string{"-createdAt"},
+			}
+
+			list, err := s.repo.List(ctx, filter)
+
+			s.Require().NoError(err)
+			s.Require().Len(list.Devices, tc.expectedCount)
+		})
+	}
+}
+
+func (s *DevicesRepositoryIntegrationTestSuite) TestList_MultiValueCombinedFilters() {
+	ctx := s.T().Context()
+
+	devices := []*model.Device{
+		model.NewDevice("iPhone 15", "Apple", model.StateAvailable),
+		model.NewDevice("iPhone 14", "Apple", model.StateInUse),
+		model.NewDevice("Galaxy S24", "Samsung", model.StateAvailable),
+		model.NewDevice("Galaxy S23", "Samsung", model.StateInactive),
+		model.NewDevice("Pixel 8", "Google", model.StateAvailable),
+	}
+	s.seedDevices(ctx, devices)
+
+	cases := []struct {
+		name          string
+		brands        []string
+		states        []model.State
+		expectedCount int
+	}{
+		{
+			name:          "Apple or Samsung AND available",
+			brands:        []string{"Apple", "Samsung"},
+			states:        []model.State{model.StateAvailable},
+			expectedCount: 2,
+		},
+		{
+			name:          "Apple AND available or in-use",
+			brands:        []string{"Apple"},
+			states:        []model.State{model.StateAvailable, model.StateInUse},
+			expectedCount: 2,
+		},
+		{
+			name:          "Apple or Samsung AND available or inactive",
+			brands:        []string{"Apple", "Samsung"},
+			states:        []model.State{model.StateAvailable, model.StateInactive},
+			expectedCount: 3,
+		},
+		{
+			name:          "Google AND in-use",
+			brands:        []string{"Google"},
+			states:        []model.State{model.StateInUse},
+			expectedCount: 0,
+		},
+	}
+
+	for _, tc := range cases {
+		s.Run(tc.name, func() {
+			filter := model.DeviceFilter{
+				Brands: tc.brands,
+				States: tc.states,
+				Page:   1,
+				Size:   20,
+				Sort:   []string{"-createdAt"},
+			}
+
+			list, err := s.repo.List(ctx, filter)
+
+			s.Require().NoError(err)
+			s.Require().Len(list.Devices, tc.expectedCount)
+		})
+	}
+}
+

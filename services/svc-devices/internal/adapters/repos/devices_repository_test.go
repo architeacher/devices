@@ -1,30 +1,33 @@
 package repos_test
 
 import (
+	"bytes"
 	"errors"
 	"regexp"
 	"testing"
 	"time"
 
+	"github.com/architeacher/devices/pkg/logger"
 	"github.com/architeacher/devices/services/svc-devices/internal/adapters/repos"
 	"github.com/architeacher/devices/services/svc-devices/internal/domain/model"
-	"github.com/jackc/pgx/v5"
 	"github.com/pashagolub/pgxmock/v4"
 	"github.com/stretchr/testify/require"
 )
-
-func ptrString(s string) *string {
-	return &s
-}
-
-func ptrState(s model.State) *model.State {
-	return &s
-}
 
 func runRepoTest(
 	t *testing.T,
 	setupMock func(pgxmock.PgxPoolIface),
 	testFn func(*testing.T, *repos.DevicesRepository),
+) {
+	runRepoTestWithLogger(t, setupMock, func(t *testing.T, repo *repos.DevicesRepository, _ *bytes.Buffer) {
+		testFn(t, repo)
+	})
+}
+
+func runRepoTestWithLogger(
+	t *testing.T,
+	setupMock func(pgxmock.PgxPoolIface),
+	testFn func(*testing.T, *repos.DevicesRepository, *bytes.Buffer),
 ) {
 	t.Helper()
 	t.Parallel()
@@ -35,8 +38,10 @@ func runRepoTest(
 
 	setupMock(mock)
 
-	repo := repos.NewDevicesRepository(mock)
-	testFn(t, repo)
+	logBuffer := &bytes.Buffer{}
+	log := logger.NewBufferedTestLogger(logBuffer)
+	repo := repos.NewDevicesRepository(mock, repos.NewPgxScanner(), repos.NewCriteriaTranslator(&log), log)
+	testFn(t, repo, logBuffer)
 
 	require.NoError(t, mock.ExpectationsWereMet())
 }
@@ -174,7 +179,7 @@ func TestDevicesRepository_GetByID(t *testing.T) {
 				rows := pgxmock.NewRows([]string{"id", "name", "brand", "state", "created_at", "updated_at"}).
 					AddRow(testID.String(), "Test Device", "Test Brand", "available", now, now)
 				mock.ExpectQuery(regexp.QuoteMeta(
-					`SELECT id, name, brand, state, created_at, updated_at FROM devices WHERE id = $1`,
+					`SELECT id, name, brand, state, created_at, updated_at FROM devices WHERE id = $1 LIMIT 1`,
 				)).
 					WithArgs(testID.String()).
 					WillReturnRows(rows)
@@ -193,11 +198,12 @@ func TestDevicesRepository_GetByID(t *testing.T) {
 			name:     "device not found returns ErrDeviceNotFound",
 			deviceID: testID,
 			setupMock: func(mock pgxmock.PgxPoolIface) {
+				emptyRows := pgxmock.NewRows([]string{"id", "name", "brand", "state", "created_at", "updated_at"})
 				mock.ExpectQuery(regexp.QuoteMeta(
-					`SELECT id, name, brand, state, created_at, updated_at FROM devices WHERE id = $1`,
+					`SELECT id, name, brand, state, created_at, updated_at FROM devices WHERE id = $1 LIMIT 1`,
 				)).
 					WithArgs(testID.String()).
-					WillReturnError(pgx.ErrNoRows)
+					WillReturnRows(emptyRows)
 			},
 			expectError: true,
 			expectedErr: model.ErrDeviceNotFound,
@@ -207,7 +213,7 @@ func TestDevicesRepository_GetByID(t *testing.T) {
 			deviceID: testID,
 			setupMock: func(mock pgxmock.PgxPoolIface) {
 				mock.ExpectQuery(regexp.QuoteMeta(
-					`SELECT id, name, brand, state, created_at, updated_at FROM devices WHERE id = $1`,
+					`SELECT id, name, brand, state, created_at, updated_at FROM devices WHERE id = $1 LIMIT 1`,
 				)).
 					WithArgs(testID.String()).
 					WillReturnError(errors.New("connection error"))
@@ -258,19 +264,13 @@ func TestDevicesRepository_List(t *testing.T) {
 			name:   "list all devices with default pagination",
 			filter: model.DefaultDeviceFilter(),
 			setupMock: func(mock pgxmock.PgxPoolIface) {
-				rows := pgxmock.NewRows([]string{"id", "name", "brand", "state", "created_at", "updated_at"}).
-					AddRow(model.NewDeviceID().String(), "Device 1", "Brand A", "available", now, now).
-					AddRow(model.NewDeviceID().String(), "Device 2", "Brand B", "in-use", now, now)
+				rows := pgxmock.NewRows([]string{"id", "name", "brand", "state", "created_at", "updated_at", "total_count"}).
+					AddRow(model.NewDeviceID().String(), "Device 1", "Brand A", "available", now, now, uint(2)).
+					AddRow(model.NewDeviceID().String(), "Device 2", "Brand B", "in-use", now, now, uint(2))
 				mock.ExpectQuery(regexp.QuoteMeta(
-					`SELECT id, name, brand, state, created_at, updated_at FROM devices ORDER BY created_at DESC LIMIT 20 OFFSET 0`,
+					`SELECT id, name, brand, state, created_at, updated_at, COUNT(*) OVER() as total_count FROM devices ORDER BY created_at DESC LIMIT 20 OFFSET 0`,
 				)).
 					WillReturnRows(rows)
-
-				countRows := pgxmock.NewRows([]string{"count"}).AddRow(uint(2))
-				mock.ExpectQuery(regexp.QuoteMeta(
-					`SELECT COUNT(*) FROM devices`,
-				)).
-					WillReturnRows(countRows)
 			},
 			expectError:   false,
 			expectedCount: 2,
@@ -284,108 +284,167 @@ func TestDevicesRepository_List(t *testing.T) {
 			},
 		},
 		{
-			name: "list with brand filter",
+			name: "list with single brand filter",
 			filter: model.DeviceFilter{
-				Brand: ptrString("Apple"),
-				Page:  1,
-				Size:  10,
-				Sort:  "-createdAt",
+				Brands: []string{"Apple"},
+				Page:   1,
+				Size:   10,
+				Sort:   []string{"-createdAt"},
 			},
 			setupMock: func(mock pgxmock.PgxPoolIface) {
-				rows := pgxmock.NewRows([]string{"id", "name", "brand", "state", "created_at", "updated_at"}).
-					AddRow(model.NewDeviceID().String(), "iPhone", "Apple", "available", now, now)
+				rows := pgxmock.NewRows([]string{"id", "name", "brand", "state", "created_at", "updated_at", "total_count"}).
+					AddRow(model.NewDeviceID().String(), "iPhone", "Apple", "available", now, now, uint(1))
 				mock.ExpectQuery(regexp.QuoteMeta(
-					`SELECT id, name, brand, state, created_at, updated_at FROM devices WHERE brand = $1 ORDER BY created_at DESC LIMIT 10 OFFSET 0`,
+					`SELECT id, name, brand, state, created_at, updated_at, COUNT(*) OVER() as total_count FROM devices WHERE brand IN ($1) ORDER BY created_at DESC LIMIT 10 OFFSET 0`,
 				)).
 					WithArgs("Apple").
 					WillReturnRows(rows)
-
-				countRows := pgxmock.NewRows([]string{"count"}).AddRow(uint(1))
-				mock.ExpectQuery(regexp.QuoteMeta(
-					`SELECT COUNT(*) FROM devices WHERE brand = $1`,
-				)).
-					WithArgs("Apple").
-					WillReturnRows(countRows)
 			},
 			expectError:   false,
 			expectedCount: 1,
 		},
 		{
-			name: "list with state filter",
+			name: "list with single state filter",
 			filter: model.DeviceFilter{
-				State: ptrState(model.StateInUse),
-				Page:  1,
-				Size:  10,
-				Sort:  "-createdAt",
+				States: []model.State{model.StateInUse},
+				Page:   1,
+				Size:   10,
+				Sort:   []string{"-createdAt"},
 			},
 			setupMock: func(mock pgxmock.PgxPoolIface) {
-				rows := pgxmock.NewRows([]string{"id", "name", "brand", "state", "created_at", "updated_at"}).
-					AddRow(model.NewDeviceID().String(), "Device", "Brand", "in-use", now, now)
+				rows := pgxmock.NewRows([]string{"id", "name", "brand", "state", "created_at", "updated_at", "total_count"}).
+					AddRow(model.NewDeviceID().String(), "Device", "Brand", "in-use", now, now, uint(1))
 				mock.ExpectQuery(regexp.QuoteMeta(
-					`SELECT id, name, brand, state, created_at, updated_at FROM devices WHERE state = $1 ORDER BY created_at DESC LIMIT 10 OFFSET 0`,
+					`SELECT id, name, brand, state, created_at, updated_at, COUNT(*) OVER() as total_count FROM devices WHERE state IN ($1) ORDER BY created_at DESC LIMIT 10 OFFSET 0`,
 				)).
 					WithArgs("in-use").
 					WillReturnRows(rows)
-
-				countRows := pgxmock.NewRows([]string{"count"}).AddRow(uint(1))
-				mock.ExpectQuery(regexp.QuoteMeta(
-					`SELECT COUNT(*) FROM devices WHERE state = $1`,
-				)).
-					WithArgs("in-use").
-					WillReturnRows(countRows)
 			},
 			expectError:   false,
 			expectedCount: 1,
 		},
 		{
-			name: "list with combined filters",
+			name: "list with combined single-value filters",
 			filter: model.DeviceFilter{
-				Brand: ptrString("Apple"),
-				State: ptrState(model.StateAvailable),
-				Page:  1,
-				Size:  10,
-				Sort:  "-createdAt",
+				Brands: []string{"Apple"},
+				States: []model.State{model.StateAvailable},
+				Page:   1,
+				Size:   10,
+				Sort:   []string{"-createdAt"},
 			},
 			setupMock: func(mock pgxmock.PgxPoolIface) {
-				rows := pgxmock.NewRows([]string{"id", "name", "brand", "state", "created_at", "updated_at"}).
-					AddRow(model.NewDeviceID().String(), "iPhone", "Apple", "available", now, now)
+				rows := pgxmock.NewRows([]string{"id", "name", "brand", "state", "created_at", "updated_at", "total_count"}).
+					AddRow(model.NewDeviceID().String(), "iPhone", "Apple", "available", now, now, uint(1))
 				mock.ExpectQuery(regexp.QuoteMeta(
-					`SELECT id, name, brand, state, created_at, updated_at FROM devices WHERE brand = $1 AND state = $2 ORDER BY created_at DESC LIMIT 10 OFFSET 0`,
+					`SELECT id, name, brand, state, created_at, updated_at, COUNT(*) OVER() as total_count FROM devices WHERE (brand IN ($1) AND state IN ($2)) ORDER BY created_at DESC LIMIT 10 OFFSET 0`,
 				)).
 					WithArgs("Apple", "available").
 					WillReturnRows(rows)
-
-				countRows := pgxmock.NewRows([]string{"count"}).AddRow(uint(1))
-				mock.ExpectQuery(regexp.QuoteMeta(
-					`SELECT COUNT(*) FROM devices WHERE brand = $1 AND state = $2`,
-				)).
-					WithArgs("Apple", "available").
-					WillReturnRows(countRows)
 			},
 			expectError:   false,
 			expectedCount: 1,
+		},
+		{
+			name: "list with multiple brands filter (OR within field)",
+			filter: model.DeviceFilter{
+				Brands: []string{"Apple", "Samsung"},
+				Page:   1,
+				Size:   10,
+				Sort:   []string{"-createdAt"},
+			},
+			setupMock: func(mock pgxmock.PgxPoolIface) {
+				rows := pgxmock.NewRows([]string{"id", "name", "brand", "state", "created_at", "updated_at", "total_count"}).
+					AddRow(model.NewDeviceID().String(), "iPhone", "Apple", "available", now, now, uint(2)).
+					AddRow(model.NewDeviceID().String(), "Galaxy", "Samsung", "available", now, now, uint(2))
+				mock.ExpectQuery(regexp.QuoteMeta(
+					`SELECT id, name, brand, state, created_at, updated_at, COUNT(*) OVER() as total_count FROM devices WHERE brand IN ($1,$2) ORDER BY created_at DESC LIMIT 10 OFFSET 0`,
+				)).
+					WithArgs("Apple", "Samsung").
+					WillReturnRows(rows)
+			},
+			expectError:   false,
+			expectedCount: 2,
+			validateList: func(t *testing.T, list *model.DeviceList) {
+				brands := make(map[string]bool)
+				for _, d := range list.Devices {
+					brands[d.Brand] = true
+				}
+				require.True(t, brands["Apple"])
+				require.True(t, brands["Samsung"])
+			},
+		},
+		{
+			name: "list with multiple states filter (OR within field)",
+			filter: model.DeviceFilter{
+				States: []model.State{model.StateAvailable, model.StateInactive},
+				Page:   1,
+				Size:   10,
+				Sort:   []string{"-createdAt"},
+			},
+			setupMock: func(mock pgxmock.PgxPoolIface) {
+				rows := pgxmock.NewRows([]string{"id", "name", "brand", "state", "created_at", "updated_at", "total_count"}).
+					AddRow(model.NewDeviceID().String(), "Device 1", "Brand", "available", now, now, uint(2)).
+					AddRow(model.NewDeviceID().String(), "Device 2", "Brand", "inactive", now, now, uint(2))
+				mock.ExpectQuery(regexp.QuoteMeta(
+					`SELECT id, name, brand, state, created_at, updated_at, COUNT(*) OVER() as total_count FROM devices WHERE state IN ($1,$2) ORDER BY created_at DESC LIMIT 10 OFFSET 0`,
+				)).
+					WithArgs("available", "inactive").
+					WillReturnRows(rows)
+			},
+			expectError:   false,
+			expectedCount: 2,
+			validateList: func(t *testing.T, list *model.DeviceList) {
+				states := make(map[model.State]bool)
+				for _, d := range list.Devices {
+					states[d.State] = true
+				}
+				require.True(t, states[model.StateAvailable])
+				require.True(t, states[model.StateInactive])
+			},
+		},
+		{
+			name: "list with combined multi-value filters (AND between fields)",
+			filter: model.DeviceFilter{
+				Brands: []string{"Apple", "Samsung"},
+				States: []model.State{model.StateAvailable},
+				Page:   1,
+				Size:   10,
+				Sort:   []string{"-createdAt"},
+			},
+			setupMock: func(mock pgxmock.PgxPoolIface) {
+				rows := pgxmock.NewRows([]string{"id", "name", "brand", "state", "created_at", "updated_at", "total_count"}).
+					AddRow(model.NewDeviceID().String(), "iPhone", "Apple", "available", now, now, uint(2)).
+					AddRow(model.NewDeviceID().String(), "Galaxy", "Samsung", "available", now, now, uint(2))
+				mock.ExpectQuery(regexp.QuoteMeta(
+					`SELECT id, name, brand, state, created_at, updated_at, COUNT(*) OVER() as total_count FROM devices WHERE (brand IN ($1,$2) AND state IN ($3)) ORDER BY created_at DESC LIMIT 10 OFFSET 0`,
+				)).
+					WithArgs("Apple", "Samsung", "available").
+					WillReturnRows(rows)
+			},
+			expectError:   false,
+			expectedCount: 2,
+			validateList: func(t *testing.T, list *model.DeviceList) {
+				for _, d := range list.Devices {
+					require.Equal(t, model.StateAvailable, d.State)
+					require.True(t, d.Brand == "Apple" || d.Brand == "Samsung")
+				}
+			},
 		},
 		{
 			name: "list with ascending sort by name",
 			filter: model.DeviceFilter{
 				Page: 1,
 				Size: 10,
-				Sort: "name",
+				Sort: []string{"name"},
 			},
 			setupMock: func(mock pgxmock.PgxPoolIface) {
-				rows := pgxmock.NewRows([]string{"id", "name", "brand", "state", "created_at", "updated_at"}).
-					AddRow(model.NewDeviceID().String(), "Alpha", "Brand", "available", now, now).
-					AddRow(model.NewDeviceID().String(), "Bravo", "Brand", "available", now, now)
+				rows := pgxmock.NewRows([]string{"id", "name", "brand", "state", "created_at", "updated_at", "total_count"}).
+					AddRow(model.NewDeviceID().String(), "Alpha", "Brand", "available", now, now, uint(2)).
+					AddRow(model.NewDeviceID().String(), "Bravo", "Brand", "available", now, now, uint(2))
 				mock.ExpectQuery(regexp.QuoteMeta(
-					`SELECT id, name, brand, state, created_at, updated_at FROM devices ORDER BY name ASC LIMIT 10 OFFSET 0`,
+					`SELECT id, name, brand, state, created_at, updated_at, COUNT(*) OVER() as total_count FROM devices ORDER BY name ASC LIMIT 10 OFFSET 0`,
 				)).
 					WillReturnRows(rows)
-
-				countRows := pgxmock.NewRows([]string{"count"}).AddRow(uint(2))
-				mock.ExpectQuery(regexp.QuoteMeta(
-					`SELECT COUNT(*) FROM devices`,
-				)).
-					WillReturnRows(countRows)
 			},
 			expectError:   false,
 			expectedCount: 2,
@@ -399,22 +458,16 @@ func TestDevicesRepository_List(t *testing.T) {
 			filter: model.DeviceFilter{
 				Page: 1,
 				Size: 10,
-				Sort: "-name",
+				Sort: []string{"-name"},
 			},
 			setupMock: func(mock pgxmock.PgxPoolIface) {
-				rows := pgxmock.NewRows([]string{"id", "name", "brand", "state", "created_at", "updated_at"}).
-					AddRow(model.NewDeviceID().String(), "Zulu", "Brand", "available", now, now).
-					AddRow(model.NewDeviceID().String(), "Alpha", "Brand", "available", now, now)
+				rows := pgxmock.NewRows([]string{"id", "name", "brand", "state", "created_at", "updated_at", "total_count"}).
+					AddRow(model.NewDeviceID().String(), "Zulu", "Brand", "available", now, now, uint(2)).
+					AddRow(model.NewDeviceID().String(), "Alpha", "Brand", "available", now, now, uint(2))
 				mock.ExpectQuery(regexp.QuoteMeta(
-					`SELECT id, name, brand, state, created_at, updated_at FROM devices ORDER BY name DESC LIMIT 10 OFFSET 0`,
+					`SELECT id, name, brand, state, created_at, updated_at, COUNT(*) OVER() as total_count FROM devices ORDER BY name DESC LIMIT 10 OFFSET 0`,
 				)).
 					WillReturnRows(rows)
-
-				countRows := pgxmock.NewRows([]string{"count"}).AddRow(uint(2))
-				mock.ExpectQuery(regexp.QuoteMeta(
-					`SELECT COUNT(*) FROM devices`,
-				)).
-					WillReturnRows(countRows)
 			},
 			expectError:   false,
 			expectedCount: 2,
@@ -428,22 +481,16 @@ func TestDevicesRepository_List(t *testing.T) {
 			filter: model.DeviceFilter{
 				Page: 1,
 				Size: 10,
-				Sort: "-brand",
+				Sort: []string{"-brand"},
 			},
 			setupMock: func(mock pgxmock.PgxPoolIface) {
-				rows := pgxmock.NewRows([]string{"id", "name", "brand", "state", "created_at", "updated_at"}).
-					AddRow(model.NewDeviceID().String(), "Device", "Samsung", "available", now, now).
-					AddRow(model.NewDeviceID().String(), "Device", "Apple", "available", now, now)
+				rows := pgxmock.NewRows([]string{"id", "name", "brand", "state", "created_at", "updated_at", "total_count"}).
+					AddRow(model.NewDeviceID().String(), "Device", "Samsung", "available", now, now, uint(2)).
+					AddRow(model.NewDeviceID().String(), "Device", "Apple", "available", now, now, uint(2))
 				mock.ExpectQuery(regexp.QuoteMeta(
-					`SELECT id, name, brand, state, created_at, updated_at FROM devices ORDER BY brand DESC LIMIT 10 OFFSET 0`,
+					`SELECT id, name, brand, state, created_at, updated_at, COUNT(*) OVER() as total_count FROM devices ORDER BY brand DESC LIMIT 10 OFFSET 0`,
 				)).
 					WillReturnRows(rows)
-
-				countRows := pgxmock.NewRows([]string{"count"}).AddRow(uint(2))
-				mock.ExpectQuery(regexp.QuoteMeta(
-					`SELECT COUNT(*) FROM devices`,
-				)).
-					WillReturnRows(countRows)
 			},
 			expectError:   false,
 			expectedCount: 2,
@@ -457,22 +504,16 @@ func TestDevicesRepository_List(t *testing.T) {
 			filter: model.DeviceFilter{
 				Page: 1,
 				Size: 10,
-				Sort: "-state",
+				Sort: []string{"-state"},
 			},
 			setupMock: func(mock pgxmock.PgxPoolIface) {
-				rows := pgxmock.NewRows([]string{"id", "name", "brand", "state", "created_at", "updated_at"}).
-					AddRow(model.NewDeviceID().String(), "Device", "Brand", "inactive", now, now).
-					AddRow(model.NewDeviceID().String(), "Device", "Brand", "available", now, now)
+				rows := pgxmock.NewRows([]string{"id", "name", "brand", "state", "created_at", "updated_at", "total_count"}).
+					AddRow(model.NewDeviceID().String(), "Device", "Brand", "inactive", now, now, uint(2)).
+					AddRow(model.NewDeviceID().String(), "Device", "Brand", "available", now, now, uint(2))
 				mock.ExpectQuery(regexp.QuoteMeta(
-					`SELECT id, name, brand, state, created_at, updated_at FROM devices ORDER BY state DESC LIMIT 10 OFFSET 0`,
+					`SELECT id, name, brand, state, created_at, updated_at, COUNT(*) OVER() as total_count FROM devices ORDER BY state DESC LIMIT 10 OFFSET 0`,
 				)).
 					WillReturnRows(rows)
-
-				countRows := pgxmock.NewRows([]string{"count"}).AddRow(uint(2))
-				mock.ExpectQuery(regexp.QuoteMeta(
-					`SELECT COUNT(*) FROM devices`,
-				)).
-					WillReturnRows(countRows)
 			},
 			expectError:   false,
 			expectedCount: 2,
@@ -486,24 +527,18 @@ func TestDevicesRepository_List(t *testing.T) {
 			filter: model.DeviceFilter{
 				Page: 1,
 				Size: 10,
-				Sort: "updatedAt",
+				Sort: []string{"updatedAt"},
 			},
 			setupMock: func(mock pgxmock.PgxPoolIface) {
 				oldTime := now.Add(-2 * time.Hour)
 				newTime := now.Add(-1 * time.Hour)
-				rows := pgxmock.NewRows([]string{"id", "name", "brand", "state", "created_at", "updated_at"}).
-					AddRow(model.NewDeviceID().String(), "Old Device", "Brand", "available", now, oldTime).
-					AddRow(model.NewDeviceID().String(), "New Device", "Brand", "available", now, newTime)
+				rows := pgxmock.NewRows([]string{"id", "name", "brand", "state", "created_at", "updated_at", "total_count"}).
+					AddRow(model.NewDeviceID().String(), "Old Device", "Brand", "available", now, oldTime, uint(2)).
+					AddRow(model.NewDeviceID().String(), "New Device", "Brand", "available", now, newTime, uint(2))
 				mock.ExpectQuery(regexp.QuoteMeta(
-					`SELECT id, name, brand, state, created_at, updated_at FROM devices ORDER BY updated_at ASC LIMIT 10 OFFSET 0`,
+					`SELECT id, name, brand, state, created_at, updated_at, COUNT(*) OVER() as total_count FROM devices ORDER BY updated_at ASC LIMIT 10 OFFSET 0`,
 				)).
 					WillReturnRows(rows)
-
-				countRows := pgxmock.NewRows([]string{"count"}).AddRow(uint(2))
-				mock.ExpectQuery(regexp.QuoteMeta(
-					`SELECT COUNT(*) FROM devices`,
-				)).
-					WillReturnRows(countRows)
 			},
 			expectError:   false,
 			expectedCount: 2,
@@ -517,24 +552,18 @@ func TestDevicesRepository_List(t *testing.T) {
 			filter: model.DeviceFilter{
 				Page: 1,
 				Size: 10,
-				Sort: "-updatedAt",
+				Sort: []string{"-updatedAt"},
 			},
 			setupMock: func(mock pgxmock.PgxPoolIface) {
 				oldTime := now.Add(-2 * time.Hour)
 				newTime := now.Add(-1 * time.Hour)
-				rows := pgxmock.NewRows([]string{"id", "name", "brand", "state", "created_at", "updated_at"}).
-					AddRow(model.NewDeviceID().String(), "New Device", "Brand", "available", now, newTime).
-					AddRow(model.NewDeviceID().String(), "Old Device", "Brand", "available", now, oldTime)
+				rows := pgxmock.NewRows([]string{"id", "name", "brand", "state", "created_at", "updated_at", "total_count"}).
+					AddRow(model.NewDeviceID().String(), "New Device", "Brand", "available", now, newTime, uint(2)).
+					AddRow(model.NewDeviceID().String(), "Old Device", "Brand", "available", now, oldTime, uint(2))
 				mock.ExpectQuery(regexp.QuoteMeta(
-					`SELECT id, name, brand, state, created_at, updated_at FROM devices ORDER BY updated_at DESC LIMIT 10 OFFSET 0`,
+					`SELECT id, name, brand, state, created_at, updated_at, COUNT(*) OVER() as total_count FROM devices ORDER BY updated_at DESC LIMIT 10 OFFSET 0`,
 				)).
 					WillReturnRows(rows)
-
-				countRows := pgxmock.NewRows([]string{"count"}).AddRow(uint(2))
-				mock.ExpectQuery(regexp.QuoteMeta(
-					`SELECT COUNT(*) FROM devices`,
-				)).
-					WillReturnRows(countRows)
 			},
 			expectError:   false,
 			expectedCount: 2,
@@ -548,24 +577,18 @@ func TestDevicesRepository_List(t *testing.T) {
 			filter: model.DeviceFilter{
 				Page: 1,
 				Size: 10,
-				Sort: "invalidField",
+				Sort: []string{"invalidField"},
 			},
 			setupMock: func(mock pgxmock.PgxPoolIface) {
 				oldCreated := now.Add(-2 * time.Hour)
 				newCreated := now.Add(-1 * time.Hour)
-				rows := pgxmock.NewRows([]string{"id", "name", "brand", "state", "created_at", "updated_at"}).
-					AddRow(model.NewDeviceID().String(), "First", "Brand", "available", oldCreated, now).
-					AddRow(model.NewDeviceID().String(), "Second", "Brand", "available", newCreated, now)
+				rows := pgxmock.NewRows([]string{"id", "name", "brand", "state", "created_at", "updated_at", "total_count"}).
+					AddRow(model.NewDeviceID().String(), "First", "Brand", "available", oldCreated, now, uint(2)).
+					AddRow(model.NewDeviceID().String(), "Second", "Brand", "available", newCreated, now, uint(2))
 				mock.ExpectQuery(regexp.QuoteMeta(
-					`SELECT id, name, brand, state, created_at, updated_at FROM devices ORDER BY created_at ASC LIMIT 10 OFFSET 0`,
+					`SELECT id, name, brand, state, created_at, updated_at, COUNT(*) OVER() as total_count FROM devices ORDER BY created_at ASC LIMIT 10 OFFSET 0`,
 				)).
 					WillReturnRows(rows)
-
-				countRows := pgxmock.NewRows([]string{"count"}).AddRow(uint(2))
-				mock.ExpectQuery(regexp.QuoteMeta(
-					`SELECT COUNT(*) FROM devices`,
-				)).
-					WillReturnRows(countRows)
 			},
 			expectError:   false,
 			expectedCount: 2,
@@ -579,24 +602,18 @@ func TestDevicesRepository_List(t *testing.T) {
 			filter: model.DeviceFilter{
 				Page: 1,
 				Size: 10,
-				Sort: "-invalidField",
+				Sort: []string{"-invalidField"},
 			},
 			setupMock: func(mock pgxmock.PgxPoolIface) {
 				oldCreated := now.Add(-2 * time.Hour)
 				newCreated := now.Add(-1 * time.Hour)
-				rows := pgxmock.NewRows([]string{"id", "name", "brand", "state", "created_at", "updated_at"}).
-					AddRow(model.NewDeviceID().String(), "Second", "Brand", "available", newCreated, now).
-					AddRow(model.NewDeviceID().String(), "First", "Brand", "available", oldCreated, now)
+				rows := pgxmock.NewRows([]string{"id", "name", "brand", "state", "created_at", "updated_at", "total_count"}).
+					AddRow(model.NewDeviceID().String(), "Second", "Brand", "available", newCreated, now, uint(2)).
+					AddRow(model.NewDeviceID().String(), "First", "Brand", "available", oldCreated, now, uint(2))
 				mock.ExpectQuery(regexp.QuoteMeta(
-					`SELECT id, name, brand, state, created_at, updated_at FROM devices ORDER BY created_at DESC LIMIT 10 OFFSET 0`,
+					`SELECT id, name, brand, state, created_at, updated_at, COUNT(*) OVER() as total_count FROM devices ORDER BY created_at DESC LIMIT 10 OFFSET 0`,
 				)).
 					WillReturnRows(rows)
-
-				countRows := pgxmock.NewRows([]string{"count"}).AddRow(uint(2))
-				mock.ExpectQuery(regexp.QuoteMeta(
-					`SELECT COUNT(*) FROM devices`,
-				)).
-					WillReturnRows(countRows)
 			},
 			expectError:   false,
 			expectedCount: 2,
@@ -606,27 +623,21 @@ func TestDevicesRepository_List(t *testing.T) {
 			},
 		},
 		{
-			name: "list with empty string brand filter is ignored",
+			name: "list with empty brands slice is ignored",
 			filter: model.DeviceFilter{
-				Brand: ptrString(""),
-				Page:  1,
-				Size:  10,
-				Sort:  "-createdAt",
+				Brands: []string{},
+				Page:   1,
+				Size:   10,
+				Sort:   []string{"-createdAt"},
 			},
 			setupMock: func(mock pgxmock.PgxPoolIface) {
-				rows := pgxmock.NewRows([]string{"id", "name", "brand", "state", "created_at", "updated_at"}).
-					AddRow(model.NewDeviceID().String(), "Device 1", "Apple", "available", now, now).
-					AddRow(model.NewDeviceID().String(), "Device 2", "Samsung", "available", now, now)
+				rows := pgxmock.NewRows([]string{"id", "name", "brand", "state", "created_at", "updated_at", "total_count"}).
+					AddRow(model.NewDeviceID().String(), "Device 1", "Apple", "available", now, now, uint(2)).
+					AddRow(model.NewDeviceID().String(), "Device 2", "Samsung", "available", now, now, uint(2))
 				mock.ExpectQuery(regexp.QuoteMeta(
-					`SELECT id, name, brand, state, created_at, updated_at FROM devices ORDER BY created_at DESC LIMIT 10 OFFSET 0`,
+					`SELECT id, name, brand, state, created_at, updated_at, COUNT(*) OVER() as total_count FROM devices ORDER BY created_at DESC LIMIT 10 OFFSET 0`,
 				)).
 					WillReturnRows(rows)
-
-				countRows := pgxmock.NewRows([]string{"count"}).AddRow(uint(2))
-				mock.ExpectQuery(regexp.QuoteMeta(
-					`SELECT COUNT(*) FROM devices`,
-				)).
-					WillReturnRows(countRows)
 			},
 			expectError:   false,
 			expectedCount: 2,
@@ -640,21 +651,15 @@ func TestDevicesRepository_List(t *testing.T) {
 			filter: model.DeviceFilter{
 				Page: 2,
 				Size: 10,
-				Sort: "-createdAt",
+				Sort: []string{"-createdAt"},
 			},
 			setupMock: func(mock pgxmock.PgxPoolIface) {
-				rows := pgxmock.NewRows([]string{"id", "name", "brand", "state", "created_at", "updated_at"}).
-					AddRow(model.NewDeviceID().String(), "Device 11", "Brand", "available", now, now)
+				rows := pgxmock.NewRows([]string{"id", "name", "brand", "state", "created_at", "updated_at", "total_count"}).
+					AddRow(model.NewDeviceID().String(), "Device 11", "Brand", "available", now, now, uint(25))
 				mock.ExpectQuery(regexp.QuoteMeta(
-					`SELECT id, name, brand, state, created_at, updated_at FROM devices ORDER BY created_at DESC LIMIT 10 OFFSET 10`,
+					`SELECT id, name, brand, state, created_at, updated_at, COUNT(*) OVER() as total_count FROM devices ORDER BY created_at DESC LIMIT 10 OFFSET 10`,
 				)).
 					WillReturnRows(rows)
-
-				countRows := pgxmock.NewRows([]string{"count"}).AddRow(uint(25))
-				mock.ExpectQuery(regexp.QuoteMeta(
-					`SELECT COUNT(*) FROM devices`,
-				)).
-					WillReturnRows(countRows)
 			},
 			expectError:   false,
 			expectedCount: 1,
@@ -669,25 +674,18 @@ func TestDevicesRepository_List(t *testing.T) {
 		{
 			name: "list empty result",
 			filter: model.DeviceFilter{
-				Brand: ptrString("NonExistent"),
-				Page:  1,
-				Size:  10,
-				Sort:  "-createdAt",
+				Brands: []string{"NonExistent"},
+				Page:   1,
+				Size:   10,
+				Sort:   []string{"-createdAt"},
 			},
 			setupMock: func(mock pgxmock.PgxPoolIface) {
-				rows := pgxmock.NewRows([]string{"id", "name", "brand", "state", "created_at", "updated_at"})
+				rows := pgxmock.NewRows([]string{"id", "name", "brand", "state", "created_at", "updated_at", "total_count"})
 				mock.ExpectQuery(regexp.QuoteMeta(
-					`SELECT id, name, brand, state, created_at, updated_at FROM devices WHERE brand = $1 ORDER BY created_at DESC LIMIT 10 OFFSET 0`,
+					`SELECT id, name, brand, state, created_at, updated_at, COUNT(*) OVER() as total_count FROM devices WHERE brand IN ($1) ORDER BY created_at DESC LIMIT 10 OFFSET 0`,
 				)).
 					WithArgs("NonExistent").
 					WillReturnRows(rows)
-
-				countRows := pgxmock.NewRows([]string{"count"}).AddRow(uint(0))
-				mock.ExpectQuery(regexp.QuoteMeta(
-					`SELECT COUNT(*) FROM devices WHERE brand = $1`,
-				)).
-					WithArgs("NonExistent").
-					WillReturnRows(countRows)
 			},
 			expectError:   false,
 			expectedCount: 0,
@@ -703,25 +701,7 @@ func TestDevicesRepository_List(t *testing.T) {
 			filter: model.DefaultDeviceFilter(),
 			setupMock: func(mock pgxmock.PgxPoolIface) {
 				mock.ExpectQuery(regexp.QuoteMeta(
-					`SELECT id, name, brand, state, created_at, updated_at FROM devices ORDER BY created_at DESC LIMIT 20 OFFSET 0`,
-				)).
-					WillReturnError(errors.New("connection error"))
-			},
-			expectError: true,
-		},
-		{
-			name:   "count query error returns error",
-			filter: model.DefaultDeviceFilter(),
-			setupMock: func(mock pgxmock.PgxPoolIface) {
-				rows := pgxmock.NewRows([]string{"id", "name", "brand", "state", "created_at", "updated_at"}).
-					AddRow(model.NewDeviceID().String(), "Device", "Brand", "available", now, now)
-				mock.ExpectQuery(regexp.QuoteMeta(
-					`SELECT id, name, brand, state, created_at, updated_at FROM devices ORDER BY created_at DESC LIMIT 20 OFFSET 0`,
-				)).
-					WillReturnRows(rows)
-
-				mock.ExpectQuery(regexp.QuoteMeta(
-					`SELECT COUNT(*) FROM devices`,
+					`SELECT id, name, brand, state, created_at, updated_at, COUNT(*) OVER() as total_count FROM devices ORDER BY created_at DESC LIMIT 20 OFFSET 0`,
 				)).
 					WillReturnError(errors.New("connection error"))
 			},
@@ -911,198 +891,6 @@ func TestDevicesRepository_Delete(t *testing.T) {
 	}
 }
 
-func TestDevicesRepository_Exists(t *testing.T) {
-	t.Parallel()
-
-	testID := model.NewDeviceID()
-
-	cases := []struct {
-		name           string
-		deviceID       model.DeviceID
-		setupMock      func(mock pgxmock.PgxPoolIface)
-		expectError    bool
-		expectedErr    error
-		expectedExists bool
-	}{
-		{
-			name:     "device exists returns true",
-			deviceID: testID,
-			setupMock: func(mock pgxmock.PgxPoolIface) {
-				rows := pgxmock.NewRows([]string{"exists"}).AddRow(true)
-				mock.ExpectQuery(`SELECT EXISTS\( SELECT 1 FROM devices WHERE id = \$1 \)`).
-					WithArgs(testID.String()).
-					WillReturnRows(rows)
-			},
-			expectError:    false,
-			expectedExists: true,
-		},
-		{
-			name:     "device does not exist returns false",
-			deviceID: testID,
-			setupMock: func(mock pgxmock.PgxPoolIface) {
-				rows := pgxmock.NewRows([]string{"exists"}).AddRow(false)
-				mock.ExpectQuery(`SELECT EXISTS\( SELECT 1 FROM devices WHERE id = \$1 \)`).
-					WithArgs(testID.String()).
-					WillReturnRows(rows)
-			},
-			expectError:    false,
-			expectedExists: false,
-		},
-		{
-			name:     "database error returns wrapped ErrDatabaseQuery",
-			deviceID: testID,
-			setupMock: func(mock pgxmock.PgxPoolIface) {
-				mock.ExpectQuery(`SELECT EXISTS\( SELECT 1 FROM devices WHERE id = \$1 \)`).
-					WithArgs(testID.String()).
-					WillReturnError(errors.New("connection error"))
-			},
-			expectError: true,
-			expectedErr: model.ErrDatabaseQuery,
-		},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			runRepoTest(t, tc.setupMock, func(t *testing.T, repo *repos.DevicesRepository) {
-				exists, err := repo.Exists(t.Context(), tc.deviceID)
-
-				if tc.expectError {
-					require.Error(t, err)
-					if tc.expectedErr != nil {
-						require.ErrorIs(t, err, tc.expectedErr)
-					}
-					require.False(t, exists)
-
-					return
-				}
-				require.NoError(t, err)
-				require.Equal(t, tc.expectedExists, exists)
-			})
-		})
-	}
-}
-
-func TestDevicesRepository_Count(t *testing.T) {
-	t.Parallel()
-
-	cases := []struct {
-		name          string
-		filter        model.DeviceFilter
-		setupMock     func(mock pgxmock.PgxPoolIface)
-		expectError   bool
-		expectedErr   error
-		expectedCount uint
-	}{
-		{
-			name:   "count all devices",
-			filter: model.DeviceFilter{},
-			setupMock: func(mock pgxmock.PgxPoolIface) {
-				rows := pgxmock.NewRows([]string{"count"}).AddRow(uint(10))
-				mock.ExpectQuery(regexp.QuoteMeta(
-					`SELECT COUNT(*) FROM devices`,
-				)).
-					WillReturnRows(rows)
-			},
-			expectError:   false,
-			expectedCount: 10,
-		},
-		{
-			name: "count with brand filter",
-			filter: model.DeviceFilter{
-				Brand: ptrString("Apple"),
-			},
-			setupMock: func(mock pgxmock.PgxPoolIface) {
-				rows := pgxmock.NewRows([]string{"count"}).AddRow(uint(5))
-				mock.ExpectQuery(regexp.QuoteMeta(
-					`SELECT COUNT(*) FROM devices WHERE brand = $1`,
-				)).
-					WithArgs("Apple").
-					WillReturnRows(rows)
-			},
-			expectError:   false,
-			expectedCount: 5,
-		},
-		{
-			name: "count with state filter",
-			filter: model.DeviceFilter{
-				State: ptrState(model.StateInUse),
-			},
-			setupMock: func(mock pgxmock.PgxPoolIface) {
-				rows := pgxmock.NewRows([]string{"count"}).AddRow(uint(3))
-				mock.ExpectQuery(regexp.QuoteMeta(
-					`SELECT COUNT(*) FROM devices WHERE state = $1`,
-				)).
-					WithArgs("in-use").
-					WillReturnRows(rows)
-			},
-			expectError:   false,
-			expectedCount: 3,
-		},
-		{
-			name: "count with combined filters",
-			filter: model.DeviceFilter{
-				Brand: ptrString("Apple"),
-				State: ptrState(model.StateAvailable),
-			},
-			setupMock: func(mock pgxmock.PgxPoolIface) {
-				rows := pgxmock.NewRows([]string{"count"}).AddRow(uint(2))
-				mock.ExpectQuery(regexp.QuoteMeta(
-					`SELECT COUNT(*) FROM devices WHERE brand = $1 AND state = $2`,
-				)).
-					WithArgs("Apple", "available").
-					WillReturnRows(rows)
-			},
-			expectError:   false,
-			expectedCount: 2,
-		},
-		{
-			name:   "count empty result",
-			filter: model.DeviceFilter{},
-			setupMock: func(mock pgxmock.PgxPoolIface) {
-				rows := pgxmock.NewRows([]string{"count"}).AddRow(uint(0))
-				mock.ExpectQuery(regexp.QuoteMeta(
-					`SELECT COUNT(*) FROM devices`,
-				)).
-					WillReturnRows(rows)
-			},
-			expectError:   false,
-			expectedCount: 0,
-		},
-		{
-			name:   "database error returns wrapped ErrDatabaseQuery",
-			filter: model.DeviceFilter{},
-			setupMock: func(mock pgxmock.PgxPoolIface) {
-				mock.ExpectQuery(regexp.QuoteMeta(
-					`SELECT COUNT(*) FROM devices`,
-				)).
-					WillReturnError(errors.New("connection error"))
-			},
-			expectError: true,
-			expectedErr: model.ErrDatabaseQuery,
-		},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			runRepoTest(t, tc.setupMock, func(t *testing.T, repo *repos.DevicesRepository) {
-				count, err := repo.Count(t.Context(), tc.filter)
-
-				if tc.expectError {
-					require.Error(t, err)
-					if tc.expectedErr != nil {
-						require.ErrorIs(t, err, tc.expectedErr)
-					}
-					require.Equal(t, uint(0), count)
-
-					return
-				}
-				require.NoError(t, err)
-				require.Equal(t, tc.expectedCount, count)
-			})
-		})
-	}
-}
-
 func TestDevicesRepository_Ping(t *testing.T) {
 	t.Parallel()
 
@@ -1138,6 +926,55 @@ func TestDevicesRepository_Ping(t *testing.T) {
 					return
 				}
 				require.NoError(t, err)
+			})
+		})
+	}
+}
+
+func TestDevicesRepository_List_LogsWarningForInvalidSortField(t *testing.T) {
+	t.Parallel()
+
+	now := time.Now().UTC()
+
+	cases := []struct {
+		name          string
+		sortField     string
+		expectedField string
+	}{
+		{
+			name:          "invalid ascending sort field logs warning",
+			sortField:     "invalidField",
+			expectedField: "invalidField",
+		},
+		{
+			name:          "invalid descending sort field logs warning",
+			sortField:     "-unknownColumn",
+			expectedField: "unknownColumn",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			runRepoTestWithLogger(t, func(mock pgxmock.PgxPoolIface) {
+				rows := pgxmock.NewRows([]string{"id", "name", "brand", "state", "created_at", "updated_at", "total_count"}).
+					AddRow(model.NewDeviceID().String(), "Device", "Brand", "available", now, now, uint(1))
+				mock.ExpectQuery(`SELECT id, name, brand, state, created_at, updated_at, COUNT\(\*\) OVER\(\) as total_count FROM devices ORDER BY created_at`).
+					WillReturnRows(rows)
+			}, func(t *testing.T, repo *repos.DevicesRepository, logBuffer *bytes.Buffer) {
+				filter := model.DeviceFilter{
+					Page: 1,
+					Size: 10,
+					Sort: []string{tc.sortField},
+				}
+
+				_, err := repo.List(t.Context(), filter)
+				require.NoError(t, err)
+
+				logOutput := logBuffer.String()
+				require.Contains(t, logOutput, "unknown sort field requested")
+				require.Contains(t, logOutput, tc.expectedField)
+				require.Contains(t, logOutput, "created_at")
+				require.Contains(t, logOutput, "warn")
 			})
 		})
 	}

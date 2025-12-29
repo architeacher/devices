@@ -25,7 +25,6 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// DeviceState represents the state of a device.
 type DeviceState int32
 
 const (
@@ -130,7 +129,6 @@ func (HealthCheckResponse_ServingStatus) EnumDescriptor() ([]byte, []int) {
 	return file_device_v1_device_proto_rawDescGZIP(), []int{14, 0}
 }
 
-// Device represents a device entity.
 type Device struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -215,7 +213,6 @@ func (x *Device) GetUpdatedAt() *timestamppb.Timestamp {
 	return nil
 }
 
-// CreateDeviceRequest is the request for creating a device.
 type CreateDeviceRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
@@ -276,7 +273,6 @@ func (x *CreateDeviceRequest) GetState() DeviceState {
 	return DeviceState_DEVICE_STATE_UNSPECIFIED
 }
 
-// CreateDeviceResponse is the response for creating a device.
 type CreateDeviceResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Device        *Device                `protobuf:"bytes,1,opt,name=device,proto3" json:"device,omitempty"`
@@ -321,7 +317,6 @@ func (x *CreateDeviceResponse) GetDevice() *Device {
 	return nil
 }
 
-// GetDeviceRequest is the request for getting a device.
 type GetDeviceRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -366,7 +361,6 @@ func (x *GetDeviceRequest) GetId() string {
 	return ""
 }
 
-// GetDeviceResponse is the response for getting a device.
 type GetDeviceResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Device        *Device                `protobuf:"bytes,1,opt,name=device,proto3" json:"device,omitempty"`
@@ -411,19 +405,18 @@ func (x *GetDeviceResponse) GetDevice() *Device {
 	return nil
 }
 
-// ListDevicesRequest is the request for listing devices.
 type ListDevicesRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// Optional filter by brand.
-	Brand *string `protobuf:"bytes,1,opt,name=brand,proto3,oneof" json:"brand,omitempty"`
-	// Optional filter by state.
-	State *DeviceState `protobuf:"varint,2,opt,name=state,proto3,enum=device.v1.DeviceState,oneof" json:"state,omitempty"`
+	// Optional filter by brand(s). Multiple values use OR logic.
+	Brands []string `protobuf:"bytes,1,rep,name=brands,proto3" json:"brands,omitempty"`
+	// Optional filter by state(s). Multiple values use OR logic.
+	States []DeviceState `protobuf:"varint,2,rep,packed,name=states,proto3,enum=device.v1.DeviceState" json:"states,omitempty"`
 	// Page number (1-based).
 	Page uint32 `protobuf:"varint,3,opt,name=page,proto3" json:"page,omitempty"`
 	// Page size.
 	Size uint32 `protobuf:"varint,4,opt,name=size,proto3" json:"size,omitempty"`
-	// Sort field (e.g., "createdAt", "-createdAt" for descending).
-	Sort          string `protobuf:"bytes,5,opt,name=sort,proto3" json:"sort,omitempty"`
+	// Sort fields (e.g., "-createdAt", "name"). Prefix with `-` for descending.
+	Sort          []string `protobuf:"bytes,5,rep,name=sort,proto3" json:"sort,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -458,18 +451,18 @@ func (*ListDevicesRequest) Descriptor() ([]byte, []int) {
 	return file_device_v1_device_proto_rawDescGZIP(), []int{5}
 }
 
-func (x *ListDevicesRequest) GetBrand() string {
-	if x != nil && x.Brand != nil {
-		return *x.Brand
+func (x *ListDevicesRequest) GetBrands() []string {
+	if x != nil {
+		return x.Brands
 	}
-	return ""
+	return nil
 }
 
-func (x *ListDevicesRequest) GetState() DeviceState {
-	if x != nil && x.State != nil {
-		return *x.State
+func (x *ListDevicesRequest) GetStates() []DeviceState {
+	if x != nil {
+		return x.States
 	}
-	return DeviceState_DEVICE_STATE_UNSPECIFIED
+	return nil
 }
 
 func (x *ListDevicesRequest) GetPage() uint32 {
@@ -486,14 +479,13 @@ func (x *ListDevicesRequest) GetSize() uint32 {
 	return 0
 }
 
-func (x *ListDevicesRequest) GetSort() string {
+func (x *ListDevicesRequest) GetSort() []string {
 	if x != nil {
 		return x.Sort
 	}
-	return ""
+	return nil
 }
 
-// ListDevicesResponse is the response for listing devices.
 type ListDevicesResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Devices       []*Device              `protobuf:"bytes,1,rep,name=devices,proto3" json:"devices,omitempty"`
@@ -546,7 +538,6 @@ func (x *ListDevicesResponse) GetPagination() *Pagination {
 	return nil
 }
 
-// Pagination contains pagination metadata.
 type Pagination struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Page          uint32                 `protobuf:"varint,1,opt,name=page,proto3" json:"page,omitempty"`
@@ -631,7 +622,6 @@ func (x *Pagination) GetHasPrevious() bool {
 	return false
 }
 
-// UpdateDeviceRequest is the request for fully updating a device.
 type UpdateDeviceRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -700,7 +690,6 @@ func (x *UpdateDeviceRequest) GetState() DeviceState {
 	return DeviceState_DEVICE_STATE_UNSPECIFIED
 }
 
-// UpdateDeviceResponse is the response for updating a device.
 type UpdateDeviceResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Device        *Device                `protobuf:"bytes,1,opt,name=device,proto3" json:"device,omitempty"`
@@ -745,7 +734,6 @@ func (x *UpdateDeviceResponse) GetDevice() *Device {
 	return nil
 }
 
-// PatchDeviceRequest is the request for partially updating a device.
 type PatchDeviceRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -822,7 +810,6 @@ func (x *PatchDeviceRequest) GetUpdateMask() *fieldmaskpb.FieldMask {
 	return nil
 }
 
-// PatchDeviceResponse is the response for patching a device.
 type PatchDeviceResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Device        *Device                `protobuf:"bytes,1,opt,name=device,proto3" json:"device,omitempty"`
@@ -867,7 +854,6 @@ func (x *PatchDeviceResponse) GetDevice() *Device {
 	return nil
 }
 
-// DeleteDeviceRequest is the request for deleting a device.
 type DeleteDeviceRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -912,7 +898,6 @@ func (x *DeleteDeviceRequest) GetId() string {
 	return ""
 }
 
-// HealthCheckRequest is the request for health check.
 type HealthCheckRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Service       string                 `protobuf:"bytes,1,opt,name=service,proto3" json:"service,omitempty"`
@@ -957,7 +942,6 @@ func (x *HealthCheckRequest) GetService() string {
 	return ""
 }
 
-// HealthCheckResponse is the response for health check.
 type HealthCheckResponse struct {
 	state         protoimpl.MessageState            `protogen:"open.v1"`
 	Status        HealthCheckResponse_ServingStatus `protobuf:"varint,1,opt,name=status,proto3,enum=device.v1.HealthCheckResponse_ServingStatus" json:"status,omitempty"`
@@ -1028,15 +1012,16 @@ const file_device_v1_device_proto_rawDesc = "" +
 	"\x10GetDeviceRequest\x12\x18\n" +
 	"\x02id\x18\x01 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\x02id\">\n" +
 	"\x11GetDeviceResponse\x12)\n" +
-	"\x06device\x18\x01 \x01(\v2\x11.device.v1.DeviceR\x06device\"\xe3\x01\n" +
-	"\x12ListDevicesRequest\x12#\n" +
-	"\x05brand\x18\x01 \x01(\tB\b\xbaH\x05r\x03\x18\xff\x01H\x00R\x05brand\x88\x01\x01\x12;\n" +
-	"\x05state\x18\x02 \x01(\x0e2\x16.device.v1.DeviceStateB\b\xbaH\x05\x82\x01\x02\x10\x01H\x01R\x05state\x88\x01\x01\x12\x1b\n" +
+	"\x06device\x18\x01 \x01(\v2\x11.device.v1.DeviceR\x06device\"\xe1\x01\n" +
+	"\x12ListDevicesRequest\x12(\n" +
+	"\x06brands\x18\x01 \x03(\tB\x10\xbaH\r\x92\x01\n" +
+	"\x10\n" +
+	"\"\x06r\x04\x10\x01\x18dR\x06brands\x12?\n" +
+	"\x06states\x18\x02 \x03(\x0e2\x16.device.v1.DeviceStateB\x0f\xbaH\f\x92\x01\t\x10\x03\"\x05\x82\x01\x02\x10\x01R\x06states\x12\x1b\n" +
 	"\x04page\x18\x03 \x01(\rB\a\xbaH\x04*\x02(\x01R\x04page\x12\x1d\n" +
-	"\x04size\x18\x04 \x01(\rB\t\xbaH\x06*\x04\x18d(\x01R\x04size\x12\x1b\n" +
-	"\x04sort\x18\x05 \x01(\tB\a\xbaH\x04r\x02\x182R\x04sortB\b\n" +
-	"\x06_brandB\b\n" +
-	"\x06_state\"y\n" +
+	"\x04size\x18\x04 \x01(\rB\t\xbaH\x06*\x04\x18d(\x01R\x04size\x12$\n" +
+	"\x04sort\x18\x05 \x03(\tB\x10\xbaH\r\x92\x01\n" +
+	"\x10\x05\"\x06r\x04\x10\x01\x182R\x04sort\"y\n" +
 	"\x13ListDevicesResponse\x12+\n" +
 	"\adevices\x18\x01 \x03(\v2\x11.device.v1.DeviceR\adevices\x125\n" +
 	"\n" +
@@ -1149,7 +1134,7 @@ var file_device_v1_device_proto_depIdxs = []int32{
 	0,  // 3: device.v1.CreateDeviceRequest.state:type_name -> device.v1.DeviceState
 	2,  // 4: device.v1.CreateDeviceResponse.device:type_name -> device.v1.Device
 	2,  // 5: device.v1.GetDeviceResponse.device:type_name -> device.v1.Device
-	0,  // 6: device.v1.ListDevicesRequest.state:type_name -> device.v1.DeviceState
+	0,  // 6: device.v1.ListDevicesRequest.states:type_name -> device.v1.DeviceState
 	2,  // 7: device.v1.ListDevicesResponse.devices:type_name -> device.v1.Device
 	9,  // 8: device.v1.ListDevicesResponse.pagination:type_name -> device.v1.Pagination
 	0,  // 9: device.v1.UpdateDeviceRequest.state:type_name -> device.v1.DeviceState
@@ -1186,7 +1171,6 @@ func file_device_v1_device_proto_init() {
 	if File_device_v1_device_proto != nil {
 		return
 	}
-	file_device_v1_device_proto_msgTypes[5].OneofWrappers = []any{}
 	file_device_v1_device_proto_msgTypes[10].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{

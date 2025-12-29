@@ -75,18 +75,18 @@ func (d *Device) Update(name, brand string, state State) error {
 }
 
 type DeviceFilter struct {
-	Brand *string
-	State *State
-	Page  uint
-	Size  uint
-	Sort  string
+	Brands []string
+	States []State
+	Page   uint
+	Size   uint
+	Sort   []string
 }
 
 func DefaultDeviceFilter() DeviceFilter {
 	return DeviceFilter{
 		Page: 1,
 		Size: 20,
-		Sort: "-createdAt",
+		Sort: []string{"-createdAt"},
 	}
 }
 

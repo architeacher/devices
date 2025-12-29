@@ -217,9 +217,9 @@ func (s *DeviceTestSuite) TestDefaultDeviceFilter() {
 
 	s.Require().Equal(uint(1), filter.Page)
 	s.Require().Equal(uint(20), filter.Size)
-	s.Require().Equal("-createdAt", filter.Sort)
-	s.Require().Nil(filter.Brand)
-	s.Require().Nil(filter.State)
+	s.Require().Equal([]string{"-createdAt"}, filter.Sort)
+	s.Require().Empty(filter.Brands)
+	s.Require().Empty(filter.States)
 }
 
 type StateTestSuite struct {

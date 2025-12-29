@@ -100,8 +100,8 @@ type (
 
 	Backoff struct {
 		BaseDelay  time.Duration `envconfig:"BACKOFF_BASE_DELAY" default:"1s" json:"base_delay"`
-		Multiplier float64       `envconfig:"BACKOFF_MULTIPLIER" default:"1.6" json:"multiplier"`
-		Jitter     float64       `envconfig:"BACKOFF_JITTER" default:"0.2" json:"jitter"`
+		Multiplier float64       `envconfig:"BACKOFF_MULTIPLIER" default:"1.5" json:"multiplier"`
+		Jitter     float64       `envconfig:"BACKOFF_JITTER" default:"0.3" json:"jitter"`
 		MaxDelay   time.Duration `envconfig:"BACKOFF_MAX_DELAY" default:"10s" json:"max_delay"`
 	}
 

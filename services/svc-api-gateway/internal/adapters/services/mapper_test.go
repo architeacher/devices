@@ -290,57 +290,53 @@ func TestToProtoListRequest(t *testing.T) {
 			input: model.DeviceFilter{
 				Page: 1,
 				Size: 20,
-				Sort: "-createdAt",
+				Sort: []string{"-createdAt"},
 			},
 			validate: func(t *testing.T, req *devicev1.ListDevicesRequest) {
 				require.Equal(t, uint32(1), req.GetPage())
 				require.Equal(t, uint32(20), req.GetSize())
-				require.Equal(t, "-createdAt", req.GetSort())
-				require.Nil(t, req.Brand)
-				require.Nil(t, req.State)
+				require.Equal(t, []string{"-createdAt"}, req.GetSort())
+				require.Empty(t, req.GetBrands())
+				require.Empty(t, req.GetStates())
 			},
 		},
 		{
 			name: "filter with brand",
 			input: model.DeviceFilter{
-				Brand: &brand,
-				Page:  1,
-				Size:  10,
+				Brands: []string{brand},
+				Page:   1,
+				Size:   10,
 			},
 			validate: func(t *testing.T, req *devicev1.ListDevicesRequest) {
-				require.NotNil(t, req.Brand)
-				require.Equal(t, "Apple", *req.Brand)
+				require.Equal(t, []string{"Apple"}, req.GetBrands())
 			},
 		},
 		{
 			name: "filter with state",
 			input: model.DeviceFilter{
-				State: &state,
-				Page:  1,
-				Size:  10,
+				States: []model.State{state},
+				Page:   1,
+				Size:   10,
 			},
 			validate: func(t *testing.T, req *devicev1.ListDevicesRequest) {
-				require.NotNil(t, req.State)
-				require.Equal(t, devicev1.DeviceState_DEVICE_STATE_AVAILABLE, *req.State)
+				require.Equal(t, []devicev1.DeviceState{devicev1.DeviceState_DEVICE_STATE_AVAILABLE}, req.GetStates())
 			},
 		},
 		{
 			name: "filter with all options",
 			input: model.DeviceFilter{
-				Brand: &brand,
-				State: &state,
-				Page:  2,
-				Size:  50,
-				Sort:  "name",
+				Brands: []string{brand},
+				States: []model.State{state},
+				Page:   2,
+				Size:   50,
+				Sort:   []string{"name"},
 			},
 			validate: func(t *testing.T, req *devicev1.ListDevicesRequest) {
-				require.NotNil(t, req.Brand)
-				require.Equal(t, "Apple", *req.Brand)
-				require.NotNil(t, req.State)
-				require.Equal(t, devicev1.DeviceState_DEVICE_STATE_AVAILABLE, *req.State)
+				require.Equal(t, []string{"Apple"}, req.GetBrands())
+				require.Equal(t, []devicev1.DeviceState{devicev1.DeviceState_DEVICE_STATE_AVAILABLE}, req.GetStates())
 				require.Equal(t, uint32(2), req.GetPage())
 				require.Equal(t, uint32(50), req.GetSize())
-				require.Equal(t, "name", req.GetSort())
+				require.Equal(t, []string{"name"}, req.GetSort())
 			},
 		},
 	}

@@ -22,10 +22,4 @@ type DeviceRepository interface {
 
 	// Delete removes a device from the database by its ID.
 	Delete(ctx context.Context, id model.DeviceID) error
-
-	// Exists checks if a device with the given ID exists.
-	Exists(ctx context.Context, id model.DeviceID) (bool, error)
-
-	// Count returns the total number of devices matching the filter.
-	Count(ctx context.Context, filter model.DeviceFilter) (uint, error)
 }

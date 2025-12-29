@@ -271,7 +271,7 @@ paths:
               $ref: "#/components/headers/ETagHeader"
             Cache-Control:
               $ref: "#/components/headers/CacheControlHeader"
-            X-Total-Count:
+            Total-Count:
               description: Total number of items matching the query
               schema:
                 type: integer
@@ -907,20 +907,34 @@ components:
       name: brand
       in: query
       required: false
-      description: Filter devices by brand (case-insensitive, partial match)
+      description: |
+        Filter by brand(s). Comma-separated for OR matching.
+        Example: ?brand=Apple,Samsung
       schema:
-        type: string
-        minLength: 1
-        maxLength: 100
+        type: array
+        items:
+          type: string
+          minLength: 1
+          maxLength: 100
+        maxItems: 10
+      style: form
+      explode: false
       example: "Apple"
 
     StateFilterParam:
       name: state
       in: query
       required: false
-      description: Filter devices by state
+      description: |
+        Filter by state(s). Comma-separated for OR matching.
+        Example: ?state=available,inactive
       schema:
-        $ref: "#/components/schemas/DeviceState"
+        type: array
+        items:
+          $ref: "#/components/schemas/DeviceState"
+        maxItems: 3
+      style: form
+      explode: false
       example: "available"
 
     SortParam:
@@ -928,13 +942,20 @@ components:
       in: query
       required: false
       description: |
-        Field to sort results by. Prefix with `-` for descending order.
+        Fields to sort results by. Comma-separated for multi-field sorting.
+        Prefix with `-` for descending order.
         Supported fields: name, brand, state, createdAt, updatedAt
+        Example: ?sort=-createdAt,name (sort by createdAt DESC, then name ASC)
       schema:
-        type: string
-        pattern: "^-?(name|brand|state|createdAt|updatedAt)$"
-        default: "-createdAt"
-      example: "-createdAt"
+        type: array
+        items:
+          type: string
+          pattern: "^-?(name|brand|state|createdAt|updatedAt)$"
+        maxItems: 5
+        default: ["-createdAt"]
+      style: form
+      explode: false
+      example: "-createdAt,name"
 
     FieldsParam:
       name: fields

@@ -144,8 +144,21 @@ Response includes pagination metadata:
 
 | Parameter | Description | Example |
 |-----------|-------------|---------|
-| `brand` | Case-insensitive partial match | `?brand=apple` |
-| `state` | Filter by device state | `?state=available` |
+| `brand` | Filter by brand(s), comma-separated for OR logic | `?brand=Apple,Samsung` |
+| `state` | Filter by state(s), comma-separated for OR logic | `?state=available,inactive` |
+
+**Multi-value filtering:**
+- Comma-separated values within a field use **OR** logic: `?brand=Apple,Samsung` matches devices with brand "Apple" OR "Samsung"
+- Multiple filter parameters use **AND** logic: `?brand=Apple&state=available` matches Apple devices that are available
+- Maximum 10 brands and 3 states per request
+
+**Generated SQL:**
+```sql
+SELECT * FROM devices
+WHERE brand IN ('Apple', 'Samsung') AND state IN ('available')
+ORDER BY created_at DESC
+LIMIT 20 OFFSET 0
+```
 
 #### Sorting
 
@@ -156,6 +169,40 @@ Response includes pagination metadata:
 Sortable fields: `name`, `brand`, `state`, `createdAt`, `updatedAt`
 
 Default sort: `-createdAt` (newest first)
+
+---
+
+### Future: Advanced Search Endpoint
+
+For complex query scenarios beyond comma-separated filters, a dedicated search endpoint is planned:
+
+#### Option A: RSQL via GET
+
+```
+GET /v1/devices/search?q=brand=in=(Apple,Samsung);state==available
+```
+
+RSQL provides a query language for REST APIs with operators like `==`, `!=`, `=in=`, `=out=`, `=gt=`, `=lt=`, `;` (AND), `,` (OR).
+
+#### Option B: Elasticsearch/Lucene-style via POST
+
+```http
+POST /v1/devices/search
+Content-Type: application/json
+
+{
+  "query": {
+    "bool": {
+      "must": [{"terms": {"brand": ["Apple", "Samsung"]}}],
+      "should": [{"term": {"state": "available"}}]
+    }
+  }
+}
+```
+
+This approach supports complex nested queries, full-text search, and aggregations.
+
+**Status:** Planned for future release when use cases require advanced search capabilities.
 
 ---
 

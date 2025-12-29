@@ -57,13 +57,16 @@ func toProtoPagination(p model.Pagination) *devicev1.Pagination {
 func toDomainFilter(req *devicev1.ListDevicesRequest) model.DeviceFilter {
 	filter := model.DefaultDeviceFilter()
 
-	if req.Brand != nil {
-		filter.Brand = req.Brand
+	if len(req.GetBrands()) > 0 {
+		filter.Brands = req.GetBrands()
 	}
 
-	if req.State != nil {
-		state := toDomainState(*req.State)
-		filter.State = &state
+	if len(req.GetStates()) > 0 {
+		states := make([]model.State, 0, len(req.GetStates()))
+		for _, s := range req.GetStates() {
+			states = append(states, toDomainState(s))
+		}
+		filter.States = states
 	}
 
 	if req.Page > 0 {
@@ -74,8 +77,8 @@ func toDomainFilter(req *devicev1.ListDevicesRequest) model.DeviceFilter {
 		filter.Size = uint(req.Size)
 	}
 
-	if req.Sort != "" {
-		filter.Sort = req.Sort
+	if len(req.GetSort()) > 0 {
+		filter.Sort = req.GetSort()
 	}
 
 	return filter

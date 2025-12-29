@@ -115,13 +115,12 @@ func TestListDevicesQueryHandler(t *testing.T) {
 						TotalItems: 1,
 						TotalPages: 1,
 					},
-					Filters: model.DeviceFilter{Brand: &brand, Page: 1, Size: 10},
+					Filters: model.DeviceFilter{Brands: []string{brand}, Page: 1, Size: 10},
 				}, nil)
 			},
 			filter: func() model.DeviceFilter {
 				f := model.DefaultDeviceFilter()
-				brand := "Brand A"
-				f.Brand = &brand
+				f.Brands = []string{"Brand A"}
 
 				return f
 			}(),
@@ -132,7 +131,6 @@ func TestListDevicesQueryHandler(t *testing.T) {
 			setupSvc: func(fake *mocks.FakeDevicesService) {
 				device1 := model.NewDevice("Device 1", "Brand A", model.StateAvailable)
 				device3 := model.NewDevice("Device 3", "Brand C", model.StateAvailable)
-				state := model.StateAvailable
 				fake.ListDevicesReturns(&model.DeviceList{
 					Devices: []*model.Device{device1, device3},
 					Pagination: model.Pagination{
@@ -141,13 +139,12 @@ func TestListDevicesQueryHandler(t *testing.T) {
 						TotalItems: 2,
 						TotalPages: 1,
 					},
-					Filters: model.DeviceFilter{State: &state, Page: 1, Size: 10},
+					Filters: model.DeviceFilter{States: []model.State{model.StateAvailable}, Page: 1, Size: 10},
 				}, nil)
 			},
 			filter: func() model.DeviceFilter {
 				f := model.DefaultDeviceFilter()
-				state := model.StateAvailable
-				f.State = &state
+				f.States = []model.State{model.StateAvailable}
 
 				return f
 			}(),

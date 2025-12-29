@@ -127,10 +127,10 @@ func TestListDevicesQueryHandler(t *testing.T) {
 		{
 			name: "list with brand and state filters",
 			filter: model.DeviceFilter{
-				Brand: &brand,
-				State: &state,
-				Page:  1,
-				Size:  10,
+				Brands: []string{brand},
+				States: []model.State{state},
+				Page:   1,
+				Size:   10,
 			},
 			setupSvc: func() *mocks.FakeDevicesService {
 				fake := &mocks.FakeDevicesService{}
@@ -151,8 +151,8 @@ func TestListDevicesQueryHandler(t *testing.T) {
 			},
 			validate: func(t *testing.T, result *model.DeviceList) {
 				require.NotNil(t, result)
-				require.Equal(t, &brand, result.Filters.Brand)
-				require.Equal(t, &state, result.Filters.State)
+				require.Equal(t, []string{brand}, result.Filters.Brands)
+				require.Equal(t, []model.State{state}, result.Filters.States)
 			},
 		},
 	}

@@ -214,7 +214,6 @@ func TestDeviceHandler_ListDevices(t *testing.T) {
 			name: "filter by brand",
 			setupSvc: func(fake *mocks.FakeDevicesService) {
 				device1 := model.NewDevice("Device 1", "Brand A", model.StateAvailable)
-				brand := "Brand A"
 				fake.ListDevicesReturns(&model.DeviceList{
 					Devices: []*model.Device{device1},
 					Pagination: model.Pagination{
@@ -223,11 +222,11 @@ func TestDeviceHandler_ListDevices(t *testing.T) {
 						TotalItems: 1,
 						TotalPages: 1,
 					},
-					Filters: model.DeviceFilter{Brand: &brand, Page: 1, Size: 10},
+					Filters: model.DeviceFilter{Brands: []string{"Brand A"}, Page: 1, Size: 10},
 				}, nil)
 			},
 			request: &devicev1.ListDevicesRequest{
-				Brand: strPtr("Brand A"),
+				Brands: []string{"Brand A"},
 			},
 			expectedCount: 1,
 		},

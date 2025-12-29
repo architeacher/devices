@@ -204,6 +204,101 @@ func (s *DeviceListTestSuite) TestListDevicesWithCombinedFilters() {
 	}
 }
 
+func (s *DeviceListTestSuite) TestListDevicesWithMultipleBrands() {
+	cases := []struct {
+		name          string
+		brands        string
+		expectedCount int
+	}{
+		{name: "Apple and Samsung", brands: "Apple,Samsung", expectedCount: 4},
+		{name: "Apple and Google", brands: "Apple,Google", expectedCount: 3},
+		{name: "Samsung and Google", brands: "Samsung,Google", expectedCount: 3},
+		{name: "all brands", brands: "Apple,Samsung,Google", expectedCount: 5},
+		{name: "single brand backward compatible", brands: "Apple", expectedCount: 2},
+	}
+
+	for _, tc := range cases {
+		s.Run(tc.name, func() {
+			s.Require().NoError(s.Server.TruncateDevices(s.T().Context()))
+			s.seedDevices()
+
+			path := fmt.Sprintf("/v1/devices?brand=%s", tc.brands)
+			data, _ := s.getDeviceList(path)
+			s.Require().Equal(tc.expectedCount, len(data))
+		})
+	}
+}
+
+func (s *DeviceListTestSuite) TestListDevicesWithMultipleStates() {
+	cases := []struct {
+		name          string
+		states        string
+		expectedCount int
+	}{
+		{name: "available and in-use", states: "available,in-use", expectedCount: 4},
+		{name: "available and inactive", states: "available,inactive", expectedCount: 4},
+		{name: "in-use and inactive", states: "in-use,inactive", expectedCount: 2},
+		{name: "all states", states: "available,in-use,inactive", expectedCount: 5},
+		{name: "single state backward compatible", states: "available", expectedCount: 3},
+	}
+
+	for _, tc := range cases {
+		s.Run(tc.name, func() {
+			s.Require().NoError(s.Server.TruncateDevices(s.T().Context()))
+			s.seedDevices()
+
+			path := fmt.Sprintf("/v1/devices?state=%s", tc.states)
+			data, _ := s.getDeviceList(path)
+			s.Require().Equal(tc.expectedCount, len(data))
+		})
+	}
+}
+
+func (s *DeviceListTestSuite) TestListDevicesWithMultiValueCombinedFilters() {
+	cases := []struct {
+		name          string
+		brands        string
+		states        string
+		expectedCount int
+	}{
+		{
+			name:          "Apple or Samsung AND available",
+			brands:        "Apple,Samsung",
+			states:        "available",
+			expectedCount: 2,
+		},
+		{
+			name:          "Apple AND available or in-use",
+			brands:        "Apple",
+			states:        "available,in-use",
+			expectedCount: 2,
+		},
+		{
+			name:          "Apple or Samsung AND available or inactive",
+			brands:        "Apple,Samsung",
+			states:        "available,inactive",
+			expectedCount: 3,
+		},
+		{
+			name:          "Google AND in-use",
+			brands:        "Google",
+			states:        "in-use",
+			expectedCount: 0,
+		},
+	}
+
+	for _, tc := range cases {
+		s.Run(tc.name, func() {
+			s.Require().NoError(s.Server.TruncateDevices(s.T().Context()))
+			s.seedDevices()
+
+			path := fmt.Sprintf("/v1/devices?brand=%s&state=%s", tc.brands, tc.states)
+			data, _ := s.getDeviceList(path)
+			s.Require().Equal(tc.expectedCount, len(data))
+		})
+	}
+}
+
 func (s *DeviceListTestSuite) TestHeadDevices() {
 	ids := s.seedDevices()
 
@@ -212,7 +307,7 @@ func (s *DeviceListTestSuite) TestHeadDevices() {
 	defer resp.Body.Close()
 
 	s.Require().Equal(http.StatusOK, resp.StatusCode)
-	s.Require().Equal(fmt.Sprintf("%d", len(ids)), resp.Header.Get("X-Total-Count"))
+	s.Require().Equal(fmt.Sprintf("%d", len(ids)), resp.Header.Get("Total-Count"))
 }
 
 func (s *DeviceListTestSuite) TestOptionsDevices() {

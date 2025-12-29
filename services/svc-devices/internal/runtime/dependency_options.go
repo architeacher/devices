@@ -124,7 +124,12 @@ func WithDatabase(ctx context.Context) DependencyOption {
 
 func WithDataRepositories() DependencyOption {
 	return func(d *dependencies) error {
-		d.repos.deviceRepo = repos.NewDevicesRepository(d.infra.dbPool)
+		d.repos.deviceRepo = repos.NewDevicesRepository(
+			d.infra.dbPool,
+			repos.NewPgxScanner(),
+			repos.NewCriteriaTranslator(&d.infra.logger),
+			d.infra.logger,
+		)
 
 		return nil
 	}

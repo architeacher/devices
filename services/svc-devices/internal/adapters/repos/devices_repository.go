@@ -7,6 +7,7 @@ import (
 	"time"
 
 	sq "github.com/Masterminds/squirrel"
+	"github.com/architeacher/devices/pkg/logger"
 	"github.com/architeacher/devices/services/svc-devices/internal/domain/model"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -26,8 +27,12 @@ type (
 		Ping(ctx context.Context) error
 	}
 
+	// DevicesRepository handles device persistence operations.
 	DevicesRepository struct {
-		pool PoolOps
+		pool       PoolOps
+		scanner    Scanner
+		logger     logger.Logger
+		translator *CriteriaTranslator
 	}
 
 	deviceRow struct {
@@ -38,10 +43,26 @@ type (
 		CreatedAt time.Time `db:"created_at"`
 		UpdatedAt time.Time `db:"updated_at"`
 	}
+
+	deviceRowWithCount struct {
+		deviceRow
+		TotalCount uint `db:"total_count"`
+	}
 )
 
-func NewDevicesRepository(pool PoolOps) *DevicesRepository {
-	return &DevicesRepository{pool: pool}
+// NewDevicesRepository creates a new DevicesRepository with the given dependencies.
+func NewDevicesRepository(
+	pool PoolOps,
+	scanner Scanner,
+	translator *CriteriaTranslator,
+	log logger.Logger,
+) *DevicesRepository {
+	return &DevicesRepository{
+		pool:       pool,
+		scanner:    scanner,
+		translator: translator,
+		logger:     log,
+	}
 }
 
 func (r *DevicesRepository) Create(ctx context.Context, device *model.Device) error {
@@ -81,43 +102,34 @@ func (r *DevicesRepository) GetByID(ctx context.Context, id model.DeviceID) (*mo
 }
 
 func (r *DevicesRepository) List(ctx context.Context, filter model.DeviceFilter) (*model.DeviceList, error) {
-	selectBuilder := psql.Select("id", "name", "brand", "state", "created_at", "updated_at").
-		From(devicesTable)
+	criteria := model.FromDeviceFilter(filter)
 
-	countBuilder := psql.Select("COUNT(*)").
-		From(devicesTable)
+	selectBuilder := psql.Select(
+		"id", "name", "brand", "state", "created_at", "updated_at",
+		"COUNT(*) OVER() as total_count",
+	).From(devicesTable)
 
-	selectBuilder, countBuilder = r.applyFilters(selectBuilder, countBuilder, filter)
+	selectBuilder = r.translator.ApplyToSelect(selectBuilder, criteria)
 
-	selectBuilder = r.applyOrdering(selectBuilder, filter.Sort)
-
-	offset := (filter.Page - 1) * filter.Size
-	selectBuilder = selectBuilder.Limit(uint64(filter.Size)).Offset(uint64(offset))
-
-	devices, err := r.queryDevices(ctx, selectBuilder)
+	devices, totalItems, err := r.queryDevicesWithCount(ctx, selectBuilder)
 	if err != nil {
 		return nil, err
 	}
 
-	totalItems, err := r.countDevices(ctx, countBuilder)
-	if err != nil {
-		return nil, err
-	}
-
-	totalPages := totalItems / filter.Size
-	if totalItems%filter.Size != 0 {
+	totalPages := totalItems / criteria.Size()
+	if totalItems%criteria.Size() != 0 {
 		totalPages++
 	}
 
 	return &model.DeviceList{
 		Devices: devices,
 		Pagination: model.Pagination{
-			Page:        filter.Page,
-			Size:        filter.Size,
+			Page:        criteria.Page(),
+			Size:        criteria.Size(),
 			TotalItems:  totalItems,
 			TotalPages:  totalPages,
-			HasNext:     filter.Page < totalPages,
-			HasPrevious: filter.Page > 1,
+			HasNext:     criteria.Page() < totalPages,
+			HasPrevious: criteria.Page() > 1,
 		},
 		Filters: filter,
 	}, nil
@@ -156,34 +168,6 @@ func (r *DevicesRepository) Delete(ctx context.Context, id model.DeviceID) error
 	return nil
 }
 
-func (r *DevicesRepository) Exists(ctx context.Context, id model.DeviceID) (bool, error) {
-	query, args, err := psql.Select("1").
-		Prefix("SELECT EXISTS(").
-		From(devicesTable).
-		Where(sq.Eq{"id": id.String()}).
-		Suffix(")").
-		ToSql()
-	if err != nil {
-		return false, fmt.Errorf("failed to build exists query: %w", err)
-	}
-
-	var exists bool
-
-	err = r.pool.QueryRow(ctx, query, args...).Scan(&exists)
-	if err != nil {
-		return false, fmt.Errorf("%w: %v", model.ErrDatabaseQuery, err)
-	}
-
-	return exists, nil
-}
-
-func (r *DevicesRepository) Count(ctx context.Context, filter model.DeviceFilter) (uint, error) {
-	countBuilder := psql.Select("COUNT(*)").From(devicesTable)
-	countBuilder = r.applyFilterConditions(countBuilder, filter)
-
-	return r.countDevices(ctx, countBuilder)
-}
-
 func (r *DevicesRepository) Ping(ctx context.Context) error {
 	return r.pool.Ping(ctx)
 }
@@ -196,23 +180,28 @@ func (r *DevicesRepository) findByCriteria(
 	query, args, err := psql.Select("id", "name", "brand", "state", "created_at", "updated_at").
 		From(devicesTable).
 		Where(criteria).
+		Limit(1).
 		ToSql()
 	if err != nil {
 		return nil, fmt.Errorf("failed to build select query: %w", err)
 	}
 
-	row := r.pool.QueryRow(ctx, query, args...)
-
-	device, err := r.scanDevice(row)
+	rows, err := r.pool.Query(ctx, query, args...)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		return nil, fmt.Errorf("%w: %v", model.ErrDatabaseQuery, err)
+	}
+	defer rows.Close()
+
+	var row deviceRow
+	if err := r.scanner.ScanOne(&row, rows); err != nil {
+		if r.scanner.IsNotFound(err) {
 			return nil, model.ErrDeviceNotFound
 		}
 
 		return nil, fmt.Errorf("%s: %w", errorContext, err)
 	}
 
-	return device, nil
+	return r.convertRowToDevice(row)
 }
 
 func (r *DevicesRepository) updateByCriteria(
@@ -237,58 +226,6 @@ func (r *DevicesRepository) updateByCriteria(
 	return nil
 }
 
-func (r *DevicesRepository) applyFilters(
-	selectBuilder sq.SelectBuilder,
-	countBuilder sq.SelectBuilder,
-	filter model.DeviceFilter,
-) (sq.SelectBuilder, sq.SelectBuilder) {
-	selectBuilder = r.applyFilterConditions(selectBuilder, filter)
-	countBuilder = r.applyFilterConditions(countBuilder, filter)
-
-	return selectBuilder, countBuilder
-}
-
-func (r *DevicesRepository) applyFilterConditions(builder sq.SelectBuilder, filter model.DeviceFilter) sq.SelectBuilder {
-	if filter.Brand != nil && *filter.Brand != "" {
-		builder = builder.Where(sq.Eq{"brand": *filter.Brand})
-	}
-
-	if filter.State != nil {
-		builder = builder.Where(sq.Eq{"state": filter.State.String()})
-	}
-
-	return builder
-}
-
-func (r *DevicesRepository) applyOrdering(builder sq.SelectBuilder, sort string) sq.SelectBuilder {
-	if sort == "" {
-		sort = "-createdAt"
-	}
-
-	direction := "ASC"
-	field := sort
-
-	if len(sort) > 0 && sort[0] == '-' {
-		direction = "DESC"
-		field = sort[1:]
-	}
-
-	columnMap := map[string]string{
-		"createdAt": "created_at",
-		"updatedAt": "updated_at",
-		"name":      "name",
-		"brand":     "brand",
-		"state":     "state",
-	}
-
-	column, ok := columnMap[field]
-	if !ok {
-		column = "created_at"
-	}
-
-	return builder.OrderBy(fmt.Sprintf("%s %s", column, direction))
-}
-
 func (r *DevicesRepository) queryDevices(ctx context.Context, builder sq.SelectBuilder) ([]*model.Device, error) {
 	query, args, err := builder.ToSql()
 	if err != nil {
@@ -301,74 +238,56 @@ func (r *DevicesRepository) queryDevices(ctx context.Context, builder sq.SelectB
 	}
 	defer rows.Close()
 
-	var devices []*model.Device
+	var deviceRows []deviceRow
+	if err := r.scanner.ScanAll(&deviceRows, rows); err != nil {
+		return nil, fmt.Errorf("%w: %v", model.ErrDatabaseQuery, err)
+	}
 
-	for rows.Next() {
-		device, err := r.scanDeviceFromRows(rows)
+	devices := make([]*model.Device, 0, len(deviceRows))
+	for index := range deviceRows {
+		device, err := r.convertRowToDevice(deviceRows[index])
 		if err != nil {
 			return nil, fmt.Errorf("%w: %v", model.ErrDatabaseQuery, err)
 		}
-
 		devices = append(devices, device)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("%w: %v", model.ErrDatabaseQuery, err)
 	}
 
 	return devices, nil
 }
 
-func (r *DevicesRepository) countDevices(ctx context.Context, builder sq.SelectBuilder) (uint, error) {
+func (r *DevicesRepository) queryDevicesWithCount(ctx context.Context, builder sq.SelectBuilder) ([]*model.Device, uint, error) {
 	query, args, err := builder.ToSql()
 	if err != nil {
-		return 0, fmt.Errorf("failed to build count query: %w", err)
+		return nil, 0, fmt.Errorf("failed to build select query: %w", err)
 	}
 
-	var count uint
-
-	err = r.pool.QueryRow(ctx, query, args...).Scan(&count)
+	rows, err := r.pool.Query(ctx, query, args...)
 	if err != nil {
-		return 0, fmt.Errorf("%w: %v", model.ErrDatabaseQuery, err)
+		return nil, 0, fmt.Errorf("%w: %v", model.ErrDatabaseQuery, err)
+	}
+	defer rows.Close()
+
+	var deviceRows []deviceRowWithCount
+	if err := r.scanner.ScanAll(&deviceRows, rows); err != nil {
+		return nil, 0, fmt.Errorf("%w: %v", model.ErrDatabaseQuery, err)
 	}
 
-	return count, nil
-}
-
-func (r *DevicesRepository) scanDevice(row pgx.Row) (*model.Device, error) {
-	var deviceRow deviceRow
-
-	err := row.Scan(
-		&deviceRow.ID,
-		&deviceRow.Name,
-		&deviceRow.Brand,
-		&deviceRow.State,
-		&deviceRow.CreatedAt,
-		&deviceRow.UpdatedAt,
-	)
-	if err != nil {
-		return nil, err
+	if len(deviceRows) == 0 {
+		return []*model.Device{}, 0, nil
 	}
 
-	return r.convertRowToDevice(deviceRow)
-}
+	totalCount := deviceRows[0].TotalCount
+	devices := make([]*model.Device, 0, len(deviceRows))
 
-func (r *DevicesRepository) scanDeviceFromRows(rows pgx.Rows) (*model.Device, error) {
-	var deviceRow deviceRow
-
-	err := rows.Scan(
-		&deviceRow.ID,
-		&deviceRow.Name,
-		&deviceRow.Brand,
-		&deviceRow.State,
-		&deviceRow.CreatedAt,
-		&deviceRow.UpdatedAt,
-	)
-	if err != nil {
-		return nil, err
+	for index := range deviceRows {
+		device, err := r.convertRowToDevice(deviceRows[index].deviceRow)
+		if err != nil {
+			return nil, 0, fmt.Errorf("%w: %v", model.ErrDatabaseQuery, err)
+		}
+		devices = append(devices, device)
 	}
 
-	return r.convertRowToDevice(deviceRow)
+	return devices, totalCount, nil
 }
 
 func (r *DevicesRepository) convertRowToDevice(row deviceRow) (*model.Device, error) {

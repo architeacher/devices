@@ -31,20 +31,12 @@ const (
 // DeviceServiceClient is the client API for DeviceService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-//
-// DeviceService provides CRUD operations for devices.
 type DeviceServiceClient interface {
-	// CreateDevice creates a new device.
 	CreateDevice(ctx context.Context, in *CreateDeviceRequest, opts ...grpc.CallOption) (*CreateDeviceResponse, error)
-	// GetDevice retrieves a device by ID.
 	GetDevice(ctx context.Context, in *GetDeviceRequest, opts ...grpc.CallOption) (*GetDeviceResponse, error)
-	// ListDevices retrieves a paginated list of devices.
 	ListDevices(ctx context.Context, in *ListDevicesRequest, opts ...grpc.CallOption) (*ListDevicesResponse, error)
-	// UpdateDevice fully updates a device.
 	UpdateDevice(ctx context.Context, in *UpdateDeviceRequest, opts ...grpc.CallOption) (*UpdateDeviceResponse, error)
-	// PatchDevice partially updates a device.
 	PatchDevice(ctx context.Context, in *PatchDeviceRequest, opts ...grpc.CallOption) (*PatchDeviceResponse, error)
-	// DeleteDevice deletes a device by ID.
 	DeleteDevice(ctx context.Context, in *DeleteDeviceRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 }
 
@@ -119,20 +111,12 @@ func (c *deviceServiceClient) DeleteDevice(ctx context.Context, in *DeleteDevice
 // DeviceServiceServer is the server API for DeviceService service.
 // All implementations must embed UnimplementedDeviceServiceServer
 // for forward compatibility.
-//
-// DeviceService provides CRUD operations for devices.
 type DeviceServiceServer interface {
-	// CreateDevice creates a new device.
 	CreateDevice(context.Context, *CreateDeviceRequest) (*CreateDeviceResponse, error)
-	// GetDevice retrieves a device by ID.
 	GetDevice(context.Context, *GetDeviceRequest) (*GetDeviceResponse, error)
-	// ListDevices retrieves a paginated list of devices.
 	ListDevices(context.Context, *ListDevicesRequest) (*ListDevicesResponse, error)
-	// UpdateDevice fully updates a device.
 	UpdateDevice(context.Context, *UpdateDeviceRequest) (*UpdateDeviceResponse, error)
-	// PatchDevice partially updates a device.
 	PatchDevice(context.Context, *PatchDeviceRequest) (*PatchDeviceResponse, error)
-	// DeleteDevice deletes a device by ID.
 	DeleteDevice(context.Context, *DeleteDeviceRequest) (*emptypb.Empty, error)
 	mustEmbedUnimplementedDeviceServiceServer()
 }
@@ -335,12 +319,8 @@ const (
 // HealthServiceClient is the client API for HealthService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-//
-// HealthService provides health check operations following gRPC health checking protocol.
 type HealthServiceClient interface {
-	// Check returns the health status of the service.
 	Check(ctx context.Context, in *HealthCheckRequest, opts ...grpc.CallOption) (*HealthCheckResponse, error)
-	// Watch streams health status updates.
 	Watch(ctx context.Context, in *HealthCheckRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[HealthCheckResponse], error)
 }
 
@@ -384,12 +364,8 @@ type HealthService_WatchClient = grpc.ServerStreamingClient[HealthCheckResponse]
 // HealthServiceServer is the server API for HealthService service.
 // All implementations must embed UnimplementedHealthServiceServer
 // for forward compatibility.
-//
-// HealthService provides health check operations following gRPC health checking protocol.
 type HealthServiceServer interface {
-	// Check returns the health status of the service.
 	Check(context.Context, *HealthCheckRequest) (*HealthCheckResponse, error)
-	// Watch streams health status updates.
 	Watch(*HealthCheckRequest, grpc.ServerStreamingServer[HealthCheckResponse]) error
 	mustEmbedUnimplementedHealthServiceServer()
 }

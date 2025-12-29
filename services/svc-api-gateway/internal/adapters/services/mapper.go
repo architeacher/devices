@@ -87,13 +87,14 @@ func toProtoListRequest(filter model.DeviceFilter) *devicev1.ListDevicesRequest 
 		Sort: filter.Sort,
 	}
 
-	if filter.Brand != nil {
-		req.Brand = filter.Brand
+	if len(filter.Brands) > 0 {
+		req.Brands = filter.Brands
 	}
 
-	if filter.State != nil {
-		state := toProtoState(*filter.State)
-		req.State = &state
+	if len(filter.States) > 0 {
+		for _, s := range filter.States {
+			req.States = append(req.States, toProtoState(s))
+		}
 	}
 
 	return req

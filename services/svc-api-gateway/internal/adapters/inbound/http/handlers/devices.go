@@ -87,14 +87,17 @@ func (h *DeviceHandler) ListDevices(w http.ResponseWriter, r *http.Request, para
 	if params.Size != nil {
 		filter.Size = uint(*params.Size)
 	}
-	if params.Brand != nil {
-		filter.Brand = params.Brand
+	if params.Brand != nil && len(*params.Brand) > 0 {
+		filter.Brands = *params.Brand
 	}
-	if params.State != nil {
-		state := model.State(*params.State)
-		filter.State = &state
+	if params.State != nil && len(*params.State) > 0 {
+		states := make([]model.State, 0, len(*params.State))
+		for _, s := range *params.State {
+			states = append(states, model.State(s))
+		}
+		filter.States = states
 	}
-	if params.Sort != nil {
+	if params.Sort != nil && len(*params.Sort) > 0 {
 		filter.Sort = *params.Sort
 	}
 
@@ -125,7 +128,7 @@ func (h *DeviceHandler) HeadDevices(w http.ResponseWriter, r *http.Request, para
 		return
 	}
 
-	w.Header().Set("X-Total-Count", fmt.Sprintf("%d", result.Pagination.TotalItems))
+	w.Header().Set("Total-Count", fmt.Sprintf("%d", result.Pagination.TotalItems))
 	w.WriteHeader(http.StatusOK)
 }
 

@@ -336,7 +336,7 @@ func TestDefaultDeviceFilter(t *testing.T) {
 
 	require.Equal(t, uint(1), filter.Page)
 	require.Equal(t, uint(20), filter.Size)
-	require.Equal(t, "-createdAt", filter.Sort)
-	require.Nil(t, filter.Brand)
-	require.Nil(t, filter.State)
+	require.Equal(t, []string{"-createdAt"}, filter.Sort)
+	require.Empty(t, filter.Brands)
+	require.Empty(t, filter.States)
 }

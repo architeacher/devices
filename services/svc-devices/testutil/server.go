@@ -119,7 +119,7 @@ func New(ctx context.Context, opts ...Option) (*TestServer, error) {
 	metricsClient := noop.NewMetricsClient()
 	tracerProvider := otelNoop.NewTracerProvider()
 
-	deviceRepo := repos.NewDevicesRepository(pool)
+	deviceRepo := repos.NewDevicesRepository(pool, repos.NewPgxScanner(), repos.NewCriteriaTranslator(&log), log)
 	deviceSvc := services.NewDevicesService(deviceRepo)
 
 	app := usecases.NewApplication(

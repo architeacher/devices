@@ -1398,47 +1398,67 @@
             "name": "brand",
             "in": "query",
             "required": false,
-            "description": "Filter devices by brand (case-insensitive, partial match)",
+            "description": "Filter by brand(s). Comma-separated for OR matching.\nExample: ?brand=Apple,Samsung\n",
             "schema": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 100
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "maxItems": 10
             },
+            "style": "form",
+            "explode": false,
             "example": "Apple"
           },
           {
             "name": "state",
             "in": "query",
             "required": false,
-            "description": "Filter devices by state",
+            "description": "Filter by state(s). Comma-separated for OR matching.\nExample: ?state=available,inactive\n",
             "schema": {
-              "type": "string",
-              "description": "The current state of the device",
-              "enum": [
-                "available",
-                "in-use",
-                "inactive"
-              ],
-              "example": "available",
-              "x-enum-descriptions": {
-                "available": "Device is available for use",
-                "in-use": "Device is currently being used (name/brand cannot be updated, cannot be deleted)",
-                "inactive": "Device is inactive and not available for use"
-              }
+              "type": "array",
+              "items": {
+                "type": "string",
+                "description": "The current state of the device",
+                "enum": [
+                  "available",
+                  "in-use",
+                  "inactive"
+                ],
+                "example": "available",
+                "x-enum-descriptions": {
+                  "available": "Device is available for use",
+                  "in-use": "Device is currently being used (name/brand cannot be updated, cannot be deleted)",
+                  "inactive": "Device is inactive and not available for use"
+                }
+              },
+              "maxItems": 3
             },
+            "style": "form",
+            "explode": false,
             "example": "available"
           },
           {
             "name": "sort",
             "in": "query",
             "required": false,
-            "description": "Field to sort results by. Prefix with `-` for descending order.\nSupported fields: name, brand, state, createdAt, updatedAt\n",
+            "description": "Fields to sort results by. Comma-separated for multi-field sorting.\nPrefix with `-` for descending order.\nSupported fields: name, brand, state, createdAt, updatedAt\nExample: ?sort=-createdAt,name (sort by createdAt DESC, then name ASC)\n",
             "schema": {
-              "type": "string",
-              "pattern": "^-?(name|brand|state|createdAt|updatedAt)$",
-              "default": "-createdAt"
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^-?(name|brand|state|createdAt|updatedAt)$"
+              },
+              "maxItems": 5,
+              "default": [
+                "-createdAt"
+              ]
             },
-            "example": "-createdAt"
+            "style": "form",
+            "explode": false,
+            "example": "-createdAt,name"
           },
           {
             "name": "fields",
@@ -2717,47 +2737,67 @@
             "name": "brand",
             "in": "query",
             "required": false,
-            "description": "Filter devices by brand (case-insensitive, partial match)",
+            "description": "Filter by brand(s). Comma-separated for OR matching.\nExample: ?brand=Apple,Samsung\n",
             "schema": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 100
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "maxItems": 10
             },
+            "style": "form",
+            "explode": false,
             "example": "Apple"
           },
           {
             "name": "state",
             "in": "query",
             "required": false,
-            "description": "Filter devices by state",
+            "description": "Filter by state(s). Comma-separated for OR matching.\nExample: ?state=available,inactive\n",
             "schema": {
-              "type": "string",
-              "description": "The current state of the device",
-              "enum": [
-                "available",
-                "in-use",
-                "inactive"
-              ],
-              "example": "available",
-              "x-enum-descriptions": {
-                "available": "Device is available for use",
-                "in-use": "Device is currently being used (name/brand cannot be updated, cannot be deleted)",
-                "inactive": "Device is inactive and not available for use"
-              }
+              "type": "array",
+              "items": {
+                "type": "string",
+                "description": "The current state of the device",
+                "enum": [
+                  "available",
+                  "in-use",
+                  "inactive"
+                ],
+                "example": "available",
+                "x-enum-descriptions": {
+                  "available": "Device is available for use",
+                  "in-use": "Device is currently being used (name/brand cannot be updated, cannot be deleted)",
+                  "inactive": "Device is inactive and not available for use"
+                }
+              },
+              "maxItems": 3
             },
+            "style": "form",
+            "explode": false,
             "example": "available"
           },
           {
             "name": "sort",
             "in": "query",
             "required": false,
-            "description": "Field to sort results by. Prefix with `-` for descending order.\nSupported fields: name, brand, state, createdAt, updatedAt\n",
+            "description": "Fields to sort results by. Comma-separated for multi-field sorting.\nPrefix with `-` for descending order.\nSupported fields: name, brand, state, createdAt, updatedAt\nExample: ?sort=-createdAt,name (sort by createdAt DESC, then name ASC)\n",
             "schema": {
-              "type": "string",
-              "pattern": "^-?(name|brand|state|createdAt|updatedAt)$",
-              "default": "-createdAt"
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^-?(name|brand|state|createdAt|updatedAt)$"
+              },
+              "maxItems": 5,
+              "default": [
+                "-createdAt"
+              ]
             },
-            "example": "-createdAt"
+            "style": "form",
+            "explode": false,
+            "example": "-createdAt,name"
           },
           {
             "name": "If-None-Match",
@@ -2814,7 +2854,7 @@
                 },
                 "example": "private, max-age=300"
               },
-              "X-Total-Count": {
+              "Total-Count": {
                 "description": "Total number of items matching the query",
                 "schema": {
                   "type": "integer"
@@ -11456,47 +11496,67 @@
         "name": "brand",
         "in": "query",
         "required": false,
-        "description": "Filter devices by brand (case-insensitive, partial match)",
+        "description": "Filter by brand(s). Comma-separated for OR matching.\nExample: ?brand=Apple,Samsung\n",
         "schema": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 100
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "maxItems": 10
         },
+        "style": "form",
+        "explode": false,
         "example": "Apple"
       },
       "StateFilterParam": {
         "name": "state",
         "in": "query",
         "required": false,
-        "description": "Filter devices by state",
+        "description": "Filter by state(s). Comma-separated for OR matching.\nExample: ?state=available,inactive\n",
         "schema": {
-          "type": "string",
-          "description": "The current state of the device",
-          "enum": [
-            "available",
-            "in-use",
-            "inactive"
-          ],
-          "example": "available",
-          "x-enum-descriptions": {
-            "available": "Device is available for use",
-            "in-use": "Device is currently being used (name/brand cannot be updated, cannot be deleted)",
-            "inactive": "Device is inactive and not available for use"
-          }
+          "type": "array",
+          "items": {
+            "type": "string",
+            "description": "The current state of the device",
+            "enum": [
+              "available",
+              "in-use",
+              "inactive"
+            ],
+            "example": "available",
+            "x-enum-descriptions": {
+              "available": "Device is available for use",
+              "in-use": "Device is currently being used (name/brand cannot be updated, cannot be deleted)",
+              "inactive": "Device is inactive and not available for use"
+            }
+          },
+          "maxItems": 3
         },
+        "style": "form",
+        "explode": false,
         "example": "available"
       },
       "SortParam": {
         "name": "sort",
         "in": "query",
         "required": false,
-        "description": "Field to sort results by. Prefix with `-` for descending order.\nSupported fields: name, brand, state, createdAt, updatedAt\n",
+        "description": "Fields to sort results by. Comma-separated for multi-field sorting.\nPrefix with `-` for descending order.\nSupported fields: name, brand, state, createdAt, updatedAt\nExample: ?sort=-createdAt,name (sort by createdAt DESC, then name ASC)\n",
         "schema": {
-          "type": "string",
-          "pattern": "^-?(name|brand|state|createdAt|updatedAt)$",
-          "default": "-createdAt"
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^-?(name|brand|state|createdAt|updatedAt)$"
+          },
+          "maxItems": 5,
+          "default": [
+            "-createdAt"
+          ]
         },
-        "example": "-createdAt"
+        "style": "form",
+        "explode": false,
+        "example": "-createdAt,name"
       },
       "FieldsParam": {
         "name": "fields",
