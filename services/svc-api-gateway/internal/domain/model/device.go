@@ -75,11 +75,13 @@ func (d *Device) Update(name, brand string, state State) error {
 }
 
 type DeviceFilter struct {
-	Brands []string
-	States []State
-	Page   uint
-	Size   uint
-	Sort   []string
+	Keyword string
+	Brands  []string
+	States  []State
+	Sort    []string
+	Page    uint
+	Size    uint
+	Cursor  string
 }
 
 func DefaultDeviceFilter() DeviceFilter {
@@ -91,12 +93,14 @@ func DefaultDeviceFilter() DeviceFilter {
 }
 
 type Pagination struct {
-	Page        uint
-	Size        uint
-	TotalItems  uint
-	TotalPages  uint
-	HasNext     bool
-	HasPrevious bool
+	Page           uint
+	Size           uint
+	TotalItems     uint
+	TotalPages     uint
+	HasNext        bool
+	HasPrevious    bool
+	NextCursor     string
+	PreviousCursor string
 }
 
 type DeviceList struct {

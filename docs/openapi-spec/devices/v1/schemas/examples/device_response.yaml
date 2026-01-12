@@ -10,6 +10,10 @@ created:
       updatedAt: "2024-01-15T10:30:00Z"
       links:
         self: "/devices/019234a5-6b7c-8d9e-0f12-34567890abcd"
+    meta:
+      requestId: "550e8400-e29b-41d4-a716-446655440000"
+      traceId: "0af7651916cd43dd8448eb211c80319c"
+      apiVersion: "v1"
 
 device:
   summary: Existing device
@@ -23,6 +27,10 @@ device:
       updatedAt: "2024-01-15T14:45:00Z"
       links:
         self: "/devices/019234a5-6b7c-8d9e-0f12-34567890abcd"
+    meta:
+      requestId: "550e8400-e29b-41d4-a716-446655440001"
+      traceId: "1bf7651916cd43dd8448eb211c80319d"
+      apiVersion: "v1"
 
 updated:
   summary: Updated device
@@ -36,6 +44,10 @@ updated:
       updatedAt: "2024-01-15T16:20:00Z"
       links:
         self: "/devices/019234a5-6b7c-8d9e-0f12-34567890abcd"
+    meta:
+      requestId: "550e8400-e29b-41d4-a716-446655440002"
+      traceId: "2cf7651916cd43dd8448eb211c80319e"
+      apiVersion: "v1"
 
 patched:
   summary: Partially updated device
@@ -49,3 +61,7 @@ patched:
       updatedAt: "2024-01-15T18:00:00Z"
       links:
         self: "/devices/019234a5-6b7c-8d9e-0f12-34567890abcd"
+    meta:
+      requestId: "550e8400-e29b-41d4-a716-446655440003"
+      traceId: "3df7651916cd43dd8448eb211c80319f"
+      apiVersion: "v1"

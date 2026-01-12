@@ -99,3 +99,29 @@ TracestateResponseHeader:
   schema:
     type: string
   example: "congo=t61rcWkgMzE"
+
+DeprecationHeader:
+  description: |
+    RFC 8594 compliant header indicating the API endpoint is deprecated.
+    When present and set to "true", clients should migrate to the successor version.
+  schema:
+    type: string
+    enum: ["true"]
+  example: "true"
+
+SunsetHeader:
+  description: |
+    RFC 8594 compliant header indicating when the deprecated API will be removed.
+    Date is formatted according to HTTP-date (RFC 7231).
+  schema:
+    type: string
+    format: date-time
+  example: "Wed, 31 Dec 2025 23:59:59 GMT"
+
+LinkSuccessorHeader:
+  description: |
+    RFC 8594 compliant Link header pointing to the successor API version.
+    Uses the "successor-version" relation type to indicate the replacement endpoint.
+  schema:
+    type: string
+  example: '</v2/devices>; rel="successor-version"'

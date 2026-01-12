@@ -11,7 +11,7 @@ This document describes the features and API best practices implemented in the D
 | Authorization | ✅ | Basic Auth for admin endpoints |
 | Request Validation | ✅ | OpenAPI 3.0.3 schema-based validation |
 | Error Handling | ✅ | Structured responses with gRPC error mapping |
-| Pagination | ✅ | `page`/`size` params with metadata |
+| Pagination | ✅ | Offset + cursor-based (keyset) pagination |
 | Filtering & Sorting | ✅ | Brand, state filters; multi-field sorting |
 | Field Projection | ✅ | Sparse fieldsets via `fields` parameter |
 | HATEOAS | ✅ | Self links in responses |
@@ -28,8 +28,9 @@ This document describes the features and API best practices implemented in the D
 | Metrics/Telemetry | ✅ | OpenTelemetry (counters, histograms) |
 | OpenAPI Docs | ✅ | Full spec with code generation |
 | Rate Limiting | ✅ | GCRA algorithm with RFC-compliant headers |
+| Idempotency | ✅ | `Idempotency-Key` with KeyDB-backed storage |
+| Deprecation Headers | ✅ | RFC 8594 Sunset headers for API versioning |
 | Caching | ⏳ | ETag/Cache-Control headers defined |
-| Idempotency | ⏳ | `Idempotency-Key` header defined |
 | Compression | ⏳ | Accept-Encoding headers defined |
 
 **Legend**: ✅ Implemented | ⏳ Planned
@@ -111,6 +112,10 @@ Features:
 
 ### Pagination
 
+The API supports two pagination strategies:
+
+#### Offset-Based Pagination (Default)
+
 Query parameter-based pagination with metadata:
 
 | Parameter | Description | Default | Range |
@@ -134,7 +139,45 @@ Response includes pagination metadata:
 }
 ```
 
-**Location**: `services/svc-api-gateway/internal/adapters/inbound/http/handlers/devices.go`
+#### Cursor-Based Pagination (Keyset)
+
+For large datasets and real-time data, cursor-based pagination provides consistent results:
+
+| Parameter | Description | Example |
+|-----------|-------------|---------|
+| `cursor` | Opaque cursor token | `eyJmIjoiY3JlYXRlZF9hdCIsInYiOi...` |
+| `size` | Items per page | 20 |
+
+Response includes cursor metadata:
+
+```json
+{
+  "data": [...],
+  "meta": {
+    "cursors": {
+      "next": "eyJmIjoiY3JlYXRlZF9hdCIsInYiOi...",
+      "previous": "eyJmIjoiY3JlYXRlZF9hdCIsInYiOi..."
+    },
+    "hasNext": true,
+    "hasPrevious": false
+  }
+}
+```
+
+**Cursor Structure** (base64-encoded JSON):
+- `f`: Sort field (e.g., `created_at`, `name`)
+- `v`: Field value at cursor position
+- `id`: Device ID for tie-breaking
+- `d`: Direction (`next` or `prev`)
+
+**Advantages over offset pagination:**
+- No skipped/duplicate items when data changes
+- Consistent performance regardless of page depth
+- Works well with real-time data streams
+
+**Locations**:
+- `services/svc-api-gateway/internal/adapters/inbound/http/handlers/devices.go`
+- `services/svc-devices/internal/domain/model/cursor.go`
 
 ---
 
@@ -502,6 +545,75 @@ Key generation strategy (combined IP + user):
 
 ---
 
+### Idempotency
+
+Request deduplication for POST operations using `Idempotency-Key` header with KeyDB-backed storage:
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `enabled` | true | Enable/disable idempotency checks |
+| `headerName` | Idempotency-Key | Header name for idempotency key |
+| `replayedHeader` | Idempotency-Replayed | Header indicating cached response |
+| `requiredMethods` | POST | HTTP methods requiring idempotency |
+| `cacheTTL` | 24h | How long to store responses |
+| `lockTTL` | 30s | Lock timeout for in-progress requests |
+| `gracefulDegraded` | true | Allow requests on cache failure |
+
+#### Key Validation
+
+- Must be a valid UUID (v4 or v7)
+- Invalid keys return `400 Bad Request` with `INVALID_IDEMPOTENCY_KEY` code
+
+#### Behavior
+
+1. **No key provided**: Request processed normally (no idempotency)
+2. **New key**: Request processed, response cached for `cacheTTL`
+3. **Existing key (completed)**: Cached response returned with `Idempotency-Replayed: true`
+4. **Existing key (in-progress)**: Returns `409 Conflict` with `REQUEST_IN_PROGRESS` code
+
+#### Response Caching
+
+Only successful responses (2xx status codes) are cached. Cached data includes:
+- Status code
+- Response headers
+- Response body
+- Creation timestamp
+
+**Location**: `services/svc-api-gateway/internal/adapters/inbound/http/middleware/idempotency.go`
+
+---
+
+### Deprecation Headers (RFC 8594)
+
+API versioning support with RFC 8594 compliant deprecation headers:
+
+| Header | Description | Example |
+|--------|-------------|---------|
+| `Deprecation` | Indicates API is deprecated | `true` |
+| `Sunset` | Date when API will be removed | `Sat, 01 Jun 2025 00:00:00 GMT` |
+| `Link` | Points to successor version | `</v2/devices>; rel="successor-version"` |
+
+#### Configuration
+
+| Setting | Description | Example |
+|---------|-------------|---------|
+| `enabled` | Enable deprecation headers | `true` |
+| `sunsetDate` | RFC3339 removal date | `2025-06-01T00:00:00Z` |
+| `successorPath` | URL to new API version | `/v2/devices` |
+
+#### Usage
+
+When an API version is being deprecated:
+1. Set `enabled: true` to start sending deprecation headers
+2. Set `sunsetDate` to inform clients when the API will be removed
+3. Set `successorPath` to guide clients to the new version
+
+Clients can monitor these headers to plan their migration before the sunset date.
+
+**Location**: `services/svc-api-gateway/internal/adapters/inbound/http/middleware/sunset.go`
+
+---
+
 ## Planned Features
 
 The following features are documented in the OpenAPI specification but not yet implemented:
@@ -514,11 +626,6 @@ Headers defined:
 - `Last-Modified`: Resource modification time
 - `If-None-Match`: Conditional GET
 - `If-Match`: Conditional PUT/PATCH
-
-### Idempotency
-
-Header defined:
-- `Idempotency-Key`: UUID v7 for POST request deduplication (24-hour TTL)
 
 ### Compression
 

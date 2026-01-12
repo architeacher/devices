@@ -26,7 +26,7 @@ func (s *DevicesService) CreateDevice(ctx context.Context, name, brand string, s
 }
 
 func (s *DevicesService) GetDevice(ctx context.Context, id model.DeviceID) (*model.Device, error) {
-	return s.repo.GetByID(ctx, id)
+	return s.repo.FetchByID(ctx, id)
 }
 
 func (s *DevicesService) ListDevices(ctx context.Context, filter model.DeviceFilter) (*model.DeviceList, error) {
@@ -34,7 +34,7 @@ func (s *DevicesService) ListDevices(ctx context.Context, filter model.DeviceFil
 }
 
 func (s *DevicesService) UpdateDevice(ctx context.Context, id model.DeviceID, name, brand string, state model.State) (*model.Device, error) {
-	device, err := s.repo.GetByID(ctx, id)
+	device, err := s.repo.FetchByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -51,7 +51,7 @@ func (s *DevicesService) UpdateDevice(ctx context.Context, id model.DeviceID, na
 }
 
 func (s *DevicesService) PatchDevice(ctx context.Context, id model.DeviceID, updates map[string]any) (*model.Device, error) {
-	device, err := s.repo.GetByID(ctx, id)
+	device, err := s.repo.FetchByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -68,7 +68,7 @@ func (s *DevicesService) PatchDevice(ctx context.Context, id model.DeviceID, upd
 }
 
 func (s *DevicesService) DeleteDevice(ctx context.Context, id model.DeviceID) error {
-	device, err := s.repo.GetByID(ctx, id)
+	device, err := s.repo.FetchByID(ctx, id)
 	if err != nil {
 		return err
 	}

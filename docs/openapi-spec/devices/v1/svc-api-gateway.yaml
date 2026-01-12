@@ -32,6 +32,14 @@ info:
     - Version-specific changes are documented in the changelog
     - Breaking changes require major version increment
 
+    ### API Deprecation (RFC 8594)
+    When an API version is deprecated, all responses will include:
+    - `Deprecation: true` - Indicates the endpoint is deprecated
+    - `Sunset: <date>` - RFC 7231 HTTP-date when the API will be removed
+    - `Link: <url>; rel="successor-version"` - URI of the replacement API
+
+    These headers help clients migrate to newer versions before sunset.
+
     ## Security
 
     This API uses PASETO token authentication:
@@ -155,7 +163,8 @@ paths:
     get:
       summary: List all devices
       description: |
-        Retrieves a paginated list of all devices. Supports filtering by brand and state.
+        Retrieves a paginated list of all devices. Supports filtering by brand and state,
+        and full-text search across name and brand fields using the `q` parameter.
       operationId: listDevices
       tags:
         - Devices
@@ -172,6 +181,8 @@ paths:
         - $ref: "#/components/parameters/BrandFilterParam"
         - $ref: "#/components/parameters/StateFilterParam"
         - $ref: "#/components/parameters/SortParam"
+        - $ref: "#/components/parameters/SearchParam"
+        - $ref: "#/components/parameters/CursorParam"
         - $ref: "#/components/parameters/FieldsParam"
         - $ref: "#/components/parameters/IfNoneMatchHeader"
         - $ref: "#/components/parameters/AcceptEncodingHeader"
@@ -256,6 +267,8 @@ paths:
         - $ref: "#/components/parameters/BrandFilterParam"
         - $ref: "#/components/parameters/StateFilterParam"
         - $ref: "#/components/parameters/SortParam"
+        - $ref: "#/components/parameters/SearchParam"
+        - $ref: "#/components/parameters/CursorParam"
         - $ref: "#/components/parameters/IfNoneMatchHeader"
       responses:
         "200":
@@ -996,6 +1009,56 @@ components:
           value: "id,name,state,links:(self)"
           summary: Include HATEOAS links
 
+    SearchParam:
+      name: q
+      in: query
+      required: false
+      description: |
+        Full-text search query across name and brand fields.
+        Uses PostgreSQL full-text search with English language stemming.
+
+        **Features:**
+        - Matches word variations (e.g., "running" matches "run")
+        - Case-insensitive search
+        - Searches both name and brand fields
+
+        **Examples:**
+        - `?q=iPhone` - matches "iPhone 15 Pro", "My iPhone", etc.
+        - `?q=Samsung` - matches devices with Samsung brand
+        - `?q=Galaxy` - matches "Galaxy S24", "Galaxy Tab", etc.
+
+        **Combining with filters:**
+        - `?q=iPhone&state=available` - available iPhones only
+        - `?q=Pro&brand=Apple` - Apple devices with "Pro" in name
+      schema:
+        type: string
+        minLength: 2
+        maxLength: 255
+      example: "iPhone"
+
+    CursorParam:
+      name: cursor
+      in: query
+      required: false
+      description: |
+        Opaque cursor for keyset-based pagination.
+        When provided, the `page` parameter is ignored.
+
+        **Usage:**
+        1. First request: Don't include cursor (uses page-based pagination)
+        2. Subsequent requests: Use `pagination.nextCursor` or `pagination.previousCursor` from previous response
+
+        **Benefits over offset pagination:**
+        - Stable results even when data changes between requests
+        - Better performance for large datasets (no OFFSET scanning)
+        - Consistent page sizes
+
+        **Note:** Cursors are opaque strings - do not parse or modify them.
+      schema:
+        type: string
+        maxLength: 500
+      example: "eyJmIjoiLWNyZWF0ZWRBdCIsInYiOiIyMDI0LTAxLTE1VDEwOjMwOjAwWiIsImlkIjoiNTUwZTg0MDAtZTI5Yi00MWQ0LWE3MTYtNDQ2NjU1NDQwMDAwIiwiZCI6Im5leHQifQ"
+
     IfMatchHeader:
       name: If-Match
       in: header
@@ -1151,6 +1214,15 @@ components:
     TracestateResponseHeader:
       $ref: "schemas/headers/response-headers.yaml#/TracestateResponseHeader"
 
+    DeprecationHeader:
+      $ref: "schemas/headers/response-headers.yaml#/DeprecationHeader"
+
+    SunsetHeader:
+      $ref: "schemas/headers/response-headers.yaml#/SunsetHeader"
+
+    LinkSuccessorHeader:
+      $ref: "schemas/headers/response-headers.yaml#/LinkSuccessorHeader"
+
   securitySchemes:
     PasetoAuth:
       type: http
@@ -1199,6 +1271,9 @@ components:
 
     Pagination:
       $ref: "schemas/common/pagination.yaml#/Pagination"
+
+    Meta:
+      $ref: "schemas/common/meta.yaml#/Meta"
 
 tags:
   - name: Devices

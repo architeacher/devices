@@ -1,0 +1,29 @@
+Meta:
+  type: object
+  description: |
+    Response metadata containing tracing information and API versioning.
+    All successful responses include this field to support observability and debugging.
+  required:
+    - requestId
+    - apiVersion
+  properties:
+    requestId:
+      type: string
+      format: uuid
+      description: |
+        Unique identifier for this specific request.
+        Matches the `Request-Id` response header.
+        Use this for correlating logs and debugging.
+      example: "019234a5-6b7c-8d9e-0f12-34567890abcd"
+    traceId:
+      type: string
+      description: |
+        W3C Trace Context trace ID extracted from the traceparent header.
+        Present only when distributed tracing is enabled.
+        Use this to trace requests across multiple services.
+      example: "0af7651916cd43dd8448eb211c80319c"
+    apiVersion:
+      type: string
+      description: API version used to process this request
+      enum: [v1]
+      example: "v1"

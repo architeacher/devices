@@ -2,7 +2,7 @@
 
 package ports
 
-//counterfeiter:generate -o ../mocks/device_service.go . DevicesService
+//counterfeiter:generate -o ../mocks/devices_service.go . DevicesService
 
 import (
 	"context"

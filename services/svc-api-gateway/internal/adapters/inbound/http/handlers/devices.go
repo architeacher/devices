@@ -47,22 +47,15 @@ type (
 		UpdatedAt *time.Time         `json:"updatedAt,omitempty"`
 	}
 
-	deviceResponse struct {
-		Data deviceData `json:"data"`
-	}
-
-	deviceListResponse struct {
-		Data       []deviceData   `json:"data"`
-		Pagination paginationData `json:"pagination"`
-	}
-
 	paginationData struct {
-		Page        uint  `json:"page"`
-		Size        uint  `json:"size"`
-		TotalItems  uint  `json:"totalItems"`
-		TotalPages  uint  `json:"totalPages"`
-		HasNext     *bool `json:"hasNext,omitempty"`
-		HasPrevious *bool `json:"hasPrevious,omitempty"`
+		Page           uint    `json:"page"`
+		Size           uint    `json:"size"`
+		TotalItems     uint    `json:"totalItems"`
+		TotalPages     uint    `json:"totalPages"`
+		HasNext        *bool   `json:"hasNext,omitempty"`
+		HasPrevious    *bool   `json:"hasPrevious,omitempty"`
+		NextCursor     *string `json:"nextCursor,omitempty"`
+		PreviousCursor *string `json:"previousCursor,omitempty"`
 	}
 
 	DeviceHandler struct {
@@ -81,15 +74,14 @@ func NewDeviceHandler(app *usecases.WebApplication) *DeviceHandler {
 func (h *DeviceHandler) ListDevices(w http.ResponseWriter, r *http.Request, params ListDevicesParams) {
 	filter := model.DefaultDeviceFilter()
 
-	if params.Page != nil {
-		filter.Page = uint(*params.Page)
+	if params.Q != nil && *params.Q != "" {
+		filter.Keyword = *params.Q
 	}
-	if params.Size != nil {
-		filter.Size = uint(*params.Size)
-	}
+
 	if params.Brand != nil && len(*params.Brand) > 0 {
 		filter.Brands = *params.Brand
 	}
+
 	if params.State != nil && len(*params.State) > 0 {
 		states := make([]model.State, 0, len(*params.State))
 		for _, s := range *params.State {
@@ -97,8 +89,21 @@ func (h *DeviceHandler) ListDevices(w http.ResponseWriter, r *http.Request, para
 		}
 		filter.States = states
 	}
+
 	if params.Sort != nil && len(*params.Sort) > 0 {
 		filter.Sort = *params.Sort
+	}
+
+	if params.Page != nil {
+		filter.Page = uint(*params.Page)
+	}
+
+	if params.Size != nil {
+		filter.Size = uint(*params.Size)
+	}
+
+	if params.Cursor != nil && *params.Cursor != "" {
+		filter.Cursor = *params.Cursor
 	}
 
 	result, err := h.app.Queries.ListDevices.Execute(r.Context(), queries.ListDevicesQuery{Filter: filter})
@@ -108,17 +113,49 @@ func (h *DeviceHandler) ListDevices(w http.ResponseWriter, r *http.Request, para
 		return
 	}
 
-	writeJSONResponse(w, http.StatusOK, toDeviceListResponse(result))
+	data, pagination := toDeviceListData(result)
+	response := EnvelopedResponse{
+		Data:       data,
+		Meta:       NewMeta(r),
+		Pagination: pagination,
+	}
+
+	writeJSONResponse(w, http.StatusOK, response)
 }
 
 func (h *DeviceHandler) HeadDevices(w http.ResponseWriter, r *http.Request, params HeadDevicesParams) {
 	filter := model.DefaultDeviceFilter()
 
+	if params.Q != nil && *params.Q != "" {
+		filter.Keyword = *params.Q
+	}
+
+	if params.Brand != nil && len(*params.Brand) > 0 {
+		filter.Brands = *params.Brand
+	}
+
+	if params.State != nil && len(*params.State) > 0 {
+		states := make([]model.State, 0, len(*params.State))
+		for _, s := range *params.State {
+			states = append(states, model.State(s))
+		}
+		filter.States = states
+	}
+
+	if params.Sort != nil && len(*params.Sort) > 0 {
+		filter.Sort = *params.Sort
+	}
+
 	if params.Page != nil {
 		filter.Page = uint(*params.Page)
 	}
+
 	if params.Size != nil {
 		filter.Size = uint(*params.Size)
+	}
+
+	if params.Cursor != nil && *params.Cursor != "" {
+		filter.Cursor = *params.Cursor
 	}
 
 	result, err := h.app.Queries.ListDevices.Execute(r.Context(), queries.ListDevicesQuery{Filter: filter})
@@ -164,7 +201,13 @@ func (h *DeviceHandler) CreateDevice(w http.ResponseWriter, r *http.Request, _ C
 	}
 
 	w.Header().Set("Location", fmt.Sprintf("/v1/devices/%s", device.ID.String()))
-	writeJSONResponse(w, http.StatusCreated, toDeviceResponse(device))
+
+	response := EnvelopedResponse{
+		Data: toDeviceData(device),
+		Meta: NewMeta(r),
+	}
+
+	writeJSONResponse(w, http.StatusCreated, response)
 }
 
 func (h *DeviceHandler) GetDevice(w http.ResponseWriter, r *http.Request, deviceId openapi_types.UUID, _ GetDeviceParams) {
@@ -188,7 +231,12 @@ func (h *DeviceHandler) GetDevice(w http.ResponseWriter, r *http.Request, device
 		return
 	}
 
-	writeJSONResponse(w, http.StatusOK, toDeviceResponse(device))
+	response := EnvelopedResponse{
+		Data: toDeviceData(device),
+		Meta: NewMeta(r),
+	}
+
+	writeJSONResponse(w, http.StatusOK, response)
 }
 
 func (h *DeviceHandler) HeadDevice(w http.ResponseWriter, r *http.Request, deviceId openapi_types.UUID, _ HeadDeviceParams) {
@@ -249,7 +297,12 @@ func (h *DeviceHandler) UpdateDevice(w http.ResponseWriter, r *http.Request, dev
 		return
 	}
 
-	writeJSONResponse(w, http.StatusOK, toDeviceResponse(device))
+	response := EnvelopedResponse{
+		Data: toDeviceData(device),
+		Meta: NewMeta(r),
+	}
+
+	writeJSONResponse(w, http.StatusOK, response)
 }
 
 func (h *DeviceHandler) PatchDevice(w http.ResponseWriter, r *http.Request, deviceId openapi_types.UUID, _ PatchDeviceParams) {
@@ -290,7 +343,12 @@ func (h *DeviceHandler) PatchDevice(w http.ResponseWriter, r *http.Request, devi
 		return
 	}
 
-	writeJSONResponse(w, http.StatusOK, toDeviceResponse(device))
+	response := EnvelopedResponse{
+		Data: toDeviceData(device),
+		Meta: NewMeta(r),
+	}
+
+	writeJSONResponse(w, http.StatusOK, response)
 }
 
 func (h *DeviceHandler) DeleteDevice(w http.ResponseWriter, r *http.Request, deviceId openapi_types.UUID, _ DeleteDeviceParams) {
@@ -463,11 +521,7 @@ func toDeviceData(device *model.Device) deviceData {
 	}
 }
 
-func toDeviceResponse(device *model.Device) deviceResponse {
-	return deviceResponse{Data: toDeviceData(device)}
-}
-
-func toDeviceListResponse(list *model.DeviceList) deviceListResponse {
+func toDeviceListData(list *model.DeviceList) ([]deviceData, *paginationData) {
 	data := make([]deviceData, 0, len(list.Devices))
 	for index := range list.Devices {
 		data = append(data, toDeviceData(list.Devices[index]))
@@ -476,15 +530,22 @@ func toDeviceListResponse(list *model.DeviceList) deviceListResponse {
 	hasNext := list.Pagination.HasNext
 	hasPrevious := list.Pagination.HasPrevious
 
-	return deviceListResponse{
-		Data: data,
-		Pagination: paginationData{
-			Page:        list.Pagination.Page,
-			Size:        list.Pagination.Size,
-			TotalItems:  list.Pagination.TotalItems,
-			TotalPages:  list.Pagination.TotalPages,
-			HasNext:     &hasNext,
-			HasPrevious: &hasPrevious,
-		},
+	pagination := &paginationData{
+		Page:        list.Pagination.Page,
+		Size:        list.Pagination.Size,
+		TotalItems:  list.Pagination.TotalItems,
+		TotalPages:  list.Pagination.TotalPages,
+		HasNext:     &hasNext,
+		HasPrevious: &hasPrevious,
 	}
+
+	if list.Pagination.NextCursor != "" {
+		pagination.NextCursor = &list.Pagination.NextCursor
+	}
+
+	if list.Pagination.PreviousCursor != "" {
+		pagination.PreviousCursor = &list.Pagination.PreviousCursor
+	}
+
+	return data, pagination
 }

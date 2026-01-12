@@ -112,9 +112,9 @@
 - **Use Cases** (`usecases/`): Application-specific business rules orchestrating domain and ports
 
 **Consequences**:
-- Business logic isolated from frameworks and infrastructure
+- Business logic is isolated from frameworks and infrastructure
 - Easy to test domain logic in isolation with mock adapters
-- Flexible to swap implementations (e.g., change database without touching business logic)
+- Flexible to swap implementations (e.g., change a database without touching business logic)
 - Clear dependency direction: adapters depend on ports, never the reverse
 
 ---

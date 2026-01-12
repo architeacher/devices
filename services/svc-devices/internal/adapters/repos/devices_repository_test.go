@@ -225,7 +225,7 @@ func TestDevicesRepository_GetByID(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			runRepoTest(t, tc.setupMock, func(t *testing.T, repo *repos.DevicesRepository) {
-				device, err := repo.GetByID(t.Context(), tc.deviceID)
+				device, err := repo.FetchByID(t.Context(), tc.deviceID)
 
 				if tc.expectError {
 					require.Error(t, err)
@@ -926,6 +926,211 @@ func TestDevicesRepository_Ping(t *testing.T) {
 					return
 				}
 				require.NoError(t, err)
+			})
+		})
+	}
+}
+
+func TestDevicesRepository_List_WithFullTextSearch(t *testing.T) {
+	t.Parallel()
+
+	now := time.Now().UTC()
+
+	cases := []struct {
+		name          string
+		filter        model.DeviceFilter
+		setupMock     func(mock pgxmock.PgxPoolIface)
+		expectError   bool
+		expectedCount int
+		validateList  func(*testing.T, *model.DeviceList)
+	}{
+		{
+			name: "search by exact name match",
+			filter: model.DeviceFilter{
+				Keyword: "iPhone",
+				Page:    1,
+				Size:    20,
+				Sort:    []string{"-createdAt"},
+			},
+			setupMock: func(mock pgxmock.PgxPoolIface) {
+				rows := pgxmock.NewRows([]string{"id", "name", "brand", "state", "created_at", "updated_at", "total_count"}).
+					AddRow(model.NewDeviceID().String(), "iPhone 15 Pro", "Apple", "available", now, now, uint(2)).
+					AddRow(model.NewDeviceID().String(), "iPhone 14", "Apple", "in-use", now, now, uint(2))
+				mock.ExpectQuery(regexp.QuoteMeta(
+					`SELECT id, name, brand, state, created_at, updated_at, COUNT(*) OVER() as total_count FROM devices WHERE search_vector @@ plainto_tsquery('english', $1) ORDER BY created_at DESC LIMIT 20 OFFSET 0`,
+				)).
+					WithArgs("iPhone").
+					WillReturnRows(rows)
+			},
+			expectError:   false,
+			expectedCount: 2,
+			validateList: func(t *testing.T, list *model.DeviceList) {
+				for _, d := range list.Devices {
+					require.Contains(t, d.Name, "iPhone")
+				}
+			},
+		},
+		{
+			name: "search by brand match",
+			filter: model.DeviceFilter{
+				Keyword: "Samsung",
+				Page:    1,
+				Size:    20,
+				Sort:    []string{"-createdAt"},
+			},
+			setupMock: func(mock pgxmock.PgxPoolIface) {
+				rows := pgxmock.NewRows([]string{"id", "name", "brand", "state", "created_at", "updated_at", "total_count"}).
+					AddRow(model.NewDeviceID().String(), "Galaxy S24", "Samsung", "available", now, now, uint(1))
+				mock.ExpectQuery(regexp.QuoteMeta(
+					`SELECT id, name, brand, state, created_at, updated_at, COUNT(*) OVER() as total_count FROM devices WHERE search_vector @@ plainto_tsquery('english', $1) ORDER BY created_at DESC LIMIT 20 OFFSET 0`,
+				)).
+					WithArgs("Samsung").
+					WillReturnRows(rows)
+			},
+			expectError:   false,
+			expectedCount: 1,
+			validateList: func(t *testing.T, list *model.DeviceList) {
+				require.Equal(t, "Samsung", list.Devices[0].Brand)
+			},
+		},
+		{
+			name: "search with no results",
+			filter: model.DeviceFilter{
+				Keyword: "nonexistent",
+				Page:    1,
+				Size:    20,
+				Sort:    []string{"-createdAt"},
+			},
+			setupMock: func(mock pgxmock.PgxPoolIface) {
+				rows := pgxmock.NewRows([]string{"id", "name", "brand", "state", "created_at", "updated_at", "total_count"})
+				mock.ExpectQuery(regexp.QuoteMeta(
+					`SELECT id, name, brand, state, created_at, updated_at, COUNT(*) OVER() as total_count FROM devices WHERE search_vector @@ plainto_tsquery('english', $1) ORDER BY created_at DESC LIMIT 20 OFFSET 0`,
+				)).
+					WithArgs("nonexistent").
+					WillReturnRows(rows)
+			},
+			expectError:   false,
+			expectedCount: 0,
+			validateList: func(t *testing.T, list *model.DeviceList) {
+				require.Equal(t, uint(0), list.Pagination.TotalItems)
+			},
+		},
+		{
+			name: "search combined with state filter",
+			filter: model.DeviceFilter{
+				Keyword: "iPhone",
+				States:  []model.State{model.StateAvailable},
+				Page:    1,
+				Size:    20,
+				Sort:    []string{"-createdAt"},
+			},
+			setupMock: func(mock pgxmock.PgxPoolIface) {
+				rows := pgxmock.NewRows([]string{"id", "name", "brand", "state", "created_at", "updated_at", "total_count"}).
+					AddRow(model.NewDeviceID().String(), "iPhone 15 Pro", "Apple", "available", now, now, uint(1))
+				mock.ExpectQuery(regexp.QuoteMeta(
+					`SELECT id, name, brand, state, created_at, updated_at, COUNT(*) OVER() as total_count FROM devices WHERE (search_vector @@ plainto_tsquery('english', $1) AND state IN ($2)) ORDER BY created_at DESC LIMIT 20 OFFSET 0`,
+				)).
+					WithArgs("iPhone", "available").
+					WillReturnRows(rows)
+			},
+			expectError:   false,
+			expectedCount: 1,
+			validateList: func(t *testing.T, list *model.DeviceList) {
+				require.Equal(t, model.StateAvailable, list.Devices[0].State)
+				require.Contains(t, list.Devices[0].Name, "iPhone")
+			},
+		},
+		{
+			name: "search combined with brand filter",
+			filter: model.DeviceFilter{
+				Keyword: "Pro",
+				Brands:  []string{"Apple"},
+				Page:    1,
+				Size:    20,
+				Sort:    []string{"-createdAt"},
+			},
+			setupMock: func(mock pgxmock.PgxPoolIface) {
+				rows := pgxmock.NewRows([]string{"id", "name", "brand", "state", "created_at", "updated_at", "total_count"}).
+					AddRow(model.NewDeviceID().String(), "iPhone 15 Pro", "Apple", "available", now, now, uint(1))
+				mock.ExpectQuery(regexp.QuoteMeta(
+					`SELECT id, name, brand, state, created_at, updated_at, COUNT(*) OVER() as total_count FROM devices WHERE (search_vector @@ plainto_tsquery('english', $1) AND brand IN ($2)) ORDER BY created_at DESC LIMIT 20 OFFSET 0`,
+				)).
+					WithArgs("Pro", "Apple").
+					WillReturnRows(rows)
+			},
+			expectError:   false,
+			expectedCount: 1,
+			validateList: func(t *testing.T, list *model.DeviceList) {
+				require.Equal(t, "Apple", list.Devices[0].Brand)
+				require.Contains(t, list.Devices[0].Name, "Pro")
+			},
+		},
+		{
+			name: "search combined with all filters",
+			filter: model.DeviceFilter{
+				Keyword: "Galaxy",
+				Brands:  []string{"Samsung"},
+				States:  []model.State{model.StateAvailable},
+				Page:    1,
+				Size:    20,
+				Sort:    []string{"-createdAt"},
+			},
+			setupMock: func(mock pgxmock.PgxPoolIface) {
+				rows := pgxmock.NewRows([]string{"id", "name", "brand", "state", "created_at", "updated_at", "total_count"}).
+					AddRow(model.NewDeviceID().String(), "Galaxy S24 Ultra", "Samsung", "available", now, now, uint(1))
+				mock.ExpectQuery(regexp.QuoteMeta(
+					`SELECT id, name, brand, state, created_at, updated_at, COUNT(*) OVER() as total_count FROM devices WHERE (search_vector @@ plainto_tsquery('english', $1) AND brand IN ($2) AND state IN ($3)) ORDER BY created_at DESC LIMIT 20 OFFSET 0`,
+				)).
+					WithArgs("Galaxy", "Samsung", "available").
+					WillReturnRows(rows)
+			},
+			expectError:   false,
+			expectedCount: 1,
+			validateList: func(t *testing.T, list *model.DeviceList) {
+				require.Equal(t, "Samsung", list.Devices[0].Brand)
+				require.Equal(t, model.StateAvailable, list.Devices[0].State)
+				require.Contains(t, list.Devices[0].Name, "Galaxy")
+			},
+		},
+		{
+			name: "empty search string is ignored",
+			filter: model.DeviceFilter{
+				Keyword: "",
+				Page:    1,
+				Size:    20,
+				Sort:    []string{"-createdAt"},
+			},
+			setupMock: func(mock pgxmock.PgxPoolIface) {
+				rows := pgxmock.NewRows([]string{"id", "name", "brand", "state", "created_at", "updated_at", "total_count"}).
+					AddRow(model.NewDeviceID().String(), "Device 1", "Brand A", "available", now, now, uint(2)).
+					AddRow(model.NewDeviceID().String(), "Device 2", "Brand B", "in-use", now, now, uint(2))
+				mock.ExpectQuery(regexp.QuoteMeta(
+					`SELECT id, name, brand, state, created_at, updated_at, COUNT(*) OVER() as total_count FROM devices ORDER BY created_at DESC LIMIT 20 OFFSET 0`,
+				)).
+					WillReturnRows(rows)
+			},
+			expectError:   false,
+			expectedCount: 2,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			runRepoTest(t, tc.setupMock, func(t *testing.T, repo *repos.DevicesRepository) {
+				list, err := repo.List(t.Context(), tc.filter)
+
+				if tc.expectError {
+					require.Error(t, err)
+					require.Nil(t, list)
+
+					return
+				}
+				require.NoError(t, err)
+				require.NotNil(t, list)
+				require.Len(t, list.Devices, tc.expectedCount)
+				if tc.validateList != nil {
+					tc.validateList(t, list)
+				}
 			})
 		})
 	}

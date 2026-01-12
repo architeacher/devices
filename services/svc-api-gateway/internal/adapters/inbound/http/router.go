@@ -105,6 +105,15 @@ func initMiddlewares(cfg RouterConfig) []handlers.MiddlewareFunc {
 		cfg.Logger.Info().Msg("idempotency middleware enabled")
 	}
 
+	if cfg.ServiceConfig.Deprecation.Enabled {
+		middlewares = append(middlewares, middleware.Sunset(cfg.ServiceConfig.Deprecation))
+
+		cfg.Logger.Info().
+			Str("sunset_date", cfg.ServiceConfig.Deprecation.SunsetDate).
+			Str("successor_path", cfg.ServiceConfig.Deprecation.SuccessorPath).
+			Msg("API deprecation headers enabled")
+	}
+
 	// Access logging with health check filtering.
 	if cfg.ServiceConfig.Logging.AccessLog.Enabled {
 		accessLogCfg := cfg.ServiceConfig.Logging.AccessLog

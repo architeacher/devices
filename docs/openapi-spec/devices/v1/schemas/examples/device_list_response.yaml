@@ -26,6 +26,10 @@ list:
         updatedAt: "2024-01-13T14:20:00Z"
         links:
           self: "/devices/019234a5-6b7c-8d9e-0f12-34567890abcf"
+    meta:
+      requestId: "550e8400-e29b-41d4-a716-446655440000"
+      traceId: "0af7651916cd43dd8448eb211c80319c"
+      apiVersion: "v1"
     pagination:
       page: 1
       size: 20
@@ -33,15 +37,6 @@ list:
       totalPages: 1
       hasNext: false
       hasPrevious: false
-      links:
-        self: "/devices?page=1&size=20"
-        first: "/devices?page=1&size=20"
-        last: "/devices?page=1&size=20"
-        next: null
-        previous: null
-    filters:
-      brand: null
-      state: null
 
 filteredByBrand:
   summary: Devices filtered by brand
@@ -63,6 +58,10 @@ filteredByBrand:
         updatedAt: "2024-01-15T08:30:00Z"
         links:
           self: "/devices/019234a5-6b7c-8d9e-0f12-34567890abd0"
+    meta:
+      requestId: "550e8400-e29b-41d4-a716-446655440001"
+      traceId: "1bf7651916cd43dd8448eb211c80319d"
+      apiVersion: "v1"
     pagination:
       page: 1
       size: 20
@@ -70,20 +69,15 @@ filteredByBrand:
       totalPages: 1
       hasNext: false
       hasPrevious: false
-      links:
-        self: "/devices?page=1&size=20&brand=Apple"
-        first: "/devices?page=1&size=20&brand=Apple"
-        last: "/devices?page=1&size=20&brand=Apple"
-        next: null
-        previous: null
-    filters:
-      brand: "Apple"
-      state: null
 
 empty:
   summary: Empty list of devices
   value:
     data: []
+    meta:
+      requestId: "550e8400-e29b-41d4-a716-446655440002"
+      traceId: "2cf7651916cd43dd8448eb211c80319e"
+      apiVersion: "v1"
     pagination:
       page: 1
       size: 20
@@ -91,12 +85,29 @@ empty:
       totalPages: 0
       hasNext: false
       hasPrevious: false
-      links:
-        self: "/devices?page=1&size=20"
-        first: "/devices?page=1&size=20"
-        last: "/devices?page=1&size=20"
-        next: null
-        previous: null
-    filters:
-      brand: null
-      state: null
+
+withCursor:
+  summary: List with cursor-based pagination
+  value:
+    data:
+      - id: "019234a5-6b7c-8d9e-0f12-34567890abcd"
+        name: "iPhone 15 Pro"
+        brand: "Apple"
+        state: "available"
+        createdAt: "2024-01-15T10:30:00Z"
+        updatedAt: "2024-01-15T10:30:00Z"
+        links:
+          self: "/devices/019234a5-6b7c-8d9e-0f12-34567890abcd"
+    meta:
+      requestId: "550e8400-e29b-41d4-a716-446655440003"
+      traceId: "3df7651916cd43dd8448eb211c80319f"
+      apiVersion: "v1"
+    pagination:
+      page: 1
+      size: 10
+      totalItems: 50
+      totalPages: 5
+      hasNext: true
+      hasPrevious: false
+      nextCursor: "eyJmIjoiLWNyZWF0ZWRBdCIsInYiOiIyMDI0LTAxLTE1VDEwOjMwOjAwWiIsImlkIjoiMDE5MjM0YTUtNmI3Yy04ZDllLTBmMTItMzQ1Njc4OTBhYmNkIiwiZCI6Im5leHQifQ"
+      previousCursor: null

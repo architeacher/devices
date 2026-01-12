@@ -84,3 +84,19 @@ func Between(field string, start, end any) Specification {
 func (s *betweenSpec) Operator() SpecOperator { return SpecOpBetween }
 func (s *betweenSpec) Field() string          { return s.field }
 func (s *betweenSpec) Value() any             { return []any{s.start, s.end} }
+
+type fullTextSpec struct {
+	baseSpec
+	query string
+}
+
+func FullText(query string) Specification {
+	s := &fullTextSpec{query: query}
+	s.setSelf(s)
+
+	return s
+}
+
+func (s *fullTextSpec) Operator() SpecOperator { return SpecOpFullText }
+func (s *fullTextSpec) Field() string          { return "search_vector" }
+func (s *fullTextSpec) Value() any             { return s.query }

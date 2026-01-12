@@ -55,6 +55,9 @@ func (t *CriteriaTranslator) translateSpec(spec model.Specification) sq.Sqlizer 
 	case model.SpecOpLike:
 		return sq.Like{t.col(spec.Field()): spec.Value()}
 
+	case model.SpecOpFullText:
+		return sq.Expr("search_vector @@ plainto_tsquery('english', ?)", spec.Value())
+
 	case model.SpecOpBetween:
 		values := spec.Value().([]any)
 		col := t.col(spec.Field())
@@ -119,5 +122,57 @@ func (t *CriteriaTranslator) applyPagination(builder sq.SelectBuilder, c model.C
 		return builder
 	}
 
+	if c.HasCursor() {
+		builder = t.applyCursorPagination(builder, c)
+
+		return builder.Limit(uint64(c.Size()))
+	}
+
 	return builder.Limit(uint64(c.Size())).Offset(uint64(c.Offset()))
+}
+
+func (t *CriteriaTranslator) applyCursorPagination(builder sq.SelectBuilder, c model.Criteria) sq.SelectBuilder {
+	cursor := c.Cursor()
+	if cursor == nil {
+		return builder
+	}
+
+	cursorValue, err := cursor.ParseCursorValue()
+	if err != nil {
+		return builder
+	}
+
+	sortField := t.normalizeSortField(cursor.Field)
+	col := t.col(sortField)
+	isDescending := len(cursor.Field) > 0 && cursor.Field[0] == '-'
+
+	if cursor.Direction == model.CursorDirectionNext {
+		if isDescending {
+			return builder.Where(
+				sq.Expr("("+col+", id) < (?, ?)", cursorValue, cursor.ID),
+			)
+		}
+
+		return builder.Where(
+			sq.Expr("("+col+", id) > (?, ?)", cursorValue, cursor.ID),
+		)
+	}
+
+	if isDescending {
+		return builder.Where(
+			sq.Expr("("+col+", id) > (?, ?)", cursorValue, cursor.ID),
+		)
+	}
+
+	return builder.Where(
+		sq.Expr("("+col+", id) < (?, ?)", cursorValue, cursor.ID),
+	)
+}
+
+func (t *CriteriaTranslator) normalizeSortField(field string) string {
+	if len(field) > 0 && field[0] == '-' {
+		return field[1:]
+	}
+
+	return field
 }

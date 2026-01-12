@@ -58,29 +58,35 @@ message GetDeviceResponse {
 }
 
 message ListDevicesRequest {
+  // Full-text search query across name and brand fields.
+  string query = 1 [(buf.validate.field).string = {max_len: 255}];
+
   // Optional filter by brand(s). Multiple values use OR logic.
-  repeated string brands = 1 [(buf.validate.field).repeated = {
+  repeated string brands = 2 [(buf.validate.field).repeated = {
     max_items: 10,
     items: {string: {min_len: 1, max_len: 100}}
   }];
 
   // Optional filter by state(s). Multiple values use OR logic.
-  repeated DeviceState states = 2 [(buf.validate.field).repeated = {
+  repeated DeviceState states = 3 [(buf.validate.field).repeated = {
     max_items: 3,
     items: {enum: {defined_only: true}}
   }];
 
-  // Page number (1-based).
-  uint32 page = 3 [(buf.validate.field).uint32.gte = 1];
-
-  // Page size.
-  uint32 size = 4 [(buf.validate.field).uint32 = {gte: 1, lte: 100}];
-
   // Sort fields (e.g., "-createdAt", "name"). Prefix with `-` for descending.
-  repeated string sort = 5 [(buf.validate.field).repeated = {
+  repeated string sort = 4 [(buf.validate.field).repeated = {
     max_items: 5,
     items: {string: {min_len: 1, max_len: 50}}
   }];
+
+  // Page number (1-based). Ignored when cursor is provided.
+  uint32 page = 5 [(buf.validate.field).uint32.gte = 1];
+
+  // Page size.
+  uint32 size = 6 [(buf.validate.field).uint32 = {gte: 1, lte: 100}];
+
+  // Optional cursor for keyset pagination. When provided, page is ignored.
+  string cursor = 7 [(buf.validate.field).string = {max_len: 500}];
 }
 
 message ListDevicesResponse {
@@ -95,6 +101,8 @@ message Pagination {
   uint32 total_pages = 4;
   bool has_next = 5;
   bool has_previous = 6;
+  string next_cursor = 7;
+  string previous_cursor = 8;
 }
 
 message UpdateDeviceRequest {

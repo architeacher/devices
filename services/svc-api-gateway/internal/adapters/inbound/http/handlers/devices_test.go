@@ -12,6 +12,7 @@ import (
 	"github.com/architeacher/devices/pkg/logger"
 	"github.com/architeacher/devices/pkg/metrics/noop"
 	"github.com/architeacher/devices/services/svc-api-gateway/internal/adapters/inbound/http/handlers"
+	"github.com/architeacher/devices/services/svc-api-gateway/internal/adapters/inbound/http/middleware"
 	"github.com/architeacher/devices/services/svc-api-gateway/internal/domain/model"
 	"github.com/architeacher/devices/services/svc-api-gateway/internal/mocks"
 	"github.com/architeacher/devices/services/svc-api-gateway/internal/usecases"
@@ -22,6 +23,12 @@ import (
 
 func newTestApp(deviceSvc *mocks.FakeDevicesService, healthChecker *mocks.FakeHealthChecker) *usecases.WebApplication {
 	return usecases.NewWebApplication(deviceSvc, healthChecker, logger.NewTestLogger(), noop.NewMetricsClient(), otelNoop.NewTracerProvider())
+}
+
+func withRequestContext(req *http.Request) *http.Request {
+	ctx := context.WithValue(req.Context(), middleware.RequestIDKey, uuid.New().String())
+
+	return req.WithContext(ctx)
 }
 
 func newDefaultHealthChecker() *mocks.FakeHealthChecker {
@@ -98,7 +105,7 @@ func (s *DeviceHandlerTestSuite) TestListDevices_Success() {
 	app := newTestApp(deviceSvc, newDefaultHealthChecker())
 	handler := handlers.NewDeviceHandler(app)
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/devices", nil)
+	req := withRequestContext(httptest.NewRequest(http.MethodGet, "/v1/devices", nil))
 	rec := httptest.NewRecorder()
 
 	handler.ListDevices(rec, req, handlers.ListDevicesParams{})
@@ -171,7 +178,7 @@ func (s *DeviceHandlerTestSuite) TestGetDevice_Success() {
 	app := newTestApp(deviceSvc, newDefaultHealthChecker())
 	handler := handlers.NewDeviceHandler(app)
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/devices/"+id.String(), nil)
+	req := withRequestContext(httptest.NewRequest(http.MethodGet, "/v1/devices/"+id.String(), nil))
 	rec := httptest.NewRecorder()
 
 	handler.GetDevice(rec, req, id.UUID, handlers.GetDeviceParams{})

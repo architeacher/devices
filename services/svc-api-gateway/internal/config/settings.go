@@ -28,6 +28,7 @@ type (
 		Cache                 Cache                 `json:"cache"`
 		ThrottledRateLimiting ThrottledRateLimiting `json:"throttled_rate_limiting"`
 		Idempotency           Idempotency           `json:"idempotency"`
+		Deprecation           Deprecation           `json:"deprecation"`
 		Logging               Logging               `json:"logging"`
 		Telemetry             Telemetry             `json:"telemetry"`
 	}
@@ -140,6 +141,12 @@ type (
 		HeaderName       string        `envconfig:"IDEMPOTENCY_HEADER" default:"Idempotency-Key" json:"header_name"`
 		ReplayedHeader   string        `envconfig:"IDEMPOTENCY_REPLAYED_HEADER" default:"Idempotent-Replayed" json:"replayed_header"`
 		GracefulDegraded bool          `envconfig:"IDEMPOTENCY_GRACEFUL_DEGRADED" default:"true" json:"graceful_degraded"`
+	}
+
+	Deprecation struct {
+		Enabled       bool   `envconfig:"API_DEPRECATION_ENABLED" default:"false" json:"enabled"`
+		SunsetDate    string `envconfig:"API_SUNSET_DATE" default:"" json:"sunset_date"`
+		SuccessorPath string `envconfig:"API_SUCCESSOR_PATH" default:"" json:"successor_path"`
 	}
 
 	Logging struct {

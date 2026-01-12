@@ -6,7 +6,7 @@ SERVICES_DIR := services
 PROJECT_NAME := "devices"
 VERSION ?= "v1"
 
-MOCKS_DIR := internal/mocks
+MOCKS_DIR := services/svc-devices/internal/mocks
 
 .PHONY: $(ENV_FILE) $(DOT_ENV)
 $(ENV_FILE) $(DOT_ENV):
@@ -96,7 +96,12 @@ create-migration: ## 🗂️ Creates migration files based on a passed argument 
 
 $(MOCKS_DIR):
 	$(call printMessage,"🎭  Generating mocks",$(INFO_CLR))
-	GOFLAGS="-mod=mod" go generate ./...
+	for dir in ${SERVICES_DIR}/*/; do \
+		if [ -f "$${dir}go.mod" ]; then \
+			echo "Generating mocks for $${dir}..."; \
+			(cd "$${dir}" && GOFLAGS="-mod=mod" go generate ./...) || exit 1; \
+		fi \
+	done
 
 .PHONY: generate-mocks
 generate-mocks: $(MOCKS_DIR) ## 🎭 Generate test mocks from interfaces (only if needed).
@@ -118,11 +123,11 @@ test-unit: generate-mocks ## 🧪 Run unit tests with race detection.
 	done
 
 .PHONY: test-integration
-test-integration: generate-mocks ## 🔗 Run integration tests with race detection (requires Docker).
+test-integration: ## 🔗 Run integration tests with race detection (requires Docker).
 	$(call printMessage,"🔗  Running integration tests",$(INFO_CLR))
 	for dir in ${SERVICES_DIR}/*/; do \
-		if [ -f "$${dir}go.mod" ]; then \
+		if [ -f "$${dir}go.mod" ] && [ -d "$${dir}itest" ]; then \
 			echo "Testing $${dir}..."; \
-			(cd "$${dir}" && go test -v -race -tags=integration ./...) || exit 1; \
+			(cd "$${dir}" && go test -v -race -tags=integration ./itest/...) || exit 1; \
 		fi \
 	done

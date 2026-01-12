@@ -45,17 +45,23 @@ func toDomainState(s devicev1.DeviceState) model.State {
 
 func toProtoPagination(p model.Pagination) *devicev1.Pagination {
 	return &devicev1.Pagination{
-		Page:        uint32(p.Page),
-		Size:        uint32(p.Size),
-		TotalItems:  uint32(p.TotalItems),
-		TotalPages:  uint32(p.TotalPages),
-		HasNext:     p.HasNext,
-		HasPrevious: p.HasPrevious,
+		Page:           uint32(p.Page),
+		Size:           uint32(p.Size),
+		TotalItems:     uint32(p.TotalItems),
+		TotalPages:     uint32(p.TotalPages),
+		HasNext:        p.HasNext,
+		HasPrevious:    p.HasPrevious,
+		NextCursor:     p.NextCursor,
+		PreviousCursor: p.PreviousCursor,
 	}
 }
 
 func toDomainFilter(req *devicev1.ListDevicesRequest) model.DeviceFilter {
 	filter := model.DefaultDeviceFilter()
+
+	if req.Query != "" {
+		filter.Keyword = req.Query
+	}
 
 	if len(req.GetBrands()) > 0 {
 		filter.Brands = req.GetBrands()
@@ -79,6 +85,10 @@ func toDomainFilter(req *devicev1.ListDevicesRequest) model.DeviceFilter {
 
 	if len(req.GetSort()) > 0 {
 		filter.Sort = req.GetSort()
+	}
+
+	if req.Cursor != "" {
+		filter.Cursor = req.Cursor
 	}
 
 	return filter

@@ -407,16 +407,20 @@ func (x *GetDeviceResponse) GetDevice() *Device {
 
 type ListDevicesRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
+	// Full-text search query across name and brand fields.
+	Query string `protobuf:"bytes,1,opt,name=query,proto3" json:"query,omitempty"`
 	// Optional filter by brand(s). Multiple values use OR logic.
-	Brands []string `protobuf:"bytes,1,rep,name=brands,proto3" json:"brands,omitempty"`
+	Brands []string `protobuf:"bytes,2,rep,name=brands,proto3" json:"brands,omitempty"`
 	// Optional filter by state(s). Multiple values use OR logic.
-	States []DeviceState `protobuf:"varint,2,rep,packed,name=states,proto3,enum=device.v1.DeviceState" json:"states,omitempty"`
-	// Page number (1-based).
-	Page uint32 `protobuf:"varint,3,opt,name=page,proto3" json:"page,omitempty"`
-	// Page size.
-	Size uint32 `protobuf:"varint,4,opt,name=size,proto3" json:"size,omitempty"`
+	States []DeviceState `protobuf:"varint,3,rep,packed,name=states,proto3,enum=device.v1.DeviceState" json:"states,omitempty"`
 	// Sort fields (e.g., "-createdAt", "name"). Prefix with `-` for descending.
-	Sort          []string `protobuf:"bytes,5,rep,name=sort,proto3" json:"sort,omitempty"`
+	Sort []string `protobuf:"bytes,4,rep,name=sort,proto3" json:"sort,omitempty"`
+	// Page number (1-based). Ignored when cursor is provided.
+	Page uint32 `protobuf:"varint,5,opt,name=page,proto3" json:"page,omitempty"`
+	// Page size.
+	Size uint32 `protobuf:"varint,6,opt,name=size,proto3" json:"size,omitempty"`
+	// Optional cursor for keyset pagination. When provided, page is ignored.
+	Cursor        string `protobuf:"bytes,7,opt,name=cursor,proto3" json:"cursor,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -451,6 +455,13 @@ func (*ListDevicesRequest) Descriptor() ([]byte, []int) {
 	return file_device_v1_device_proto_rawDescGZIP(), []int{5}
 }
 
+func (x *ListDevicesRequest) GetQuery() string {
+	if x != nil {
+		return x.Query
+	}
+	return ""
+}
+
 func (x *ListDevicesRequest) GetBrands() []string {
 	if x != nil {
 		return x.Brands
@@ -461,6 +472,13 @@ func (x *ListDevicesRequest) GetBrands() []string {
 func (x *ListDevicesRequest) GetStates() []DeviceState {
 	if x != nil {
 		return x.States
+	}
+	return nil
+}
+
+func (x *ListDevicesRequest) GetSort() []string {
+	if x != nil {
+		return x.Sort
 	}
 	return nil
 }
@@ -479,11 +497,11 @@ func (x *ListDevicesRequest) GetSize() uint32 {
 	return 0
 }
 
-func (x *ListDevicesRequest) GetSort() []string {
+func (x *ListDevicesRequest) GetCursor() string {
 	if x != nil {
-		return x.Sort
+		return x.Cursor
 	}
-	return nil
+	return ""
 }
 
 type ListDevicesResponse struct {
@@ -539,15 +557,17 @@ func (x *ListDevicesResponse) GetPagination() *Pagination {
 }
 
 type Pagination struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Page          uint32                 `protobuf:"varint,1,opt,name=page,proto3" json:"page,omitempty"`
-	Size          uint32                 `protobuf:"varint,2,opt,name=size,proto3" json:"size,omitempty"`
-	TotalItems    uint32                 `protobuf:"varint,3,opt,name=total_items,json=totalItems,proto3" json:"total_items,omitempty"`
-	TotalPages    uint32                 `protobuf:"varint,4,opt,name=total_pages,json=totalPages,proto3" json:"total_pages,omitempty"`
-	HasNext       bool                   `protobuf:"varint,5,opt,name=has_next,json=hasNext,proto3" json:"has_next,omitempty"`
-	HasPrevious   bool                   `protobuf:"varint,6,opt,name=has_previous,json=hasPrevious,proto3" json:"has_previous,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Page           uint32                 `protobuf:"varint,1,opt,name=page,proto3" json:"page,omitempty"`
+	Size           uint32                 `protobuf:"varint,2,opt,name=size,proto3" json:"size,omitempty"`
+	TotalItems     uint32                 `protobuf:"varint,3,opt,name=total_items,json=totalItems,proto3" json:"total_items,omitempty"`
+	TotalPages     uint32                 `protobuf:"varint,4,opt,name=total_pages,json=totalPages,proto3" json:"total_pages,omitempty"`
+	HasNext        bool                   `protobuf:"varint,5,opt,name=has_next,json=hasNext,proto3" json:"has_next,omitempty"`
+	HasPrevious    bool                   `protobuf:"varint,6,opt,name=has_previous,json=hasPrevious,proto3" json:"has_previous,omitempty"`
+	NextCursor     string                 `protobuf:"bytes,7,opt,name=next_cursor,json=nextCursor,proto3" json:"next_cursor,omitempty"`
+	PreviousCursor string                 `protobuf:"bytes,8,opt,name=previous_cursor,json=previousCursor,proto3" json:"previous_cursor,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *Pagination) Reset() {
@@ -620,6 +640,20 @@ func (x *Pagination) GetHasPrevious() bool {
 		return x.HasPrevious
 	}
 	return false
+}
+
+func (x *Pagination) GetNextCursor() string {
+	if x != nil {
+		return x.NextCursor
+	}
+	return ""
+}
+
+func (x *Pagination) GetPreviousCursor() string {
+	if x != nil {
+		return x.PreviousCursor
+	}
+	return ""
 }
 
 type UpdateDeviceRequest struct {
@@ -1012,21 +1046,23 @@ const file_device_v1_device_proto_rawDesc = "" +
 	"\x10GetDeviceRequest\x12\x18\n" +
 	"\x02id\x18\x01 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\x02id\">\n" +
 	"\x11GetDeviceResponse\x12)\n" +
-	"\x06device\x18\x01 \x01(\v2\x11.device.v1.DeviceR\x06device\"\xe1\x01\n" +
-	"\x12ListDevicesRequest\x12(\n" +
-	"\x06brands\x18\x01 \x03(\tB\x10\xbaH\r\x92\x01\n" +
+	"\x06device\x18\x01 \x01(\v2\x11.device.v1.DeviceR\x06device\"\xa3\x02\n" +
+	"\x12ListDevicesRequest\x12\x1e\n" +
+	"\x05query\x18\x01 \x01(\tB\b\xbaH\x05r\x03\x18\xff\x01R\x05query\x12(\n" +
+	"\x06brands\x18\x02 \x03(\tB\x10\xbaH\r\x92\x01\n" +
 	"\x10\n" +
 	"\"\x06r\x04\x10\x01\x18dR\x06brands\x12?\n" +
-	"\x06states\x18\x02 \x03(\x0e2\x16.device.v1.DeviceStateB\x0f\xbaH\f\x92\x01\t\x10\x03\"\x05\x82\x01\x02\x10\x01R\x06states\x12\x1b\n" +
-	"\x04page\x18\x03 \x01(\rB\a\xbaH\x04*\x02(\x01R\x04page\x12\x1d\n" +
-	"\x04size\x18\x04 \x01(\rB\t\xbaH\x06*\x04\x18d(\x01R\x04size\x12$\n" +
-	"\x04sort\x18\x05 \x03(\tB\x10\xbaH\r\x92\x01\n" +
-	"\x10\x05\"\x06r\x04\x10\x01\x182R\x04sort\"y\n" +
+	"\x06states\x18\x03 \x03(\x0e2\x16.device.v1.DeviceStateB\x0f\xbaH\f\x92\x01\t\x10\x03\"\x05\x82\x01\x02\x10\x01R\x06states\x12$\n" +
+	"\x04sort\x18\x04 \x03(\tB\x10\xbaH\r\x92\x01\n" +
+	"\x10\x05\"\x06r\x04\x10\x01\x182R\x04sort\x12\x1b\n" +
+	"\x04page\x18\x05 \x01(\rB\a\xbaH\x04*\x02(\x01R\x04page\x12\x1d\n" +
+	"\x04size\x18\x06 \x01(\rB\t\xbaH\x06*\x04\x18d(\x01R\x04size\x12 \n" +
+	"\x06cursor\x18\a \x01(\tB\b\xbaH\x05r\x03\x18\xf4\x03R\x06cursor\"y\n" +
 	"\x13ListDevicesResponse\x12+\n" +
 	"\adevices\x18\x01 \x03(\v2\x11.device.v1.DeviceR\adevices\x125\n" +
 	"\n" +
 	"pagination\x18\x02 \x01(\v2\x15.device.v1.PaginationR\n" +
-	"pagination\"\xb4\x01\n" +
+	"pagination\"\xfe\x01\n" +
 	"\n" +
 	"Pagination\x12\x12\n" +
 	"\x04page\x18\x01 \x01(\rR\x04page\x12\x12\n" +
@@ -1036,7 +1072,10 @@ const file_device_v1_device_proto_rawDesc = "" +
 	"\vtotal_pages\x18\x04 \x01(\rR\n" +
 	"totalPages\x12\x19\n" +
 	"\bhas_next\x18\x05 \x01(\bR\ahasNext\x12!\n" +
-	"\fhas_previous\x18\x06 \x01(\bR\vhasPrevious\"\xab\x01\n" +
+	"\fhas_previous\x18\x06 \x01(\bR\vhasPrevious\x12\x1f\n" +
+	"\vnext_cursor\x18\a \x01(\tR\n" +
+	"nextCursor\x12'\n" +
+	"\x0fprevious_cursor\x18\b \x01(\tR\x0epreviousCursor\"\xab\x01\n" +
 	"\x13UpdateDeviceRequest\x12\x18\n" +
 	"\x02id\x18\x01 \x01(\tB\b\xbaH\x05r\x03\xb0\x01\x01R\x02id\x12\x1e\n" +
 	"\x04name\x18\x02 \x01(\tB\n" +

@@ -93,7 +93,7 @@ func (r *DevicesRepository) Create(ctx context.Context, device *model.Device) er
 	return nil
 }
 
-func (r *DevicesRepository) GetByID(ctx context.Context, id model.DeviceID) (*model.Device, error) {
+func (r *DevicesRepository) FetchByID(ctx context.Context, id model.DeviceID) (*model.Device, error) {
 	return r.findByCriteria(
 		ctx,
 		sq.Eq{"id": id.String()},
@@ -121,18 +121,59 @@ func (r *DevicesRepository) List(ctx context.Context, filter model.DeviceFilter)
 		totalPages++
 	}
 
+	pagination := model.Pagination{
+		Page:        criteria.Page(),
+		Size:        criteria.Size(),
+		TotalItems:  totalItems,
+		TotalPages:  totalPages,
+		HasNext:     criteria.Page() < totalPages,
+		HasPrevious: criteria.Page() > 1,
+	}
+
+	sortField := r.getPrimarySortField(filter)
+	pagination = r.generateCursors(devices, pagination, sortField)
+
 	return &model.DeviceList{
-		Devices: devices,
-		Pagination: model.Pagination{
-			Page:        criteria.Page(),
-			Size:        criteria.Size(),
-			TotalItems:  totalItems,
-			TotalPages:  totalPages,
-			HasNext:     criteria.Page() < totalPages,
-			HasPrevious: criteria.Page() > 1,
-		},
-		Filters: filter,
+		Devices:    devices,
+		Pagination: pagination,
+		Filters:    filter,
 	}, nil
+}
+
+func (r *DevicesRepository) getPrimarySortField(filter model.DeviceFilter) string {
+	if len(filter.Sort) > 0 {
+		return filter.Sort[0]
+	}
+
+	return "-createdAt"
+}
+
+func (r *DevicesRepository) generateCursors(
+	devices []*model.Device,
+	pagination model.Pagination,
+	sortField string,
+) model.Pagination {
+	if len(devices) == 0 {
+		return pagination
+	}
+
+	lastDevice := devices[len(devices)-1]
+	if pagination.HasNext {
+		cursor := model.NewCursorFromDevice(lastDevice, sortField, model.CursorDirectionNext)
+		if encoded, err := model.EncodeCursor(cursor); err == nil {
+			pagination.NextCursor = encoded
+		}
+	}
+
+	firstDevice := devices[0]
+	if pagination.HasPrevious {
+		cursor := model.NewCursorFromDevice(firstDevice, sortField, model.CursorDirectionPrev)
+		if encoded, err := model.EncodeCursor(cursor); err == nil {
+			pagination.PreviousCursor = encoded
+		}
+	}
+
+	return pagination
 }
 
 func (r *DevicesRepository) Update(ctx context.Context, device *model.Device) error {

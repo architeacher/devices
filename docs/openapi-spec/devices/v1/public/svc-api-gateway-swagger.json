@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Devices API Gateway",
-    "description": "A REST API for managing device resources with full CRUD operations and filtering capabilities.\n\n## Device Domain\n\nEach device contains:\n- **Id**: Unique identifier (UUID v7)\n- **Name**: Device name\n- **Brand**: Device manufacturer/brand\n- **State**: Current state (available, in-use, inactive)\n- **Creation Time**: Timestamp when the device was created\n\n## Business Rules\n\n- Creation time cannot be updated\n- Name and brand properties cannot be updated if the device is in use\n- In-use devices cannot be deleted\n\n## API Versioning\n\nThis API uses semantic versioning and supports multiple versioning strategies:\n\n### Version Strategy\n- **URL Path Versioning**: `/v1/` (primary method)\n- **Header Versioning**: `API-Version: v1` header (alternative)\n\n### Version Information\n- All responses include `API-Version` header indicating the version used\n- Version-specific changes are documented in the changelog\n- Breaking changes require major version increment\n\n## Security\n\nThis API uses PASETO token authentication:\n- **PASETO tokens**: Platform-Agnostic Security Tokens - secure, stateless authentication\n\n## Security Headers\n\nAll responses include standard security headers:\n- `X-Content-Type-Options: nosniff`\n- `X-Frame-Options: DENY`\n- `X-XSS-Protection: 1; mode=block`\n- `Strict-Transport-Security: max-age=31536000; includeSubDomains`\n- `Content-Security-Policy: default-src 'self'`\n- `Referrer-Policy: strict-origin-when-cross-origin`\n- `Permissions-Policy: camera=(), microphone=(), geolocation=()`\n",
+    "description": "A REST API for managing device resources with full CRUD operations and filtering capabilities.\n\n## Device Domain\n\nEach device contains:\n- **Id**: Unique identifier (UUID v7)\n- **Name**: Device name\n- **Brand**: Device manufacturer/brand\n- **State**: Current state (available, in-use, inactive)\n- **Creation Time**: Timestamp when the device was created\n\n## Business Rules\n\n- Creation time cannot be updated\n- Name and brand properties cannot be updated if the device is in use\n- In-use devices cannot be deleted\n\n## API Versioning\n\nThis API uses semantic versioning and supports multiple versioning strategies:\n\n### Version Strategy\n- **URL Path Versioning**: `/v1/` (primary method)\n- **Header Versioning**: `API-Version: v1` header (alternative)\n\n### Version Information\n- All responses include `API-Version` header indicating the version used\n- Version-specific changes are documented in the changelog\n- Breaking changes require major version increment\n\n### API Deprecation (RFC 8594)\nWhen an API version is deprecated, all responses will include:\n- `Deprecation: true` - Indicates the endpoint is deprecated\n- `Sunset: <date>` - RFC 7231 HTTP-date when the API will be removed\n- `Link: <url>; rel=\"successor-version\"` - URI of the replacement API\n\nThese headers help clients migrate to newer versions before sunset.\n\n## Security\n\nThis API uses PASETO token authentication:\n- **PASETO tokens**: Platform-Agnostic Security Tokens - secure, stateless authentication\n\n## Security Headers\n\nAll responses include standard security headers:\n- `X-Content-Type-Options: nosniff`\n- `X-Frame-Options: DENY`\n- `X-XSS-Protection: 1; mode=block`\n- `Strict-Transport-Security: max-age=31536000; includeSubDomains`\n- `Content-Security-Policy: default-src 'self'`\n- `Referrer-Policy: strict-origin-when-cross-origin`\n- `Permissions-Policy: camera=(), microphone=(), geolocation=()`\n",
     "version": "1.0.0",
     "contact": {
       "name": "Devices API Support",
@@ -305,9 +305,10 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "description": "Response containing a single device",
+                  "description": "Response envelope containing a single device with metadata",
                   "required": [
-                    "data"
+                    "data",
+                    "meta"
                   ],
                   "properties": {
                     "data": {
@@ -381,6 +382,35 @@
                           }
                         }
                       }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "description": "Response metadata containing tracing information and API versioning.\nAll successful responses include this field to support observability and debugging.\n",
+                      "required": [
+                        "requestId",
+                        "apiVersion"
+                      ],
+                      "properties": {
+                        "requestId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "description": "Unique identifier for this specific request.\nMatches the `Request-Id` response header.\nUse this for correlating logs and debugging.\n",
+                          "example": "019234a5-6b7c-8d9e-0f12-34567890abcd"
+                        },
+                        "traceId": {
+                          "type": "string",
+                          "description": "W3C Trace Context trace ID extracted from the traceparent header.\nPresent only when distributed tracing is enabled.\nUse this to trace requests across multiple services.\n",
+                          "example": "0af7651916cd43dd8448eb211c80319c"
+                        },
+                        "apiVersion": {
+                          "type": "string",
+                          "description": "API version used to process this request",
+                          "enum": [
+                            "v1"
+                          ],
+                          "example": "v1"
+                        }
+                      }
                     }
                   }
                 },
@@ -398,6 +428,11 @@
                         "links": {
                           "self": "/devices/019234a5-6b7c-8d9e-0f12-34567890abcd"
                         }
+                      },
+                      "meta": {
+                        "requestId": "550e8400-e29b-41d4-a716-446655440000",
+                        "traceId": "0af7651916cd43dd8448eb211c80319c",
+                        "apiVersion": "v1"
                       }
                     }
                   }
@@ -1301,7 +1336,7 @@
       },
       "get": {
         "summary": "List all devices",
-        "description": "Retrieves a paginated list of all devices. Supports filtering by brand and state.\n",
+        "description": "Retrieves a paginated list of all devices. Supports filtering by brand and state,\nand full-text search across name and brand fields using the `q` parameter.\n",
         "operationId": "listDevices",
         "tags": [
           "Devices"
@@ -1459,6 +1494,29 @@
             "style": "form",
             "explode": false,
             "example": "-createdAt,name"
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "description": "Full-text search query across name and brand fields.\nUses PostgreSQL full-text search with English language stemming.\n\n**Features:**\n- Matches word variations (e.g., \"running\" matches \"run\")\n- Case-insensitive search\n- Searches both name and brand fields\n\n**Examples:**\n- `?q=iPhone` - matches \"iPhone 15 Pro\", \"My iPhone\", etc.\n- `?q=Samsung` - matches devices with Samsung brand\n- `?q=Galaxy` - matches \"Galaxy S24\", \"Galaxy Tab\", etc.\n\n**Combining with filters:**\n- `?q=iPhone&state=available` - available iPhones only\n- `?q=Pro&brand=Apple` - Apple devices with \"Pro\" in name\n",
+            "schema": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 255
+            },
+            "example": "iPhone"
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Opaque cursor for keyset-based pagination.\nWhen provided, the `page` parameter is ignored.\n\n**Usage:**\n1. First request: Don't include cursor (uses page-based pagination)\n2. Subsequent requests: Use `pagination.nextCursor` or `pagination.previousCursor` from previous response\n\n**Benefits over offset pagination:**\n- Stable results even when data changes between requests\n- Better performance for large datasets (no OFFSET scanning)\n- Consistent page sizes\n\n**Note:** Cursors are opaque strings - do not parse or modify them.\n",
+            "schema": {
+              "type": "string",
+              "maxLength": 500
+            },
+            "example": "eyJmIjoiLWNyZWF0ZWRBdCIsInYiOiIyMDI0LTAxLTE1VDEwOjMwOjAwWiIsImlkIjoiNTUwZTg0MDAtZTI5Yi00MWQ0LWE3MTYtNDQ2NjU1NDQwMDAwIiwiZCI6Im5leHQifQ"
           },
           {
             "name": "fields",
@@ -1620,9 +1678,10 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "description": "Response containing a paginated list of devices",
+                  "description": "Response envelope containing a paginated list of devices with metadata",
                   "required": [
                     "data",
+                    "meta",
                     "pagination"
                   ],
                   "properties": {
@@ -1702,6 +1761,35 @@
                         }
                       }
                     },
+                    "meta": {
+                      "type": "object",
+                      "description": "Response metadata containing tracing information and API versioning.\nAll successful responses include this field to support observability and debugging.\n",
+                      "required": [
+                        "requestId",
+                        "apiVersion"
+                      ],
+                      "properties": {
+                        "requestId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "description": "Unique identifier for this specific request.\nMatches the `Request-Id` response header.\nUse this for correlating logs and debugging.\n",
+                          "example": "019234a5-6b7c-8d9e-0f12-34567890abcd"
+                        },
+                        "traceId": {
+                          "type": "string",
+                          "description": "W3C Trace Context trace ID extracted from the traceparent header.\nPresent only when distributed tracing is enabled.\nUse this to trace requests across multiple services.\n",
+                          "example": "0af7651916cd43dd8448eb211c80319c"
+                        },
+                        "apiVersion": {
+                          "type": "string",
+                          "description": "API version used to process this request",
+                          "enum": [
+                            "v1"
+                          ],
+                          "example": "v1"
+                        }
+                      }
+                    },
                     "pagination": {
                       "type": "object",
                       "description": "Pagination metadata for list responses",
@@ -1747,6 +1835,16 @@
                           "description": "Whether there is a previous page",
                           "example": false
                         },
+                        "nextCursor": {
+                          "type": "string",
+                          "description": "Opaque cursor for fetching the next page using keyset pagination.\nOnly present when hasNext is true.\n",
+                          "example": "eyJmIjoiLWNyZWF0ZWRBdCIsInYiOiIyMDI0LTAxLTE1VDEwOjMwOjAwWiIsImlkIjoiNTUwZTg0MDAtZTI5Yi00MWQ0LWE3MTYtNDQ2NjU1NDQwMDAwIiwiZCI6Im5leHQifQ"
+                        },
+                        "previousCursor": {
+                          "type": "string",
+                          "description": "Opaque cursor for fetching the previous page using keyset pagination.\nOnly present when hasPrevious is true.\n",
+                          "example": "eyJmIjoiLWNyZWF0ZWRBdCIsInYiOiIyMDI0LTAxLTE1VDEyOjAwOjAwWiIsImlkIjoiNTUwZTg0MDAtZTI5Yi00MWQ0LWE3MTYtNDQ2NjU1NDQwMDAxIiwiZCI6InByZXYifQ"
+                        },
                         "links": {
                           "type": "object",
                           "description": "HATEOAS links for pagination navigation",
@@ -1784,29 +1882,6 @@
                               "example": null
                             }
                           }
-                        }
-                      }
-                    },
-                    "filters": {
-                      "type": "object",
-                      "description": "Filters that were applied to this request",
-                      "properties": {
-                        "brand": {
-                          "type": "string",
-                          "nullable": true,
-                          "description": "Brand filter that was applied",
-                          "example": "Apple"
-                        },
-                        "state": {
-                          "type": "string",
-                          "nullable": true,
-                          "description": "State filter that was applied",
-                          "enum": [
-                            "available",
-                            "in-use",
-                            "inactive"
-                          ],
-                          "example": "available"
                         }
                       }
                     }
@@ -1851,24 +1926,18 @@
                           }
                         }
                       ],
+                      "meta": {
+                        "requestId": "550e8400-e29b-41d4-a716-446655440000",
+                        "traceId": "0af7651916cd43dd8448eb211c80319c",
+                        "apiVersion": "v1"
+                      },
                       "pagination": {
                         "page": 1,
                         "size": 20,
                         "totalItems": 3,
                         "totalPages": 1,
                         "hasNext": false,
-                        "hasPrevious": false,
-                        "links": {
-                          "self": "/devices?page=1&size=20",
-                          "first": "/devices?page=1&size=20",
-                          "last": "/devices?page=1&size=20",
-                          "next": null,
-                          "previous": null
-                        }
-                      },
-                      "filters": {
-                        "brand": null,
-                        "state": null
+                        "hasPrevious": false
                       }
                     }
                   }
@@ -2800,6 +2869,29 @@
             "example": "-createdAt,name"
           },
           {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "description": "Full-text search query across name and brand fields.\nUses PostgreSQL full-text search with English language stemming.\n\n**Features:**\n- Matches word variations (e.g., \"running\" matches \"run\")\n- Case-insensitive search\n- Searches both name and brand fields\n\n**Examples:**\n- `?q=iPhone` - matches \"iPhone 15 Pro\", \"My iPhone\", etc.\n- `?q=Samsung` - matches devices with Samsung brand\n- `?q=Galaxy` - matches \"Galaxy S24\", \"Galaxy Tab\", etc.\n\n**Combining with filters:**\n- `?q=iPhone&state=available` - available iPhones only\n- `?q=Pro&brand=Apple` - Apple devices with \"Pro\" in name\n",
+            "schema": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 255
+            },
+            "example": "iPhone"
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Opaque cursor for keyset-based pagination.\nWhen provided, the `page` parameter is ignored.\n\n**Usage:**\n1. First request: Don't include cursor (uses page-based pagination)\n2. Subsequent requests: Use `pagination.nextCursor` or `pagination.previousCursor` from previous response\n\n**Benefits over offset pagination:**\n- Stable results even when data changes between requests\n- Better performance for large datasets (no OFFSET scanning)\n- Consistent page sizes\n\n**Note:** Cursors are opaque strings - do not parse or modify them.\n",
+            "schema": {
+              "type": "string",
+              "maxLength": 500
+            },
+            "example": "eyJmIjoiLWNyZWF0ZWRBdCIsInYiOiIyMDI0LTAxLTE1VDEwOjMwOjAwWiIsImlkIjoiNTUwZTg0MDAtZTI5Yi00MWQ0LWE3MTYtNDQ2NjU1NDQwMDAwIiwiZCI6Im5leHQifQ"
+          },
+          {
             "name": "If-None-Match",
             "in": "header",
             "required": false,
@@ -3659,9 +3751,10 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "description": "Response containing a single device",
+                  "description": "Response envelope containing a single device with metadata",
                   "required": [
-                    "data"
+                    "data",
+                    "meta"
                   ],
                   "properties": {
                     "data": {
@@ -3735,6 +3828,35 @@
                           }
                         }
                       }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "description": "Response metadata containing tracing information and API versioning.\nAll successful responses include this field to support observability and debugging.\n",
+                      "required": [
+                        "requestId",
+                        "apiVersion"
+                      ],
+                      "properties": {
+                        "requestId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "description": "Unique identifier for this specific request.\nMatches the `Request-Id` response header.\nUse this for correlating logs and debugging.\n",
+                          "example": "019234a5-6b7c-8d9e-0f12-34567890abcd"
+                        },
+                        "traceId": {
+                          "type": "string",
+                          "description": "W3C Trace Context trace ID extracted from the traceparent header.\nPresent only when distributed tracing is enabled.\nUse this to trace requests across multiple services.\n",
+                          "example": "0af7651916cd43dd8448eb211c80319c"
+                        },
+                        "apiVersion": {
+                          "type": "string",
+                          "description": "API version used to process this request",
+                          "enum": [
+                            "v1"
+                          ],
+                          "example": "v1"
+                        }
+                      }
                     }
                   }
                 },
@@ -3752,6 +3874,11 @@
                         "links": {
                           "self": "/devices/019234a5-6b7c-8d9e-0f12-34567890abcd"
                         }
+                      },
+                      "meta": {
+                        "requestId": "550e8400-e29b-41d4-a716-446655440001",
+                        "traceId": "1bf7651916cd43dd8448eb211c80319d",
+                        "apiVersion": "v1"
                       }
                     }
                   }
@@ -4768,9 +4895,10 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "description": "Response containing a single device",
+                  "description": "Response envelope containing a single device with metadata",
                   "required": [
-                    "data"
+                    "data",
+                    "meta"
                   ],
                   "properties": {
                     "data": {
@@ -4844,6 +4972,35 @@
                           }
                         }
                       }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "description": "Response metadata containing tracing information and API versioning.\nAll successful responses include this field to support observability and debugging.\n",
+                      "required": [
+                        "requestId",
+                        "apiVersion"
+                      ],
+                      "properties": {
+                        "requestId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "description": "Unique identifier for this specific request.\nMatches the `Request-Id` response header.\nUse this for correlating logs and debugging.\n",
+                          "example": "019234a5-6b7c-8d9e-0f12-34567890abcd"
+                        },
+                        "traceId": {
+                          "type": "string",
+                          "description": "W3C Trace Context trace ID extracted from the traceparent header.\nPresent only when distributed tracing is enabled.\nUse this to trace requests across multiple services.\n",
+                          "example": "0af7651916cd43dd8448eb211c80319c"
+                        },
+                        "apiVersion": {
+                          "type": "string",
+                          "description": "API version used to process this request",
+                          "enum": [
+                            "v1"
+                          ],
+                          "example": "v1"
+                        }
+                      }
                     }
                   }
                 },
@@ -4861,6 +5018,11 @@
                         "links": {
                           "self": "/devices/019234a5-6b7c-8d9e-0f12-34567890abcd"
                         }
+                      },
+                      "meta": {
+                        "requestId": "550e8400-e29b-41d4-a716-446655440002",
+                        "traceId": "2cf7651916cd43dd8448eb211c80319e",
+                        "apiVersion": "v1"
                       }
                     }
                   }
@@ -6442,9 +6604,10 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "description": "Response containing a single device",
+                  "description": "Response envelope containing a single device with metadata",
                   "required": [
-                    "data"
+                    "data",
+                    "meta"
                   ],
                   "properties": {
                     "data": {
@@ -6518,6 +6681,35 @@
                           }
                         }
                       }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "description": "Response metadata containing tracing information and API versioning.\nAll successful responses include this field to support observability and debugging.\n",
+                      "required": [
+                        "requestId",
+                        "apiVersion"
+                      ],
+                      "properties": {
+                        "requestId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "description": "Unique identifier for this specific request.\nMatches the `Request-Id` response header.\nUse this for correlating logs and debugging.\n",
+                          "example": "019234a5-6b7c-8d9e-0f12-34567890abcd"
+                        },
+                        "traceId": {
+                          "type": "string",
+                          "description": "W3C Trace Context trace ID extracted from the traceparent header.\nPresent only when distributed tracing is enabled.\nUse this to trace requests across multiple services.\n",
+                          "example": "0af7651916cd43dd8448eb211c80319c"
+                        },
+                        "apiVersion": {
+                          "type": "string",
+                          "description": "API version used to process this request",
+                          "enum": [
+                            "v1"
+                          ],
+                          "example": "v1"
+                        }
+                      }
                     }
                   }
                 },
@@ -6535,6 +6727,11 @@
                         "links": {
                           "self": "/devices/019234a5-6b7c-8d9e-0f12-34567890abcd"
                         }
+                      },
+                      "meta": {
+                        "requestId": "550e8400-e29b-41d4-a716-446655440003",
+                        "traceId": "3df7651916cd43dd8448eb211c80319f",
+                        "apiVersion": "v1"
                       }
                     }
                   }
@@ -11582,6 +11779,29 @@
           }
         }
       },
+      "SearchParam": {
+        "name": "q",
+        "in": "query",
+        "required": false,
+        "description": "Full-text search query across name and brand fields.\nUses PostgreSQL full-text search with English language stemming.\n\n**Features:**\n- Matches word variations (e.g., \"running\" matches \"run\")\n- Case-insensitive search\n- Searches both name and brand fields\n\n**Examples:**\n- `?q=iPhone` - matches \"iPhone 15 Pro\", \"My iPhone\", etc.\n- `?q=Samsung` - matches devices with Samsung brand\n- `?q=Galaxy` - matches \"Galaxy S24\", \"Galaxy Tab\", etc.\n\n**Combining with filters:**\n- `?q=iPhone&state=available` - available iPhones only\n- `?q=Pro&brand=Apple` - Apple devices with \"Pro\" in name\n",
+        "schema": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 255
+        },
+        "example": "iPhone"
+      },
+      "CursorParam": {
+        "name": "cursor",
+        "in": "query",
+        "required": false,
+        "description": "Opaque cursor for keyset-based pagination.\nWhen provided, the `page` parameter is ignored.\n\n**Usage:**\n1. First request: Don't include cursor (uses page-based pagination)\n2. Subsequent requests: Use `pagination.nextCursor` or `pagination.previousCursor` from previous response\n\n**Benefits over offset pagination:**\n- Stable results even when data changes between requests\n- Better performance for large datasets (no OFFSET scanning)\n- Consistent page sizes\n\n**Note:** Cursors are opaque strings - do not parse or modify them.\n",
+        "schema": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "example": "eyJmIjoiLWNyZWF0ZWRBdCIsInYiOiIyMDI0LTAxLTE1VDEwOjMwOjAwWiIsImlkIjoiNTUwZTg0MDAtZTI5Yi00MWQ0LWE3MTYtNDQ2NjU1NDQwMDAwIiwiZCI6Im5leHQifQ"
+      },
       "IfMatchHeader": {
         "name": "If-Match",
         "in": "header",
@@ -11785,6 +12005,31 @@
           "type": "string"
         },
         "example": "congo=t61rcWkgMzE"
+      },
+      "DeprecationHeader": {
+        "description": "RFC 8594 compliant header indicating the API endpoint is deprecated.\nWhen present and set to \"true\", clients should migrate to the successor version.\n",
+        "schema": {
+          "type": "string",
+          "enum": [
+            "true"
+          ]
+        },
+        "example": "true"
+      },
+      "SunsetHeader": {
+        "description": "RFC 8594 compliant header indicating when the deprecated API will be removed.\nDate is formatted according to HTTP-date (RFC 7231).\n",
+        "schema": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "example": "Wed, 31 Dec 2025 23:59:59 GMT"
+      },
+      "LinkSuccessorHeader": {
+        "description": "RFC 8594 compliant Link header pointing to the successor API version.\nUses the \"successor-version\" relation type to indicate the replacement endpoint.\n",
+        "schema": {
+          "type": "string"
+        },
+        "example": "</v2/devices>; rel=\"successor-version\""
       }
     },
     "securitySchemes": {
@@ -11934,9 +12179,10 @@
       },
       "DeviceResponse": {
         "type": "object",
-        "description": "Response containing a single device",
+        "description": "Response envelope containing a single device with metadata",
         "required": [
-          "data"
+          "data",
+          "meta"
         ],
         "properties": {
           "data": {
@@ -12010,14 +12256,44 @@
                 }
               }
             }
+          },
+          "meta": {
+            "type": "object",
+            "description": "Response metadata containing tracing information and API versioning.\nAll successful responses include this field to support observability and debugging.\n",
+            "required": [
+              "requestId",
+              "apiVersion"
+            ],
+            "properties": {
+              "requestId": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Unique identifier for this specific request.\nMatches the `Request-Id` response header.\nUse this for correlating logs and debugging.\n",
+                "example": "019234a5-6b7c-8d9e-0f12-34567890abcd"
+              },
+              "traceId": {
+                "type": "string",
+                "description": "W3C Trace Context trace ID extracted from the traceparent header.\nPresent only when distributed tracing is enabled.\nUse this to trace requests across multiple services.\n",
+                "example": "0af7651916cd43dd8448eb211c80319c"
+              },
+              "apiVersion": {
+                "type": "string",
+                "description": "API version used to process this request",
+                "enum": [
+                  "v1"
+                ],
+                "example": "v1"
+              }
+            }
           }
         }
       },
       "DeviceListResponse": {
         "type": "object",
-        "description": "Response containing a paginated list of devices",
+        "description": "Response envelope containing a paginated list of devices with metadata",
         "required": [
           "data",
+          "meta",
           "pagination"
         ],
         "properties": {
@@ -12097,6 +12373,35 @@
               }
             }
           },
+          "meta": {
+            "type": "object",
+            "description": "Response metadata containing tracing information and API versioning.\nAll successful responses include this field to support observability and debugging.\n",
+            "required": [
+              "requestId",
+              "apiVersion"
+            ],
+            "properties": {
+              "requestId": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Unique identifier for this specific request.\nMatches the `Request-Id` response header.\nUse this for correlating logs and debugging.\n",
+                "example": "019234a5-6b7c-8d9e-0f12-34567890abcd"
+              },
+              "traceId": {
+                "type": "string",
+                "description": "W3C Trace Context trace ID extracted from the traceparent header.\nPresent only when distributed tracing is enabled.\nUse this to trace requests across multiple services.\n",
+                "example": "0af7651916cd43dd8448eb211c80319c"
+              },
+              "apiVersion": {
+                "type": "string",
+                "description": "API version used to process this request",
+                "enum": [
+                  "v1"
+                ],
+                "example": "v1"
+              }
+            }
+          },
           "pagination": {
             "type": "object",
             "description": "Pagination metadata for list responses",
@@ -12142,6 +12447,16 @@
                 "description": "Whether there is a previous page",
                 "example": false
               },
+              "nextCursor": {
+                "type": "string",
+                "description": "Opaque cursor for fetching the next page using keyset pagination.\nOnly present when hasNext is true.\n",
+                "example": "eyJmIjoiLWNyZWF0ZWRBdCIsInYiOiIyMDI0LTAxLTE1VDEwOjMwOjAwWiIsImlkIjoiNTUwZTg0MDAtZTI5Yi00MWQ0LWE3MTYtNDQ2NjU1NDQwMDAwIiwiZCI6Im5leHQifQ"
+              },
+              "previousCursor": {
+                "type": "string",
+                "description": "Opaque cursor for fetching the previous page using keyset pagination.\nOnly present when hasPrevious is true.\n",
+                "example": "eyJmIjoiLWNyZWF0ZWRBdCIsInYiOiIyMDI0LTAxLTE1VDEyOjAwOjAwWiIsImlkIjoiNTUwZTg0MDAtZTI5Yi00MWQ0LWE3MTYtNDQ2NjU1NDQwMDAxIiwiZCI6InByZXYifQ"
+              },
               "links": {
                 "type": "object",
                 "description": "HATEOAS links for pagination navigation",
@@ -12179,29 +12494,6 @@
                     "example": null
                   }
                 }
-              }
-            }
-          },
-          "filters": {
-            "type": "object",
-            "description": "Filters that were applied to this request",
-            "properties": {
-              "brand": {
-                "type": "string",
-                "nullable": true,
-                "description": "Brand filter that was applied",
-                "example": "Apple"
-              },
-              "state": {
-                "type": "string",
-                "nullable": true,
-                "description": "State filter that was applied",
-                "enum": [
-                  "available",
-                  "in-use",
-                  "inactive"
-                ],
-                "example": "available"
               }
             }
           }
@@ -13006,6 +13298,16 @@
             "description": "Whether there is a previous page",
             "example": false
           },
+          "nextCursor": {
+            "type": "string",
+            "description": "Opaque cursor for fetching the next page using keyset pagination.\nOnly present when hasNext is true.\n",
+            "example": "eyJmIjoiLWNyZWF0ZWRBdCIsInYiOiIyMDI0LTAxLTE1VDEwOjMwOjAwWiIsImlkIjoiNTUwZTg0MDAtZTI5Yi00MWQ0LWE3MTYtNDQ2NjU1NDQwMDAwIiwiZCI6Im5leHQifQ"
+          },
+          "previousCursor": {
+            "type": "string",
+            "description": "Opaque cursor for fetching the previous page using keyset pagination.\nOnly present when hasPrevious is true.\n",
+            "example": "eyJmIjoiLWNyZWF0ZWRBdCIsInYiOiIyMDI0LTAxLTE1VDEyOjAwOjAwWiIsImlkIjoiNTUwZTg0MDAtZTI5Yi00MWQ0LWE3MTYtNDQ2NjU1NDQwMDAxIiwiZCI6InByZXYifQ"
+          },
           "links": {
             "type": "object",
             "description": "HATEOAS links for pagination navigation",
@@ -13043,6 +13345,35 @@
                 "example": null
               }
             }
+          }
+        }
+      },
+      "Meta": {
+        "type": "object",
+        "description": "Response metadata containing tracing information and API versioning.\nAll successful responses include this field to support observability and debugging.\n",
+        "required": [
+          "requestId",
+          "apiVersion"
+        ],
+        "properties": {
+          "requestId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique identifier for this specific request.\nMatches the `Request-Id` response header.\nUse this for correlating logs and debugging.\n",
+            "example": "019234a5-6b7c-8d9e-0f12-34567890abcd"
+          },
+          "traceId": {
+            "type": "string",
+            "description": "W3C Trace Context trace ID extracted from the traceparent header.\nPresent only when distributed tracing is enabled.\nUse this to trace requests across multiple services.\n",
+            "example": "0af7651916cd43dd8448eb211c80319c"
+          },
+          "apiVersion": {
+            "type": "string",
+            "description": "API version used to process this request",
+            "enum": [
+              "v1"
+            ],
+            "example": "v1"
           }
         }
       },
@@ -13165,29 +13496,6 @@
             "nullable": true,
             "description": "Link to the previous page (null if on first page)",
             "example": null
-          }
-        }
-      },
-      "AppliedFilters": {
-        "type": "object",
-        "description": "Filters that were applied to this request",
-        "properties": {
-          "brand": {
-            "type": "string",
-            "nullable": true,
-            "description": "Brand filter that was applied",
-            "example": "Apple"
-          },
-          "state": {
-            "type": "string",
-            "nullable": true,
-            "description": "State filter that was applied",
-            "enum": [
-              "available",
-              "in-use",
-              "inactive"
-            ],
-            "example": "available"
           }
         }
       },
@@ -13610,24 +13918,18 @@
               }
             }
           ],
+          "meta": {
+            "requestId": "550e8400-e29b-41d4-a716-446655440000",
+            "traceId": "0af7651916cd43dd8448eb211c80319c",
+            "apiVersion": "v1"
+          },
           "pagination": {
             "page": 1,
             "size": 20,
             "totalItems": 3,
             "totalPages": 1,
             "hasNext": false,
-            "hasPrevious": false,
-            "links": {
-              "self": "/devices?page=1&size=20",
-              "first": "/devices?page=1&size=20",
-              "last": "/devices?page=1&size=20",
-              "next": null,
-              "previous": null
-            }
-          },
-          "filters": {
-            "brand": null,
-            "state": null
+            "hasPrevious": false
           }
         }
       },
@@ -13651,6 +13953,11 @@
             "links": {
               "self": "/devices/019234a5-6b7c-8d9e-0f12-34567890abcd"
             }
+          },
+          "meta": {
+            "requestId": "550e8400-e29b-41d4-a716-446655440000",
+            "traceId": "0af7651916cd43dd8448eb211c80319c",
+            "apiVersion": "v1"
           }
         }
       },
@@ -13667,6 +13974,11 @@
             "links": {
               "self": "/devices/019234a5-6b7c-8d9e-0f12-34567890abcd"
             }
+          },
+          "meta": {
+            "requestId": "550e8400-e29b-41d4-a716-446655440001",
+            "traceId": "1bf7651916cd43dd8448eb211c80319d",
+            "apiVersion": "v1"
           }
         }
       },
@@ -13691,6 +14003,11 @@
             "links": {
               "self": "/devices/019234a5-6b7c-8d9e-0f12-34567890abcd"
             }
+          },
+          "meta": {
+            "requestId": "550e8400-e29b-41d4-a716-446655440002",
+            "traceId": "2cf7651916cd43dd8448eb211c80319e",
+            "apiVersion": "v1"
           }
         }
       },
@@ -13719,6 +14036,11 @@
             "links": {
               "self": "/devices/019234a5-6b7c-8d9e-0f12-34567890abcd"
             }
+          },
+          "meta": {
+            "requestId": "550e8400-e29b-41d4-a716-446655440003",
+            "traceId": "3df7651916cd43dd8448eb211c80319f",
+            "apiVersion": "v1"
           }
         }
       },

@@ -65,15 +65,17 @@ make start
 ```
 devices/
 ├── services/
-│   ├── api-gateway/    # REST API (public-facing)
-│   └── svc-devices/    # Internal service (gRPC + PostgreSQL)
+│   ├── svc-api-gateway/    # REST API (Chi router, PASETO auth, gRPC client)
+│   └── svc-devices/        # Internal gRPC service (PostgreSQL persistence)
 ├── docs/
-│   └── openapi-spec/   # OpenAPI 3.1 specifications
+│   ├── openapi-spec/       # OpenAPI 3.1 specifications
+│   └── proto/              # Protobuf definitions
+├── pkg/                    # Shared code (logger, metrics, proto)
 ├── build/
-│   ├── mk/             # Modular Makefiles
-│   └── oapi/           # Code generation config
+│   ├── mk/                 # Modular Makefiles
+│   └── oapi/               # oapi-codegen config
 └── deployment/
-    └── docker/         # Docker/Traefik configuration
+    └── docker/             # Docker/Traefik configuration
 ```
 
 ## Available Commands

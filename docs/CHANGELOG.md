@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-01-12
+
+### Added
+
+- Filtering and sorting support for device listing with multi-value OR logic
+- GCRA-based rate limiting middleware with KeyDB storage and RFC-compliant headers
+- Idempotency middleware with KeyDB-backed storage for POST request deduplication
+- Correlation ID (`Correlation-Id`) and Request ID (`Request-Id`) header support (RFC 6648)
+- Sunset middleware for API deprecation headers (RFC 8594: `Deprecation`, `Sunset`, `Link`)
+- Cursor-based pagination model for keyset pagination support
+- Response helpers for standardized HTTP responses with metadata
+- Meta information schema for response envelopes
+
+### Changed
+
+- Updated pagination response to include cursor-based navigation support
+- Enhanced criteria translator for advanced filtering operations
+
+### Tests
+
+- Comprehensive filtering and sorting test coverage for `svc-devices`
+
 ## [0.3.1] - 2025-12-20
 
 ### Added

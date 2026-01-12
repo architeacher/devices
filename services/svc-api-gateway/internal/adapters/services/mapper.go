@@ -71,20 +71,24 @@ func toDomainPagination(p *devicev1.Pagination) model.Pagination {
 	}
 
 	return model.Pagination{
-		Page:        uint(p.GetPage()),
-		Size:        uint(p.GetSize()),
-		TotalItems:  uint(p.GetTotalItems()),
-		TotalPages:  uint(p.GetTotalPages()),
-		HasNext:     p.GetHasNext(),
-		HasPrevious: p.GetHasPrevious(),
+		Page:           uint(p.GetPage()),
+		Size:           uint(p.GetSize()),
+		TotalItems:     uint(p.GetTotalItems()),
+		TotalPages:     uint(p.GetTotalPages()),
+		HasNext:        p.GetHasNext(),
+		HasPrevious:    p.GetHasPrevious(),
+		NextCursor:     p.GetNextCursor(),
+		PreviousCursor: p.GetPreviousCursor(),
 	}
 }
 
 func toProtoListRequest(filter model.DeviceFilter) *devicev1.ListDevicesRequest {
 	req := &devicev1.ListDevicesRequest{
-		Page: uint32(filter.Page),
-		Size: uint32(filter.Size),
-		Sort: filter.Sort,
+		Query:  filter.Keyword,
+		Sort:   filter.Sort,
+		Page:   uint32(filter.Page),
+		Size:   uint32(filter.Size),
+		Cursor: filter.Cursor,
 	}
 
 	if len(filter.Brands) > 0 {

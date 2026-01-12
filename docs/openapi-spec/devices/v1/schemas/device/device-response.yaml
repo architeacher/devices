@@ -1,11 +1,14 @@
 DeviceResponse:
   type: object
-  description: Response containing a single device
+  description: Response envelope containing a single device with metadata
   required:
     - data
+    - meta
   properties:
     data:
       $ref: "#/Device"
+    meta:
+      $ref: "../common/meta.yaml#/Meta"
 
 Device:
   type: object

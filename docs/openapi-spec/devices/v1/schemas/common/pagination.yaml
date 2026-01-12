@@ -36,6 +36,18 @@ Pagination:
       type: boolean
       description: Whether there is a previous page
       example: false
+    nextCursor:
+      type: string
+      description: |
+        Opaque cursor for fetching the next page using keyset pagination.
+        Only present when hasNext is true.
+      example: "eyJmIjoiLWNyZWF0ZWRBdCIsInYiOiIyMDI0LTAxLTE1VDEwOjMwOjAwWiIsImlkIjoiNTUwZTg0MDAtZTI5Yi00MWQ0LWE3MTYtNDQ2NjU1NDQwMDAwIiwiZCI6Im5leHQifQ"
+    previousCursor:
+      type: string
+      description: |
+        Opaque cursor for fetching the previous page using keyset pagination.
+        Only present when hasPrevious is true.
+      example: "eyJmIjoiLWNyZWF0ZWRBdCIsInYiOiIyMDI0LTAxLTE1VDEyOjAwOjAwWiIsImlkIjoiNTUwZTg0MDAtZTI5Yi00MWQ0LWE3MTYtNDQ2NjU1NDQwMDAxIiwiZCI6InByZXYifQ"
     links:
       $ref: "#/PaginationLinks"
 

@@ -6,6 +6,7 @@ type CriteriaBuilder struct {
 	page    uint
 	size    uint
 	fields  []string
+	cursor  *Cursor
 }
 
 func NewCriteria() *CriteriaBuilder {
@@ -36,6 +37,12 @@ func (b *CriteriaBuilder) WhereLike(field, pattern string) *CriteriaBuilder {
 
 func (b *CriteriaBuilder) WhereBetween(field string, start, end any) *CriteriaBuilder {
 	b.specs = append(b.specs, Between(field, start, end))
+
+	return b
+}
+
+func (b *CriteriaBuilder) WhereFullText(query string) *CriteriaBuilder {
+	b.specs = append(b.specs, FullText(query))
 
 	return b
 }
@@ -96,6 +103,12 @@ func (b *CriteriaBuilder) Select(fields ...string) *CriteriaBuilder {
 	return b
 }
 
+func (b *CriteriaBuilder) WithCursor(cursor *Cursor) *CriteriaBuilder {
+	b.cursor = cursor
+
+	return b
+}
+
 func (b *CriteriaBuilder) Build() Criteria {
 	var rootSpec Specification
 
@@ -111,5 +124,6 @@ func (b *CriteriaBuilder) Build() Criteria {
 		page:    b.page,
 		size:    b.size,
 		fields:  b.fields,
+		cursor:  b.cursor,
 	}
 }

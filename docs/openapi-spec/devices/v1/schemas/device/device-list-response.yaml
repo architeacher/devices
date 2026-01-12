@@ -1,8 +1,9 @@
 DeviceListResponse:
   type: object
-  description: Response containing a paginated list of devices
+  description: Response envelope containing a paginated list of devices with metadata
   required:
     - data
+    - meta
     - pagination
   properties:
     data:
@@ -10,10 +11,10 @@ DeviceListResponse:
       description: List of devices
       items:
         $ref: "device-response.yaml#/Device"
+    meta:
+      $ref: "../common/meta.yaml#/Meta"
     pagination:
       $ref: "../common/pagination.yaml#/Pagination"
-    filters:
-      $ref: "#/AppliedFilters"
 
 AppliedFilters:
   type: object

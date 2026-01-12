@@ -1,6 +1,6 @@
 ARG     GO_VERSION
 
-# Dev tooling stage (Air + Delve + grpc_health_probe)
+# Dev tooling stage (Air + Delve + grpcurl)
 FROM    golang:${GO_VERSION:-1.25}-alpine AS dev-tools
 
 RUN     go install github.com/air-verse/air@v1.63.4 \
@@ -12,30 +12,47 @@ RUN     go install github.com/air-verse/air@v1.63.4 \
 # Build stage for production binaries
 FROM    golang:${GO_VERSION:-1.25} AS builder
 
-WORKDIR /src
+ARG     WORKDIR="/src"
+ARG     OUTPUT_DIR="/out"
+ARG     CMD_PATH="./cmd/svc-devices"
+ARG     BINARY_NAME="svc-devices"
+ARG     TARGET_OS="linux"
+ARG     TARGET_ARCH="amd64"
+
+ENV     CGO_ENABLED=0 \
+        GOOS="${TARGET_OS}" \
+        GOARCH="${TARGET_ARCH}"
+
+WORKDIR "${WORKDIR}"
 
 COPY    go.mod go.sum ./
 RUN     go mod download
 COPY    . .
 
-ARG     TARGETOS="linux"
-ARG     TARGETARCH="amd64"
-
-ENV     CGO_ENABLED=0 \
-        GOOS="${TARGETOS}" \
-        GOARCH="${TARGETARCH}"
-
 RUN     --mount=type=cache,target=/root/.cache/go-build \
         --mount=type=cache,target=/go/pkg/mod \
-        go build -o /out/svc-devices ./cmd/svc-devices
+        go build -o "${OUTPUT_DIR}/${BINARY_NAME}" "${CMD_PATH}"
 
-# Minimal runtime images per component
-FROM       gcr.io/distroless/static-debian12:nonroot AS prod
-WORKDIR    /app
-COPY       --from=builder /out/svc-devices /app/svc-devices
-COPY       --from=dev-tools /go/bin/grpc-health-probe /usr/local/bin/grpc_health_probe
-EXPOSE     9090
-ENTRYPOINT ["/app/svc-devices"]
+# Minimal runtime image for production
+FROM    gcr.io/distroless/static-debian12:nonroot AS prod
+
+ARG     WORKDIR="/app"
+ARG     ARTIFACTS_DIR="/usr/local/bin"
+ARG     SRC_ARTIFACTS_DIR="/go/bin"
+ARG     BUILDER_OUTPUT_DIR="/out"
+ARG     BINARY_NAME="svc-devices"
+ARG     APP_USER="nonroot"
+
+WORKDIR "${WORKDIR}"
+
+COPY    --from=builder "${BUILDER_OUTPUT_DIR}/${BINARY_NAME}" "${WORKDIR}/${BINARY_NAME}"
+COPY    --from=dev-tools "${SRC_ARTIFACTS_DIR}/grpcurl" "${ARTIFACTS_DIR}/grpcurl"
+
+USER    "${APP_USER}"
+
+EXPOSE  9090
+
+ENTRYPOINT ["./${BINARY_NAME}"]
 
 # Development image (default build target)
 FROM    golang:${GO_VERSION:-1.25}-alpine AS dev
@@ -73,8 +90,6 @@ COPY    --from="dev-tools" \
         "${SRC_ARTIFACTS_DIR}/dlv" \
         "${SRC_ARTIFACTS_DIR}/grpcurl" \
         "${ARTIFACTS_DIR}/"
-
-RUN     ln -s "${ARTIFACTS_DIR}/grpc-health-probe" "${ARTIFACTS_DIR}/grpc_health_probe"
 
 USER    "${APP_USER}"
 

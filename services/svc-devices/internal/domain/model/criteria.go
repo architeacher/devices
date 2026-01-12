@@ -22,6 +22,7 @@ type (
 		page    uint
 		size    uint
 		fields  []string
+		cursor  *Cursor
 	}
 )
 
@@ -31,12 +32,18 @@ func (c Criteria) Page() uint           { return c.page }
 func (c Criteria) Size() uint           { return c.size }
 func (c Criteria) Fields() []string     { return c.fields }
 func (c Criteria) Offset() uint         { return (c.page - 1) * c.size }
+func (c Criteria) Cursor() *Cursor      { return c.cursor }
 func (c Criteria) HasSpec() bool        { return c.spec != nil }
 func (c Criteria) HasSorting() bool     { return len(c.sorting) > 0 }
 func (c Criteria) HasPagination() bool  { return c.page > 0 && c.size > 0 }
+func (c Criteria) HasCursor() bool      { return c.cursor != nil }
 
 func FromDeviceFilter(filter DeviceFilter) Criteria {
 	builder := NewCriteria()
+
+	if filter.Keyword != "" {
+		builder.WhereFullText(filter.Keyword)
+	}
 
 	if len(filter.Brands) > 0 {
 		builder.WhereIn("brand", toAnySlice(filter.Brands)...)
@@ -57,6 +64,13 @@ func FromDeviceFilter(filter DeviceFilter) Criteria {
 		}
 	} else {
 		builder.OrderBy("-createdAt")
+	}
+
+	if filter.Cursor != "" {
+		cursor, err := DecodeCursor(filter.Cursor)
+		if err == nil {
+			builder.WithCursor(&cursor)
+		}
 	}
 
 	builder.Paginate(filter.Page, filter.Size)

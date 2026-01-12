@@ -10,28 +10,45 @@ RUN     go install github.com/air-verse/air@v1.63.4 \
 # Build stage for production binaries
 FROM    golang:${GO_VERSION:-1.25} AS builder
 
-WORKDIR /src
+ARG     WORKDIR="/src"
+ARG     OUTPUT_DIR="/out"
+ARG     CMD_PATH="./cmd/svc-api-gateway"
+ARG     BINARY_NAME="svc-api-gateway"
+ARG     TARGET_OS="linux"
+ARG     TARGET_ARCH="amd64"
+
+ENV     CGO_ENABLED=0 \
+        GOOS="${TARGET_OS}" \
+        GOARCH="${TARGET_ARCH}"
+
+WORKDIR "${WORKDIR}"
 
 COPY    go.mod go.sum ./
 RUN     go mod download
 COPY    . .
 
-ARG     TARGETOS="linux"
-ARG     TARGETARCH="amd64"
-
-ENV     CGO_ENABLED=0 \
-        GOOS="${TARGETOS}" \
-        GOARCH="${TARGETARCH}"
-
 RUN     --mount=type=cache,target=/root/.cache/go-build \
         --mount=type=cache,target=/go/pkg/mod \
-        go build -o /out/api ./cmd/svc-api-gateway
+        go build -o "${OUTPUT_DIR}/${BINARY_NAME}" "${CMD_PATH}"
 
-# Minimal runtime images per component
-FROM       gcr.io/distroless/static-debian12:nonroot AS prod
-WORKDIR    /app
-COPY       --from=builder /out/api /app/svc-api-gateway
-ENTRYPOINT ["/app/svc-api-gateway"]
+# Minimal runtime image for production
+FROM    gcr.io/distroless/static-debian12:nonroot AS prod
+
+ARG     WORKDIR="/app"
+ARG     ARTIFACTS_DIR="/usr/local/bin"
+ARG     BUILDER_OUTPUT_DIR="/out"
+ARG     BINARY_NAME="svc-api-gateway"
+ARG     APP_USER="nonroot"
+
+WORKDIR "${WORKDIR}"
+
+COPY    --from=builder "${BUILDER_OUTPUT_DIR}/${BINARY_NAME}" "${WORKDIR}/${BINARY_NAME}"
+
+USER    "${APP_USER}"
+
+EXPOSE  8088
+
+ENTRYPOINT ["./${BINARY_NAME}"]
 
 # Development image (default build target)
 FROM    golang:${GO_VERSION:-1.25}-alpine AS dev

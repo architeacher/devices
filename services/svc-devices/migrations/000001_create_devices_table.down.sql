@@ -1,3 +1,4 @@
+DROP INDEX IF EXISTS idx_devices_search;
 DROP INDEX IF EXISTS idx_devices_created_at;
 DROP INDEX IF EXISTS idx_devices_state;
 DROP INDEX IF EXISTS idx_devices_brand;

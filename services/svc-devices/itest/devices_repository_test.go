@@ -165,7 +165,7 @@ func (s *DevicesRepositoryIntegrationTestSuite) TestCreate_Success() {
 
 	s.Require().NoError(err)
 
-	retrieved, err := s.repo.GetByID(ctx, device.ID)
+	retrieved, err := s.repo.FetchByID(ctx, device.ID)
 	s.Require().NoError(err)
 	s.Require().Equal(device.Name, retrieved.Name)
 	s.Require().Equal(device.Brand, retrieved.Brand)
@@ -182,7 +182,7 @@ func (s *DevicesRepositoryIntegrationTestSuite) TestCreate_AllStates() {
 		err := s.repo.Create(ctx, device)
 		s.Require().NoError(err)
 
-		retrieved, err := s.repo.GetByID(ctx, device.ID)
+		retrieved, err := s.repo.FetchByID(ctx, device.ID)
 		s.Require().NoError(err)
 		s.Require().Equal(state, retrieved.State)
 	}
@@ -215,7 +215,7 @@ func (s *DevicesRepositoryIntegrationTestSuite) TestGetByID_Success() {
 	device := model.NewDevice("Test Device", "Test Brand", model.StateAvailable)
 	s.seedDevice(ctx, device)
 
-	retrieved, err := s.repo.GetByID(ctx, device.ID)
+	retrieved, err := s.repo.FetchByID(ctx, device.ID)
 
 	s.Require().NoError(err)
 	s.Require().NotNil(retrieved)
@@ -230,7 +230,7 @@ func (s *DevicesRepositoryIntegrationTestSuite) TestGetByID_NotFound() {
 
 	nonExistentID := model.NewDeviceID()
 
-	retrieved, err := s.repo.GetByID(ctx, nonExistentID)
+	retrieved, err := s.repo.FetchByID(ctx, nonExistentID)
 
 	s.Require().Error(err)
 	s.Require().ErrorIs(err, model.ErrDeviceNotFound)
@@ -646,7 +646,7 @@ func (s *DevicesRepositoryIntegrationTestSuite) TestUpdate_Success() {
 
 	s.Require().NoError(err)
 
-	retrieved, err := s.repo.GetByID(ctx, device.ID)
+	retrieved, err := s.repo.FetchByID(ctx, device.ID)
 	s.Require().NoError(err)
 	s.Require().Equal("Updated", retrieved.Name)
 	s.Require().Equal("Updated Brand", retrieved.Brand)
@@ -679,7 +679,7 @@ func (s *DevicesRepositoryIntegrationTestSuite) TestUpdate_StateTransition() {
 		err := s.repo.Update(ctx, device)
 		s.Require().NoError(err)
 
-		retrieved, err := s.repo.GetByID(ctx, device.ID)
+		retrieved, err := s.repo.FetchByID(ctx, device.ID)
 		s.Require().NoError(err)
 		s.Require().Equal(newState, retrieved.State)
 	}
@@ -695,7 +695,7 @@ func (s *DevicesRepositoryIntegrationTestSuite) TestDelete_Success() {
 
 	s.Require().NoError(err)
 
-	retrieved, err := s.repo.GetByID(ctx, device.ID)
+	retrieved, err := s.repo.FetchByID(ctx, device.ID)
 	s.Require().Error(err)
 	s.Require().ErrorIs(err, model.ErrDeviceNotFound)
 	s.Require().Nil(retrieved)
