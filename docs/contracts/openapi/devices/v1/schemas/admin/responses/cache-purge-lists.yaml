@@ -1,0 +1,8 @@
+description: Device list caches purged successfully
+content:
+  application/json:
+    schema:
+      $ref: "entities/cache.yaml#/CachePurge"
+    examples:
+      purged:
+        $ref: "../examples/cache.yaml#/purge_lists"

@@ -5,7 +5,7 @@ import (
 
 	"github.com/architeacher/devices/pkg/logger"
 	"github.com/architeacher/devices/pkg/metrics"
-	"github.com/architeacher/devices/services/svc-api-gateway/internal/adapters/inbound/http/handlers"
+	"github.com/architeacher/devices/services/svc-api-gateway/internal/adapters/inbound/http/handlers/public"
 	"github.com/architeacher/devices/services/svc-api-gateway/internal/adapters/inbound/http/middleware"
 	"github.com/architeacher/devices/services/svc-api-gateway/internal/config"
 	"github.com/architeacher/devices/services/svc-api-gateway/internal/ports"
@@ -33,10 +33,10 @@ type RouterConfig struct {
 func NewRouter(cfg RouterConfig) http.Handler {
 	router := chi.NewRouter()
 
-	handler := handlers.NewDeviceHandler(cfg.App)
+	handler := public.NewDeviceHandler(cfg.App)
 
 	// Spin up automatic generated routes.
-	return handlers.HandlerWithOptions(handler, handlers.ChiServerOptions{
+	return public.HandlerWithOptions(handler, public.ChiServerOptions{
 		BaseRouter:       router,
 		BaseURL:          baseURL,
 		Middlewares:      initMiddlewares(cfg),
@@ -44,8 +44,8 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	})
 }
 
-func initMiddlewares(cfg RouterConfig) []handlers.MiddlewareFunc {
-	swagger, err := handlers.GetSwagger()
+func initMiddlewares(cfg RouterConfig) []public.MiddlewareFunc {
+	swagger, err := public.GetSwagger()
 	if err != nil {
 		cfg.Logger.Fatal().Err(err).Msg("failed to load swagger spec")
 	}
@@ -69,9 +69,9 @@ func initMiddlewares(cfg RouterConfig) []handlers.MiddlewareFunc {
 		},
 	)
 
-	middlewares := []handlers.MiddlewareFunc{
+	middlewares := []public.MiddlewareFunc{
 		chimiddleware.RealIP,
-		chimiddleware.Timeout(cfg.ServiceConfig.HTTPServer.WriteTimeout),
+		chimiddleware.Timeout(cfg.ServiceConfig.PublicHTTPServer.WriteTimeout),
 		middleware.RequestTracking(),
 		middleware.SecurityHeaders(cfg.ServiceConfig.App.APIVersion),
 		middleware.CORS([]string{"*"}),

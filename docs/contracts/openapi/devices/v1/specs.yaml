@@ -1,0 +1,944 @@
+openapi: 3.0.3
+info:
+  title: Devices API Gateway
+  description: |
+    A REST API for managing device resources with full CRUD operations and filtering capabilities.
+
+    ## Device Domain
+
+    Each device contains:
+    - **Id**: Unique identifier (UUID v7)
+    - **Name**: Device name
+    - **Brand**: Device manufacturer/brand
+    - **State**: Current state (available, in-use, inactive)
+    - **Creation Time**: Timestamp when the device was created
+
+    ## Business Rules
+
+    - Creation time cannot be updated
+    - Name and brand properties cannot be updated if the device is in use
+    - In-use devices cannot be deleted
+
+    ## API Versioning
+
+    This API uses semantic versioning and supports multiple versioning strategies:
+
+    ### Version Strategy
+    - **URL Path Versioning**: `/v1/` (primary method)
+    - **Header Versioning**: `API-Version: v1` header (alternative)
+
+    ### Version Information
+    - All responses include `API-Version` header indicating the version used
+    - Version-specific changes are documented in the changelog
+    - Breaking changes require major version increment
+
+    ### API Deprecation (RFC 8594)
+    When an API version is deprecated, all responses will include:
+    - `Deprecation: true` - Indicates the endpoint is deprecated
+    - `Sunset: <date>` - RFC 7231 HTTP-date when the API will be removed
+    - `Link: <url>; rel="successor-version"` - URI of the replacement API
+
+    These headers help clients migrate to newer versions before sunset.
+
+    ## Security
+
+    This API uses PASETO token authentication:
+    - **PASETO tokens**: Platform-Agnostic Security Tokens - secure, stateless authentication
+
+    ## Security Headers
+
+    All responses include standard security headers:
+    - `X-Content-Type-Options: nosniff`
+    - `X-Frame-Options: DENY`
+    - `X-XSS-Protection: 1; mode=block`
+    - `Strict-Transport-Security: max-age=31536000; includeSubDomains`
+    - `Content-Security-Policy: default-src 'self'`
+    - `Referrer-Policy: strict-origin-when-cross-origin`
+    - `Permissions-Policy: camera=(), microphone=(), geolocation=()`
+
+  version: 1.0.0
+  contact:
+    name: Devices API Support
+    url: https://github.com/architeacher/devices
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: https://api.devices.dev/{version}
+    description: Local development server
+    variables:
+      version:
+        default: "v1"
+        enum:
+          - v1
+        description: The API version to use
+  - url: https://api.devices.com/{version}
+    description: Production server
+    variables:
+      version:
+        default: "v1"
+        enum:
+          - v1
+        description: The API version to use
+
+security:
+  - PasetoAuth: []
+
+paths:
+  /devices:
+    post:
+      summary: Create a new device
+      description: |
+        Creates a new device resource. The device will be assigned a unique UUID v7 identifier
+        and the creation time will be automatically set to the current timestamp.
+      operationId: createDevice
+      tags:
+        - Devices
+      security:
+        - PasetoAuth: []
+      parameters:
+        - $ref: "#/components/parameters/AuthorizationHeader"
+        - $ref: "#/components/parameters/ApiVersionHeader"
+        - $ref: "#/components/parameters/RequestIdHeader"
+        - $ref: "#/components/parameters/TraceparentHeader"
+        - $ref: "#/components/parameters/TracestateHeader"
+        - $ref: "#/components/parameters/IdempotencyKeyHeader"
+        - $ref: "#/components/parameters/AcceptHeader"
+      requestBody:
+        $ref: "schemas/devices/requests/create-device.yaml"
+      responses:
+        "201":
+          $ref: "schemas/devices/responses/device-created.yaml"
+        "400":
+          $ref: "schemas/common/responses/errors/bad-request.yaml"
+        "401":
+          $ref: "schemas/common/responses/errors/unauthorized.yaml"
+        "406":
+          $ref: "schemas/common/responses/errors/not-acceptable.yaml"
+        "422":
+          $ref: "schemas/common/responses/errors/unprocessable-entity.yaml"
+        "429":
+          $ref: "schemas/common/responses/errors/rate-limit.yaml"
+        "500":
+          $ref: "schemas/common/responses/errors/server-error.yaml"
+
+    get:
+      summary: List all devices
+      description: |
+        Retrieves a paginated list of all devices. Supports filtering by brand and state,
+        and full-text search across name and brand fields using the `q` parameter.
+      operationId: listDevices
+      tags:
+        - Devices
+      security:
+        - PasetoAuth: []
+      parameters:
+        - $ref: "#/components/parameters/AuthorizationHeader"
+        - $ref: "#/components/parameters/ApiVersionHeader"
+        - $ref: "#/components/parameters/RequestIdHeader"
+        - $ref: "#/components/parameters/TraceparentHeader"
+        - $ref: "#/components/parameters/TracestateHeader"
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/SizeParam"
+        - $ref: "#/components/parameters/BrandFilterParam"
+        - $ref: "#/components/parameters/StateFilterParam"
+        - $ref: "#/components/parameters/SortParam"
+        - $ref: "#/components/parameters/SearchParam"
+        - $ref: "#/components/parameters/CursorParam"
+        - $ref: "#/components/parameters/FieldsParam"
+        - $ref: "#/components/parameters/IfNoneMatchHeader"
+        - $ref: "#/components/parameters/AcceptEncodingHeader"
+        - $ref: "#/components/parameters/AcceptHeader"
+      responses:
+        "200":
+          $ref: "schemas/devices/responses/devices-list.yaml"
+        "304":
+          $ref: "schemas/devices/responses/not-modified.yaml"
+        "400":
+          $ref: "schemas/common/responses/errors/bad-request.yaml"
+        "401":
+          $ref: "schemas/common/responses/errors/unauthorized.yaml"
+        "406":
+          $ref: "schemas/common/responses/errors/not-acceptable.yaml"
+        "429":
+          $ref: "schemas/common/responses/errors/rate-limit.yaml"
+        "500":
+          $ref: "schemas/common/responses/errors/server-error.yaml"
+
+    head:
+      summary: Get devices collection metadata
+      description: |
+        Returns headers only for the devices collection (no response body).
+        Useful for checking collection size or validating cached data via ETag.
+      operationId: headDevices
+      tags:
+        - Devices
+      security:
+        - PasetoAuth: []
+      parameters:
+        - $ref: "#/components/parameters/AuthorizationHeader"
+        - $ref: "#/components/parameters/ApiVersionHeader"
+        - $ref: "#/components/parameters/RequestIdHeader"
+        - $ref: "#/components/parameters/TraceparentHeader"
+        - $ref: "#/components/parameters/TracestateHeader"
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/SizeParam"
+        - $ref: "#/components/parameters/BrandFilterParam"
+        - $ref: "#/components/parameters/StateFilterParam"
+        - $ref: "#/components/parameters/SortParam"
+        - $ref: "#/components/parameters/SearchParam"
+        - $ref: "#/components/parameters/CursorParam"
+        - $ref: "#/components/parameters/IfNoneMatchHeader"
+      responses:
+        "200":
+          $ref: "schemas/devices/responses/devices-head.yaml"
+        "304":
+          $ref: "schemas/devices/responses/not-modified.yaml"
+        "401":
+          $ref: "schemas/common/responses/errors/unauthorized.yaml"
+        "429":
+          $ref: "schemas/common/responses/errors/rate-limit.yaml"
+        "500":
+          $ref: "schemas/common/responses/errors/server-error.yaml"
+
+    options:
+      summary: Get allowed methods for devices collection
+      description: |
+        Returns the HTTP methods allowed for the devices collection.
+        Used for CORS preflight requests and capability discovery.
+      operationId: optionsDevices
+      tags:
+        - Devices
+      security: []
+      responses:
+        "204":
+          $ref: "schemas/devices/responses/devices-options.yaml"
+        "400":
+          $ref: "schemas/common/responses/errors/bad-request.yaml"
+
+  /devices/{deviceId}:
+    get:
+      summary: Get a device by ID
+      description: Retrieves a single device by its unique identifier.
+      operationId: getDevice
+      tags:
+        - Devices
+      security:
+        - PasetoAuth: []
+      parameters:
+        - $ref: "#/components/parameters/AuthorizationHeader"
+        - $ref: "#/components/parameters/ApiVersionHeader"
+        - $ref: "#/components/parameters/RequestIdHeader"
+        - $ref: "#/components/parameters/TraceparentHeader"
+        - $ref: "#/components/parameters/TracestateHeader"
+        - $ref: "#/components/parameters/DeviceIdParam"
+        - $ref: "#/components/parameters/FieldsParam"
+        - $ref: "#/components/parameters/IfNoneMatchHeader"
+        - $ref: "#/components/parameters/AcceptEncodingHeader"
+        - $ref: "#/components/parameters/AcceptHeader"
+      responses:
+        "200":
+          $ref: "schemas/devices/responses/device-retrieved.yaml"
+        "304":
+          $ref: "schemas/devices/responses/not-modified.yaml"
+        "401":
+          $ref: "schemas/common/responses/errors/unauthorized.yaml"
+        "404":
+          $ref: "schemas/common/responses/errors/not-found.yaml"
+        "406":
+          $ref: "schemas/common/responses/errors/not-acceptable.yaml"
+        "429":
+          $ref: "schemas/common/responses/errors/rate-limit.yaml"
+        "500":
+          $ref: "schemas/common/responses/errors/server-error.yaml"
+
+    put:
+      summary: Fully update a device
+      description: |
+        Fully updates an existing device. All fields must be provided.
+
+        **Business Rules:**
+        - Creation time cannot be updated (will be ignored if provided)
+        - Name and brand cannot be updated if the device state is "in-use"
+      operationId: updateDevice
+      tags:
+        - Devices
+      security:
+        - PasetoAuth: []
+      parameters:
+        - $ref: "#/components/parameters/AuthorizationHeader"
+        - $ref: "#/components/parameters/ApiVersionHeader"
+        - $ref: "#/components/parameters/RequestIdHeader"
+        - $ref: "#/components/parameters/TraceparentHeader"
+        - $ref: "#/components/parameters/TracestateHeader"
+        - $ref: "#/components/parameters/DeviceIdParam"
+        - $ref: "#/components/parameters/IfMatchHeader"
+        - $ref: "#/components/parameters/AcceptHeader"
+      requestBody:
+        $ref: "schemas/devices/requests/update-device.yaml"
+      responses:
+        "200":
+          $ref: "schemas/devices/responses/device-updated.yaml"
+        "400":
+          $ref: "schemas/common/responses/errors/bad-request.yaml"
+        "401":
+          $ref: "schemas/common/responses/errors/unauthorized.yaml"
+        "404":
+          $ref: "schemas/common/responses/errors/not-found.yaml"
+        "406":
+          $ref: "schemas/common/responses/errors/not-acceptable.yaml"
+        "409":
+          $ref: "schemas/common/responses/errors/conflict.yaml"
+        "412":
+          $ref: "schemas/common/responses/errors/precondition-failed.yaml"
+        "422":
+          $ref: "schemas/common/responses/errors/unprocessable-entity.yaml"
+        "429":
+          $ref: "schemas/common/responses/errors/rate-limit.yaml"
+        "500":
+          $ref: "schemas/common/responses/errors/server-error.yaml"
+
+    patch:
+      summary: Partially update a device
+      description: |
+        Partially updates an existing device. Only provided fields will be updated.
+
+        **Business Rules:**
+        - Creation time cannot be updated (will be ignored if provided)
+        - Name and brand cannot be updated if the device state is "in-use"
+      operationId: patchDevice
+      tags:
+        - Devices
+      security:
+        - PasetoAuth: []
+      parameters:
+        - $ref: "#/components/parameters/AuthorizationHeader"
+        - $ref: "#/components/parameters/ApiVersionHeader"
+        - $ref: "#/components/parameters/RequestIdHeader"
+        - $ref: "#/components/parameters/TraceparentHeader"
+        - $ref: "#/components/parameters/TracestateHeader"
+        - $ref: "#/components/parameters/DeviceIdParam"
+        - $ref: "#/components/parameters/IfMatchHeader"
+        - $ref: "#/components/parameters/AcceptHeader"
+      requestBody:
+        $ref: "schemas/devices/requests/patch-device.yaml"
+      responses:
+        "200":
+          $ref: "schemas/devices/responses/device-updated.yaml"
+        "400":
+          $ref: "schemas/common/responses/errors/bad-request.yaml"
+        "401":
+          $ref: "schemas/common/responses/errors/unauthorized.yaml"
+        "404":
+          $ref: "schemas/common/responses/errors/not-found.yaml"
+        "406":
+          $ref: "schemas/common/responses/errors/not-acceptable.yaml"
+        "409":
+          $ref: "schemas/common/responses/errors/conflict.yaml"
+        "412":
+          $ref: "schemas/common/responses/errors/precondition-failed.yaml"
+        "422":
+          $ref: "schemas/common/responses/errors/unprocessable-entity.yaml"
+        "429":
+          $ref: "schemas/common/responses/errors/rate-limit.yaml"
+        "500":
+          $ref: "schemas/common/responses/errors/server-error.yaml"
+
+    delete:
+      summary: Delete a device
+      description: |
+        Deletes a device by its unique identifier.
+
+        **Business Rules:**
+        - Devices with state "in-use" cannot be deleted
+      operationId: deleteDevice
+      tags:
+        - Devices
+      security:
+        - PasetoAuth: []
+      parameters:
+        - $ref: "#/components/parameters/AuthorizationHeader"
+        - $ref: "#/components/parameters/ApiVersionHeader"
+        - $ref: "#/components/parameters/RequestIdHeader"
+        - $ref: "#/components/parameters/TraceparentHeader"
+        - $ref: "#/components/parameters/TracestateHeader"
+        - $ref: "#/components/parameters/DeviceIdParam"
+      responses:
+        "204":
+          $ref: "schemas/devices/responses/device-deleted.yaml"
+        "401":
+          $ref: "schemas/common/responses/errors/unauthorized.yaml"
+        "404":
+          $ref: "schemas/common/responses/errors/not-found.yaml"
+        "409":
+          $ref: "schemas/common/responses/errors/conflict.yaml"
+        "429":
+          $ref: "schemas/common/responses/errors/rate-limit.yaml"
+        "500":
+          $ref: "schemas/common/responses/errors/server-error.yaml"
+
+    head:
+      summary: Get device metadata
+      description: |
+        Returns headers only for a single device (no response body).
+        Useful for checking if a device exists or validating cached data via ETag.
+      operationId: headDevice
+      tags:
+        - Devices
+      security:
+        - PasetoAuth: []
+      parameters:
+        - $ref: "#/components/parameters/AuthorizationHeader"
+        - $ref: "#/components/parameters/ApiVersionHeader"
+        - $ref: "#/components/parameters/RequestIdHeader"
+        - $ref: "#/components/parameters/TraceparentHeader"
+        - $ref: "#/components/parameters/TracestateHeader"
+        - $ref: "#/components/parameters/DeviceIdParam"
+        - $ref: "#/components/parameters/IfNoneMatchHeader"
+      responses:
+        "200":
+          $ref: "schemas/devices/responses/device-head.yaml"
+        "304":
+          $ref: "schemas/devices/responses/not-modified.yaml"
+        "401":
+          $ref: "schemas/common/responses/errors/unauthorized.yaml"
+        "404":
+          $ref: "schemas/common/responses/errors/not-found.yaml"
+        "429":
+          $ref: "schemas/common/responses/errors/rate-limit.yaml"
+        "500":
+          $ref: "schemas/common/responses/errors/server-error.yaml"
+
+    options:
+      summary: Get allowed methods for device resource
+      description: |
+        Returns the HTTP methods allowed for this device resource.
+        Used for CORS preflight requests and capability discovery.
+      operationId: optionsDevice
+      tags:
+        - Devices
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/DeviceIdParam"
+      responses:
+        "204":
+          $ref: "schemas/devices/responses/device-options.yaml"
+        "400":
+          $ref: "schemas/common/responses/errors/bad-request.yaml"
+
+  /liveness:
+    get:
+      summary: Liveness probe
+      description: |
+        Simple liveness check to determine if the service is running.
+        Used by orchestrators (like Kubernetes) to determine if the container should be restarted.
+      operationId: livenessCheck
+      tags:
+        - System
+      security: []
+      responses:
+        "200":
+          $ref: "schemas/common/responses/system/liveness-ok.yaml"
+        "429":
+          $ref: "schemas/common/responses/errors/rate-limit.yaml"
+        "503":
+          $ref: "schemas/common/responses/system/liveness-down.yaml"
+
+  /readiness:
+    get:
+      summary: Readiness probe
+      description: |
+        Comprehensive readiness check to determine if the service is ready to accept traffic.
+        Checks all critical dependencies including database and downstream services.
+        Used by orchestrators to determine if traffic should be routed to this instance.
+      operationId: readinessCheck
+      tags:
+        - System
+      security: []
+      responses:
+        "200":
+          $ref: "schemas/common/responses/system/readiness-ok.yaml"
+        "429":
+          $ref: "schemas/common/responses/errors/rate-limit.yaml"
+        "503":
+          $ref: "schemas/common/responses/system/readiness-down.yaml"
+
+  /health:
+    get:
+      summary: Health check
+      description: |
+        Comprehensive health check with detailed system information including uptime.
+        This endpoint provides the same dependency status as readiness but includes
+        additional system metrics. Protected with basic authentication.
+      operationId: healthCheck
+      tags:
+        - System
+      security:
+        - BasicAuth: []
+      responses:
+        "200":
+          $ref: "schemas/common/responses/system/health-ok.yaml"
+        "401":
+          $ref: "schemas/common/responses/errors/unauthorized.yaml"
+        "503":
+          $ref: "schemas/common/responses/system/health-down.yaml"
+
+  /admin/cache/health:
+    get:
+      summary: Check cache health status
+      description: |
+        Returns the current health status of the cache subsystem.
+        This endpoint is served on the internal admin port (default: 8089).
+      operationId: getCacheHealth
+      tags:
+        - Admin
+      security:
+        - BasicAuth: []
+      responses:
+        "200":
+          $ref: "schemas/admin/responses/cache-health-ok.yaml"
+        "401":
+          $ref: "schemas/common/responses/errors/unauthorized.yaml"
+        "503":
+          $ref: "schemas/admin/responses/cache-health-unavailable.yaml"
+
+  /admin/cache/devices:
+    delete:
+      summary: Purge all device caches
+      description: |
+        Removes all cached device data including individual devices and list caches.
+        This endpoint is served on the internal admin port (default: 8089).
+      operationId: purgeAllDeviceCaches
+      tags:
+        - Admin
+      security:
+        - BasicAuth: []
+      responses:
+        "200":
+          $ref: "schemas/admin/responses/cache-purge-all-devices.yaml"
+        "401":
+          $ref: "schemas/common/responses/errors/unauthorized.yaml"
+        "500":
+          $ref: "schemas/admin/responses/cache-server-error.yaml"
+        "503":
+          $ref: "schemas/admin/responses/cache-unavailable.yaml"
+
+  /admin/cache/devices/{deviceId}:
+    delete:
+      summary: Purge cache for a specific device
+      description: |
+        Removes cached data for a single device by its ID.
+        This endpoint is served on the internal admin port (default: 8089).
+      operationId: purgeDeviceCache
+      tags:
+        - Admin
+      security:
+        - BasicAuth: []
+      parameters:
+        - $ref: "#/components/parameters/DeviceIdParam"
+      responses:
+        "200":
+          $ref: "schemas/admin/responses/cache-purge-device.yaml"
+        "400":
+          $ref: "schemas/admin/responses/cache-bad-request.yaml"
+        "500":
+          $ref: "schemas/admin/responses/cache-server-error.yaml"
+        "503":
+          $ref: "schemas/admin/responses/cache-unavailable.yaml"
+
+  /admin/cache/devices/lists:
+    delete:
+      summary: Purge all device list caches
+      description: |
+        Removes all cached device list queries.
+        Individual device caches are not affected.
+        This endpoint is served on the internal admin port (default: 8089).
+      operationId: purgeDeviceListCaches
+      tags:
+        - Admin
+      security:
+        - BasicAuth: []
+      responses:
+        "200":
+          $ref: "schemas/admin/responses/cache-purge-lists.yaml"
+        "401":
+          $ref: "schemas/common/responses/errors/unauthorized.yaml"
+        "500":
+          $ref: "schemas/admin/responses/cache-server-error.yaml"
+        "503":
+          $ref: "schemas/admin/responses/cache-unavailable.yaml"
+
+  /admin/cache/pattern:
+    delete:
+      summary: Purge cache entries by pattern
+      description: |
+        Removes all cache entries matching a specified pattern.
+        Supports glob-style patterns (e.g., `device:*`, `devices:list:*`).
+        This endpoint is served on the internal admin port (default: 8089).
+      operationId: purgeCacheByPattern
+      tags:
+        - Admin
+      security:
+        - BasicAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CachePatternParam"
+      responses:
+        "200":
+          $ref: "schemas/admin/responses/cache-purge-pattern.yaml"
+        "400":
+          $ref: "schemas/admin/responses/cache-bad-request.yaml"
+        "500":
+          $ref: "schemas/admin/responses/cache-server-error.yaml"
+        "503":
+          $ref: "schemas/admin/responses/cache-unavailable.yaml"
+
+components:
+  parameters:
+    ApiVersionHeader:
+      name: API-Version
+      in: header
+      required: false
+      description: |
+        API version to use for this request. If not specified, defaults to v1.
+        Supported versions: v1
+      schema:
+        type: string
+        enum: [v1]
+        default: v1
+      example: v1
+
+    RequestIdHeader:
+      name: Request-Id
+      in: header
+      required: false
+      description: |
+        Unique request identifier for tracing and debugging purposes (per-request, always generated server-side).
+        RFC 6648 compliant (no X- prefix).
+      schema:
+        type: string
+        format: uuid
+      example: "019234a5-6b7c-8d9e-0f12-34567890abcd"
+
+    DeviceIdParam:
+      name: deviceId
+      in: path
+      required: true
+      description: The unique identifier of the device (UUID v7)
+      schema:
+        type: string
+        format: uuid
+      example: "019234a5-6b7c-8d9e-0f12-34567890abcd"
+
+    PageParam:
+      name: page
+      in: query
+      required: false
+      description: Page number for pagination (1-indexed)
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+      example: 1
+
+    SizeParam:
+      name: size
+      in: query
+      required: false
+      description: Number of items per page
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+      example: 20
+
+    BrandFilterParam:
+      name: brand
+      in: query
+      required: false
+      description: |
+        Filter by brand(s). Comma-separated for OR matching.
+        Example: ?brand=Apple,Samsung
+      schema:
+        type: array
+        items:
+          type: string
+          minLength: 1
+          maxLength: 100
+        maxItems: 10
+      style: form
+      explode: false
+      example: ["Apple"]
+
+    StateFilterParam:
+      name: state
+      in: query
+      required: false
+      description: |
+        Filter by state(s). Comma-separated for OR matching.
+        Example: ?state=available,inactive
+      schema:
+        type: array
+        items:
+          $ref: "schemas/common/entities/device-state.yaml#/DeviceState"
+        maxItems: 3
+      style: form
+      explode: false
+      example: ["available"]
+
+    SortParam:
+      name: sort
+      in: query
+      required: false
+      description: |
+        Fields to sort results by. Comma-separated for multi-field sorting.
+        Prefix with `-` for descending order.
+        Supported fields: name, brand, state, createdAt, updatedAt
+        Example: ?sort=-createdAt,name (sort by createdAt DESC, then name ASC)
+      schema:
+        type: array
+        items:
+          type: string
+          pattern: "^-?(name|brand|state|createdAt|updatedAt)$"
+        maxItems: 5
+        default: ["-createdAt"]
+      style: form
+      explode: false
+      example: ["-createdAt", "name"]
+
+    FieldsParam:
+      name: fields
+      in: query
+      required: false
+      description: |
+        Field projection to control which fields are returned in the response.
+
+        **Default behavior (no fields parameter):**
+        Returns essential fields only: `id`, `name`, `brand`, `state`
+
+        **With fields parameter:**
+        Returns only the specified fields. Use comma-separated list.
+
+        **Supported fields:**
+        - `id` - Device unique identifier (always included)
+        - `name` - Device name
+        - `brand` - Device manufacturer
+        - `state` - Device state (available, in-use, inactive)
+        - `createdAt` - Creation timestamp
+        - `updatedAt` - Last update timestamp
+        - `links` - HATEOAS navigation links
+
+        **Nested fields syntax:**
+        Use `field:(subfield1,subfield2)` for nested objects.
+        Example: `links:(self)` returns only the self link.
+      schema:
+        type: string
+        pattern: "^[a-zA-Z,:()]+$"
+      examples:
+        essential:
+          value: "id,name,brand,state"
+          summary: Essential fields only
+        withTimestamps:
+          value: "id,name,brand,state,createdAt,updatedAt"
+          summary: Include timestamps
+        withLinks:
+          value: "id,name,state,links:(self)"
+          summary: Include HATEOAS links
+
+    SearchParam:
+      name: q
+      in: query
+      required: false
+      description: |
+        Full-text search query across name and brand fields.
+        Uses PostgreSQL full-text search with English language stemming.
+
+        **Features:**
+        - Matches word variations (e.g., "running" matches "run")
+        - Case-insensitive search
+        - Searches both name and brand fields
+
+        **Examples:**
+        - `?q=iPhone` - matches "iPhone 15 Pro", "My iPhone", etc.
+        - `?q=Samsung` - matches devices with Samsung brand
+        - `?q=Galaxy` - matches "Galaxy S24", "Galaxy Tab", etc.
+
+        **Combining with filters:**
+        - `?q=iPhone&state=available` - available iPhones only
+        - `?q=Pro&brand=Apple` - Apple devices with "Pro" in name
+      schema:
+        type: string
+        minLength: 2
+        maxLength: 255
+      example: "iPhone"
+
+    CursorParam:
+      name: cursor
+      in: query
+      required: false
+      description: |
+        Opaque cursor for keyset-based pagination.
+        When provided, the `page` parameter is ignored.
+
+        **Usage:**
+        1. First request: Don't include cursor (uses page-based pagination)
+        2. Subsequent requests: Use `pagination.nextCursor` or `pagination.previousCursor` from previous response
+
+        **Benefits over offset pagination:**
+        - Stable results even when data changes between requests
+        - Better performance for large datasets (no OFFSET scanning)
+        - Consistent page sizes
+
+        **Note:** Cursors are opaque strings - do not parse or modify them.
+      schema:
+        type: string
+        maxLength: 500
+      example: "eyJmIjoiLWNyZWF0ZWRBdCIsInYiOiIyMDI0LTAxLTE1VDEwOjMwOjAwWiIsImlkIjoiNTUwZTg0MDAtZTI5Yi00MWQ0LWE3MTYtNDQ2NjU1NDQwMDAwIiwiZCI6Im5leHQifQ"
+
+    IfMatchHeader:
+      name: If-Match
+      in: header
+      required: false
+      description: |
+        ETag value for optimistic concurrency control.
+        The request will only succeed if the current resource ETag matches this value.
+      schema:
+        type: string
+      example: '"a1b2c3d4e5f6"'
+
+    IfNoneMatchHeader:
+      name: If-None-Match
+      in: header
+      required: false
+      description: |
+        ETag value for conditional requests.
+        For GET: Returns 304 Not Modified if the resource hasn't changed.
+        For PUT/PATCH: Prevents updates if resource exists (use "*").
+      schema:
+        type: string
+      example: '"a1b2c3d4e5f6"'
+
+    AuthorizationHeader:
+      name: Authorization
+      in: header
+      required: true
+      description: |
+        PASETO v4 bearer token for authentication.
+        Format: Bearer v4.public.{payload}.{signature}
+      schema:
+        type: string
+        pattern: "^Bearer v4\\.(public|local)\\..+$"
+      example: "Bearer v4.public.eyJleHAiOiIyMDI0LTAxLTE1VDEyOjAwOjAwWiIsImlhdCI6IjIwMjQtMDEtMTVUMTA6MDA6MDBaIiwic3ViIjoiMDE5MjM0YTUtNmI3Yy04ZDllLTBmMTItMzQ1Njc4OTBhYmNkIn0.signature"
+
+    IdempotencyKeyHeader:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: |
+        Unique key to ensure idempotent POST requests.
+        If the same key is sent again within the TTL window (24 hours),
+        the server returns the cached response instead of creating a duplicate.
+
+        **Requirements:**
+        - Must be a valid UUID v7
+        - Must be unique per logical operation
+        - Cached for 24 hours
+      schema:
+        type: string
+        format: uuid
+      example: "019234a5-6b7c-8d9e-0f12-34567890abcd"
+
+    AcceptEncodingHeader:
+      name: Accept-Encoding
+      in: header
+      required: false
+      description: |
+        Accepted compression algorithms for the response.
+        Server will use the best matching algorithm.
+      schema:
+        type: string
+      example: "gzip, deflate, br"
+
+    AcceptHeader:
+      name: Accept
+      in: header
+      required: false
+      description: |
+        Media type(s) acceptable for the response.
+        Currently only `application/json` is supported.
+
+        If not specified, defaults to `application/json`.
+        If an unsupported media type is requested, returns 406 Not Acceptable.
+      schema:
+        type: string
+        default: "application/json"
+      example: "application/json"
+
+    TraceparentHeader:
+      name: traceparent
+      in: header
+      required: false
+      description: |
+        W3C Trace Context header for distributed tracing (OpenTelemetry compatible).
+
+        Format: `{version}-{trace-id}-{parent-id}-{trace-flags}`
+        - version: 2 hex digits (always "00")
+        - trace-id: 32 hex digits (16 bytes)
+        - parent-id: 16 hex digits (8 bytes)
+        - trace-flags: 2 hex digits (sampling flag)
+
+        If not provided, the server will generate a new trace context.
+      schema:
+        type: string
+        pattern: "^00-[a-f0-9]{32}-[a-f0-9]{16}-[0-9a-f]{2}$"
+      example: "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01"
+
+    TracestateHeader:
+      name: tracestate
+      in: header
+      required: false
+      description: |
+        W3C Trace Context state header for vendor-specific trace data.
+        Comma-separated list of key=value pairs.
+      schema:
+        type: string
+      example: "congo=t61rcWkgMzE,rojo=00f067aa0ba902b7"
+
+    CachePatternParam:
+      name: pattern
+      in: query
+      required: true
+      description: |
+        Glob-style pattern to match cache keys.
+        Examples: `device:*`, `devices:list:v1:*`
+      schema:
+        type: string
+      example: "device:*"
+
+  securitySchemes:
+    PasetoAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: PASETO
+      description: |
+        PASETO (Platform-Agnostic Security Tokens) v4 token.
+        A secure, stateless token format for authentication.
+        Format: Bearer v4.public.{payload}.{signature}
+
+    BasicAuth:
+      type: http
+      scheme: basic
+      description: Basic HTTP authentication for administrative endpoints
+
+tags:
+  - name: Devices
+    description: Device management operations
+  - name: System
+    description: System liveness, readiness, and health probes
+  - name: Admin
+    description: |
+      Internal administrative endpoints for cache management.
+      These endpoints are served on a separate internal port (default: 8089)
+      and should not be exposed to the public internet.
+    x-internal: true

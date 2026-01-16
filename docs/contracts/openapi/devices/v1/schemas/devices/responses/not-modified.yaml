@@ -1,0 +1,12 @@
+description: Not Modified - Resource unchanged since last request (ETag matched)
+headers:
+  API-Version:
+    $ref: "../../common/responses/headers/headers.yaml#/ApiVersionHeader"
+  ETag:
+    $ref: "../../common/responses/headers/headers.yaml#/ETagHeader"
+  Cache-Control:
+    $ref: "../../common/responses/headers/headers.yaml#/CacheControlHeader"
+  traceparent:
+    $ref: "../../common/responses/headers/headers.yaml#/TraceparentResponseHeader"
+  tracestate:
+    $ref: "../../common/responses/headers/headers.yaml#/TracestateResponseHeader"

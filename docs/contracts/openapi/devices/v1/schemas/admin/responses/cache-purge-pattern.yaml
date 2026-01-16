@@ -1,0 +1,8 @@
+description: Cache entries matching pattern purged successfully
+content:
+  application/json:
+    schema:
+      $ref: "entities/cache.yaml#/CachePatternPurge"
+    examples:
+      purged:
+        $ref: "../examples/cache.yaml#/purge_pattern"

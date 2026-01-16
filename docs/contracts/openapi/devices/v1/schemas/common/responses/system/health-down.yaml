@@ -1,0 +1,8 @@
+description: Service is unhealthy
+content:
+  application/json:
+    schema:
+      $ref: "entities/health.yaml#/Health"
+    examples:
+      down:
+        $ref: "examples/health.yaml#/down"

@@ -1,0 +1,56 @@
+description: Unprocessable Entity - The request was well-formed but contains semantic errors
+headers:
+  API-Version:
+    $ref: "../headers/headers.yaml#/ApiVersionHeader"
+  Request-Id:
+    $ref: "../headers/headers.yaml#/RequestIdHeader"
+  Correlation-Id:
+    $ref: "../headers/headers.yaml#/CorrelationIdHeader"
+  traceparent:
+    $ref: "../headers/headers.yaml#/TraceparentResponseHeader"
+  tracestate:
+    $ref: "../headers/headers.yaml#/TracestateResponseHeader"
+content:
+  application/json:
+    schema:
+      $ref: "entities/error.yaml#/Error"
+    examples:
+      validation_error:
+        summary: Validation errors
+        value:
+          code: "VALIDATION_ERROR"
+          message: "The request body contains validation errors"
+          requestId: "019234a5-6b7c-8d9e-0f12-34567890abcd"
+          traceId: "0af7651916cd43dd8448eb211c80319c"
+          timestamp: "2024-01-15T10:30:00Z"
+          details:
+            - field: "name"
+              message: "name is required"
+              code: "REQUIRED_FIELD"
+            - field: "brand"
+              message: "brand must be between 1 and 100 characters"
+              code: "INVALID_LENGTH"
+      invalid_state:
+        summary: Invalid state value
+        value:
+          code: "VALIDATION_ERROR"
+          message: "The request body contains validation errors"
+          requestId: "019234a5-6b7c-8d9e-0f12-34567890abcd"
+          traceId: "0af7651916cd43dd8448eb211c80319c"
+          timestamp: "2024-01-15T10:30:00Z"
+          details:
+            - field: "state"
+              message: "state must be one of: available, in-use, inactive"
+              code: "INVALID_ENUM_VALUE"
+      invalid_uuid:
+        summary: Invalid UUID format
+        value:
+          code: "VALIDATION_ERROR"
+          message: "The request contains an invalid identifier"
+          requestId: "019234a5-6b7c-8d9e-0f12-34567890abcd"
+          traceId: "0af7651916cd43dd8448eb211c80319c"
+          timestamp: "2024-01-15T10:30:00Z"
+          details:
+            - field: "deviceId"
+              message: "deviceId must be a valid UUID"
+              code: "INVALID_FORMAT"

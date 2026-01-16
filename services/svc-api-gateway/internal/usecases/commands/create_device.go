@@ -22,6 +22,7 @@ type (
 
 	createDeviceCommandHandler struct {
 		devicesService ports.DevicesService
+		cache          ports.DevicesCache
 	}
 )
 
@@ -39,6 +40,33 @@ func NewCreateDeviceCommandHandler(
 	)
 }
 
+// NewCreateDeviceCommandHandlerWithCache creates a command handler with cache invalidation.
+func NewCreateDeviceCommandHandlerWithCache(
+	svc ports.DevicesService,
+	cache ports.DevicesCache,
+	log logger.Logger,
+	metricsClient metrics.Client,
+	tracerProvider otelTrace.TracerProvider,
+) CreateDeviceCommandHandler {
+	return decorator.ApplyCommandDecorators[CreateDeviceCommand, *model.Device](
+		createDeviceCommandHandler{devicesService: svc, cache: cache},
+		log,
+		metricsClient,
+		tracerProvider,
+	)
+}
+
 func (h createDeviceCommandHandler) Handle(ctx context.Context, cmd CreateDeviceCommand) (*model.Device, error) {
-	return h.devicesService.CreateDevice(ctx, cmd.Name, cmd.Brand, cmd.State)
+	device, err := h.devicesService.CreateDevice(ctx, cmd.Name, cmd.Brand, cmd.State)
+	if err != nil {
+		return nil, err
+	}
+
+	if h.cache != nil {
+		go func() {
+			_ = h.cache.InvalidateAllLists(context.Background())
+		}()
+	}
+
+	return device, nil
 }

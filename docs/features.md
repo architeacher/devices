@@ -30,7 +30,7 @@ This document describes the features and API best practices implemented in the D
 | Rate Limiting | ✅ | GCRA algorithm with RFC-compliant headers |
 | Idempotency | ✅ | `Idempotency-Key` with KeyDB-backed storage |
 | Deprecation Headers | ✅ | RFC 8594 Sunset headers for API versioning |
-| Caching | ⏳ | ETag/Cache-Control headers defined |
+| Caching | ✅ | Cache-Aside pattern with ETag/conditional GET |
 | Compression | ⏳ | Accept-Encoding headers defined |
 
 **Legend**: ✅ Implemented | ⏳ Planned
@@ -511,7 +511,7 @@ Full OpenAPI 3.0.3 specification with:
 - Server variables for environment-specific URLs
 - Code generation via oapi-codegen v2
 
-**Location**: `docs/openapi-spec/devices/v1/svc-api-gateway.yaml`
+**Location**: `docs/contracts/openapi/devices/v1/specs.yaml`
 
 ---
 
@@ -614,18 +614,115 @@ Clients can monitor these headers to plan their migration before the sunset date
 
 ---
 
+### Caching
+
+Device data caching with the Cache-Aside pattern at the API Gateway layer, using KeyDB for storage.
+
+#### Architecture
+
+The caching layer is implemented at the **Query Decorator** level (not HTTP middleware) for several reasons:
+- Cache keys are semantic (device ID) rather than URL-based
+- Easy invalidation by ID (`InvalidateDevice(id)`)
+- Domain objects are serialized once, not per-request
+- Full observability (all requests logged, metriced, traced including cache hits)
+
+**Decorator Order**: `logging → metrics → tracing → cache → base`
+
+#### Cache-Aside Pattern
+
+```
+Request → Check Cache → Hit? → Return cached data
+                     → Miss? → Query backend → Cache result → Return data
+```
+
+#### Configuration
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `enabled` | true | Enable/disable device caching |
+| `deviceTTL` | 5m | TTL for individual device cache |
+| `listTTL` | 1m | TTL for device list cache |
+| `maxAge` | 60 | Cache-Control max-age seconds |
+| `staleWhileRevalidate` | 30 | Stale-while-revalidate seconds |
+
+Environment variables:
+- `DEVICES_CACHE_ENABLED`
+- `DEVICES_CACHE_DEVICE_TTL`
+- `DEVICES_CACHE_LIST_TTL`
+- `DEVICES_CACHE_MAX_AGE`
+- `DEVICES_CACHE_STALE_REVALIDATE`
+
+#### Response Headers
+
+| Header | Value Example | Purpose |
+|--------|---------------|---------|
+| `Cache-Status` | `HIT`, `MISS`, `BYPASS` | Indicates cache result |
+| `Cache-Key` | `device:v1:550e8400...` | Debug: cache key used |
+| `Cache-TTL` | `287` | Remaining TTL in seconds |
+| `ETag` | `"a1b2c3d4e5f6"` | Resource version for conditional GET |
+| `Cache-Control` | `private, max-age=60, stale-while-revalidate=30` | Client caching directive |
+| `Last-Modified` | `Tue, 13 Jan 2026 01:00:00 GMT` | Resource modification time |
+
+#### ETag Generation
+
+ETags are generated using xxhash for high performance:
+- Strong ETags: `"abc123def456"` (quoted hex)
+- Weak ETags: `W/"abc123def456"` (optional for list responses)
+
+#### Conditional GET
+
+The conditional GET middleware handles `If-None-Match` headers:
+1. Client sends `If-None-Match: "abc123"`
+2. Server generates ETag for current response
+3. If match: Returns `304 Not Modified` (no body)
+4. If no match: Returns full response with new ETag
+
+#### Cache Invalidation
+
+| Operation | Device Cache | List Cache |
+|-----------|-------------|------------|
+| Create | - | Invalidate all |
+| Update | Invalidate ID | Invalidate all |
+| Patch | Invalidate ID | Invalidate all |
+| Delete | Invalidate ID | Invalidate all |
+
+Invalidation runs asynchronously (goroutine) to avoid blocking responses.
+
+#### Cache Key Patterns
+
+- Individual device: `device:v1:{uuid}`
+- Device list: `devices:list:v1:{filter_hash}`
+
+Filter hashes use SHA-256 with sorted arrays for consistent keys regardless of parameter order.
+
+#### Admin Operations
+
+Internal cache management endpoints (not exposed on public API):
+- `DELETE /admin/cache/devices` - Purge all device caches
+- `DELETE /admin/cache/devices/{id}` - Purge specific device
+- `DELETE /admin/cache/devices/lists` - Purge all list caches
+- `GET /admin/cache/health` - Check cache health
+
+Makefile targets:
+```bash
+make cache-purge          # Purge all device caches
+make cache-purge-lists    # Purge list caches only
+make cache-purge-device ID=<uuid>  # Purge specific device
+make cache-stats          # Show cache statistics
+make cache-keys           # List all device cache keys
+```
+
+**Locations**:
+- `services/svc-api-gateway/internal/adapters/repos/devices_cache_repository.go`
+- `services/svc-api-gateway/internal/adapters/inbound/http/middleware/etag.go`
+- `services/svc-api-gateway/internal/adapters/inbound/http/middleware/conditional.go`
+- `pkg/decorator/caching.go`
+
+---
+
 ## Planned Features
 
 The following features are documented in the OpenAPI specification but not yet implemented:
-
-### Caching
-
-Headers defined:
-- `ETag`: Resource version tag
-- `Cache-Control`: Caching directives
-- `Last-Modified`: Resource modification time
-- `If-None-Match`: Conditional GET
-- `If-Match`: Conditional PUT/PATCH
 
 ### Compression
 

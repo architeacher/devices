@@ -1,0 +1,33 @@
+description: List of devices retrieved successfully
+headers:
+  API-Version:
+    $ref: "../../common/responses/headers/headers.yaml#/ApiVersionHeader"
+  Request-Id:
+    $ref: "../../common/responses/headers/headers.yaml#/RequestIdHeader"
+  Correlation-Id:
+    $ref: "../../common/responses/headers/headers.yaml#/CorrelationIdHeader"
+  ETag:
+    $ref: "../../common/responses/headers/headers.yaml#/ETagHeader"
+  Cache-Control:
+    $ref: "../../common/responses/headers/headers.yaml#/CacheControlHeader"
+  RateLimit-Limit:
+    $ref: "../../common/responses/headers/headers.yaml#/RateLimitLimitHeader"
+  RateLimit-Remaining:
+    $ref: "../../common/responses/headers/headers.yaml#/RateLimitRemainingHeader"
+  RateLimit-Reset:
+    $ref: "../../common/responses/headers/headers.yaml#/RateLimitResetHeader"
+  Content-Encoding:
+    $ref: "../../common/responses/headers/headers.yaml#/ContentEncodingHeader"
+  Vary:
+    $ref: "../../common/responses/headers/headers.yaml#/VaryHeader"
+  traceparent:
+    $ref: "../../common/responses/headers/headers.yaml#/TraceparentResponseHeader"
+  tracestate:
+    $ref: "../../common/responses/headers/headers.yaml#/TracestateResponseHeader"
+content:
+  application/json:
+    schema:
+      $ref: "entities/devices-list.yaml#/DevicesListEnvelope"
+    examples:
+      list:
+        $ref: "../examples/devices-list.yaml#/list"

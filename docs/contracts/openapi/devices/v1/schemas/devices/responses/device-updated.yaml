@@ -1,0 +1,33 @@
+description: Device updated successfully
+headers:
+  API-Version:
+    $ref: "../../common/responses/headers/headers.yaml#/ApiVersionHeader"
+  Request-Id:
+    $ref: "../../common/responses/headers/headers.yaml#/RequestIdHeader"
+  Correlation-Id:
+    $ref: "../../common/responses/headers/headers.yaml#/CorrelationIdHeader"
+  ETag:
+    $ref: "../../common/responses/headers/headers.yaml#/ETagHeader"
+  RateLimit-Limit:
+    $ref: "../../common/responses/headers/headers.yaml#/RateLimitLimitHeader"
+  RateLimit-Remaining:
+    $ref: "../../common/responses/headers/headers.yaml#/RateLimitRemainingHeader"
+  RateLimit-Reset:
+    $ref: "../../common/responses/headers/headers.yaml#/RateLimitResetHeader"
+  Content-Encoding:
+    $ref: "../../common/responses/headers/headers.yaml#/ContentEncodingHeader"
+  Vary:
+    $ref: "../../common/responses/headers/headers.yaml#/VaryHeader"
+  traceparent:
+    $ref: "../../common/responses/headers/headers.yaml#/TraceparentResponseHeader"
+  tracestate:
+    $ref: "../../common/responses/headers/headers.yaml#/TracestateResponseHeader"
+content:
+  application/json:
+    schema:
+      $ref: "entities/device.yaml#/DeviceEnvelope"
+    examples:
+      updated:
+        $ref: "../examples/device.yaml#/updated"
+      patched:
+        $ref: "../examples/device.yaml#/patched"

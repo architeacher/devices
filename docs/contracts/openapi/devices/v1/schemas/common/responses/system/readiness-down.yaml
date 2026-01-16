@@ -1,0 +1,8 @@
+description: Service is not ready (dependencies unavailable)
+content:
+  application/json:
+    schema:
+      $ref: "entities/readiness.yaml#/Readiness"
+    examples:
+      down:
+        $ref: "examples/readiness.yaml#/down"

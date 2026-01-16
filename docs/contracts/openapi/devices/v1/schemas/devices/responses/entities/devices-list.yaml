@@ -1,0 +1,17 @@
+DevicesListEnvelope:
+  type: object
+  description: Response envelope containing a paginated list of devices with metadata
+  required:
+    - data
+    - meta
+    - pagination
+  properties:
+    data:
+      type: array
+      description: List of devices
+      items:
+        $ref: "device.yaml#/Device"
+    meta:
+      $ref: "../../../common/responses/entities/meta.yaml#/Meta"
+    pagination:
+      $ref: "../../../common/entities/pagination.yaml#/Pagination"

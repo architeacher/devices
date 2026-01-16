@@ -23,6 +23,7 @@ type (
 
 	updateDeviceCommandHandler struct {
 		deviceService ports.DevicesService
+		cache         ports.DevicesCache
 	}
 )
 
@@ -40,8 +41,37 @@ func NewUpdateDeviceCommandHandler(
 	)
 }
 
+// NewUpdateDeviceCommandHandlerWithCache creates a command handler with cache invalidation.
+func NewUpdateDeviceCommandHandlerWithCache(
+	svc ports.DevicesService,
+	cache ports.DevicesCache,
+	log logger.Logger,
+	metricsClient metrics.Client,
+	tracerProvider otelTrace.TracerProvider,
+) UpdateDeviceCommandHandler {
+	return decorator.ApplyCommandDecorators[UpdateDeviceCommand, *model.Device](
+		updateDeviceCommandHandler{deviceService: svc, cache: cache},
+		log,
+		metricsClient,
+		tracerProvider,
+	)
+}
+
 func (h updateDeviceCommandHandler) Handle(ctx context.Context, cmd UpdateDeviceCommand) (*model.Device, error) {
-	return h.deviceService.UpdateDevice(ctx, cmd.ID, cmd.Name, cmd.Brand, cmd.State)
+	device, err := h.deviceService.UpdateDevice(ctx, cmd.ID, cmd.Name, cmd.Brand, cmd.State)
+	if err != nil {
+		return nil, err
+	}
+
+	if h.cache != nil {
+		go func() {
+			bgCtx := context.Background()
+			_ = h.cache.InvalidateDevice(bgCtx, cmd.ID)
+			_ = h.cache.InvalidateAllLists(bgCtx)
+		}()
+	}
+
+	return device, nil
 }
 
 type (
@@ -54,6 +84,7 @@ type (
 
 	patchDeviceCommandHandler struct {
 		deviceService ports.DevicesService
+		cache         ports.DevicesCache
 	}
 )
 
@@ -71,6 +102,35 @@ func NewPatchDeviceCommandHandler(
 	)
 }
 
+// NewPatchDeviceCommandHandlerWithCache creates a command handler with cache invalidation.
+func NewPatchDeviceCommandHandlerWithCache(
+	svc ports.DevicesService,
+	cache ports.DevicesCache,
+	log logger.Logger,
+	metricsClient metrics.Client,
+	tracerProvider otelTrace.TracerProvider,
+) PatchDeviceCommandHandler {
+	return decorator.ApplyCommandDecorators[PatchDeviceCommand, *model.Device](
+		patchDeviceCommandHandler{deviceService: svc, cache: cache},
+		log,
+		metricsClient,
+		tracerProvider,
+	)
+}
+
 func (h patchDeviceCommandHandler) Handle(ctx context.Context, cmd PatchDeviceCommand) (*model.Device, error) {
-	return h.deviceService.PatchDevice(ctx, cmd.ID, cmd.Updates)
+	device, err := h.deviceService.PatchDevice(ctx, cmd.ID, cmd.Updates)
+	if err != nil {
+		return nil, err
+	}
+
+	if h.cache != nil {
+		go func() {
+			bgCtx := context.Background()
+			_ = h.cache.InvalidateDevice(bgCtx, cmd.ID)
+			_ = h.cache.InvalidateAllLists(bgCtx)
+		}()
+	}
+
+	return device, nil
 }

@@ -24,6 +24,7 @@ type (
 
 	deleteDeviceCommandHandler struct {
 		deviceService ports.DevicesService
+		cache         ports.DevicesCache
 	}
 )
 
@@ -41,9 +42,33 @@ func NewDeleteDeviceCommandHandler(
 	)
 }
 
+// NewDeleteDeviceCommandHandlerWithCache creates a command handler with cache invalidation.
+func NewDeleteDeviceCommandHandlerWithCache(
+	svc ports.DevicesService,
+	cache ports.DevicesCache,
+	log logger.Logger,
+	metricsClient metrics.Client,
+	tracerProvider otelTrace.TracerProvider,
+) DeleteDeviceCommandHandler {
+	return decorator.ApplyCommandDecorators[DeleteDeviceCommand, DeleteDeviceResult](
+		deleteDeviceCommandHandler{deviceService: svc, cache: cache},
+		log,
+		metricsClient,
+		tracerProvider,
+	)
+}
+
 func (h deleteDeviceCommandHandler) Handle(ctx context.Context, cmd DeleteDeviceCommand) (DeleteDeviceResult, error) {
 	if err := h.deviceService.DeleteDevice(ctx, cmd.ID); err != nil {
 		return DeleteDeviceResult{Success: false}, err
+	}
+
+	if h.cache != nil {
+		go func() {
+			bgCtx := context.Background()
+			_ = h.cache.InvalidateDevice(bgCtx, cmd.ID)
+			_ = h.cache.InvalidateAllLists(bgCtx)
+		}()
 	}
 
 	return DeleteDeviceResult{Success: true}, nil

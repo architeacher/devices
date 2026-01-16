@@ -8,7 +8,6 @@ var (
 	ErrCannotDeleteInUseDevice = errors.New("cannot delete in-use device")
 	ErrServiceUnavailable      = errors.New("service unavailable")
 	ErrTimeout                 = errors.New("request timeout")
-	ErrCircuitOpen             = errors.New("circuit breaker is open")
 )
 
 type ValidationError struct {

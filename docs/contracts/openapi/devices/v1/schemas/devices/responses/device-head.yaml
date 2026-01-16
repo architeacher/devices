@@ -1,0 +1,23 @@
+description: Device exists
+headers:
+  API-Version:
+    $ref: "../../common/responses/headers/headers.yaml#/ApiVersionHeader"
+  Request-Id:
+    $ref: "../../common/responses/headers/headers.yaml#/RequestIdHeader"
+  Correlation-Id:
+    $ref: "../../common/responses/headers/headers.yaml#/CorrelationIdHeader"
+  ETag:
+    $ref: "../../common/responses/headers/headers.yaml#/ETagHeader"
+  Cache-Control:
+    $ref: "../../common/responses/headers/headers.yaml#/CacheControlHeader"
+  Last-Modified:
+    $ref: "../../common/responses/headers/headers.yaml#/LastModifiedHeader"
+  Content-Length:
+    description: Size of the response body in bytes (if GET were used)
+    schema:
+      type: integer
+    example: 256
+  traceparent:
+    $ref: "../../common/responses/headers/headers.yaml#/TraceparentResponseHeader"
+  tracestate:
+    $ref: "../../common/responses/headers/headers.yaml#/TracestateResponseHeader"

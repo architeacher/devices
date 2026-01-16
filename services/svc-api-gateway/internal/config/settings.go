@@ -21,11 +21,13 @@ type (
 	ServiceConfig struct {
 		App                   App                   `json:"app"`
 		SecretsStorage        SecretsStorage        `json:"secrets_storage"`
-		HTTPServer            HTTPServer            `json:"http_server_server"`
+		PublicHTTPServer      PublicHTTPServer      `json:"public_http_server"`
+		AdminHTTPServer       AdminHTTPServer       `json:"admin_http_server"`
 		Auth                  Auth                  `json:"auth"`
 		DevicesGRPCClient     DevicesGRPCClient     `json:"devices_grpc_client"`
 		Backoff               Backoff               `json:"backoff"`
 		Cache                 Cache                 `json:"cache"`
+		DevicesCache          DevicesCache          `json:"devices_cache"`
 		ThrottledRateLimiting ThrottledRateLimiting `json:"throttled_rate_limiting"`
 		Idempotency           Idempotency           `json:"idempotency"`
 		Deprecation           Deprecation           `json:"deprecation"`
@@ -58,13 +60,23 @@ type (
 		PollInterval  time.Duration `envconfig:"VAULT_POLL_INTERVAL" default:"24h" json:"poll_interval"`
 	}
 
-	HTTPServer struct {
+	PublicHTTPServer struct {
 		Host            string        `envconfig:"HTTP_SERVER_HOST" default:"0.0.0.0" json:"host"`
 		Port            uint          `envconfig:"HTTP_SERVER_PORT" default:"8088" json:"port"`
 		ReadTimeout     time.Duration `envconfig:"HTTP_READ_TIMEOUT" default:"15s" json:"read_timeout"`
 		WriteTimeout    time.Duration `envconfig:"HTTP_WRITE_TIMEOUT" default:"15s" json:"write_timeout"`
 		IdleTimeout     time.Duration `envconfig:"HTTP_IDLE_TIMEOUT" default:"60s" json:"idle_timeout"`
 		ShutdownTimeout time.Duration `envconfig:"HTTP_SHUTDOWN_TIMEOUT" default:"30s" json:"shutdown_timeout"`
+	}
+
+	AdminHTTPServer struct {
+		Enabled         bool          `envconfig:"ADMIN_HTTP_SERVER_ENABLED" default:"true" json:"enabled"`
+		Host            string        `envconfig:"ADMIN_HTTP_SERVER_HOST" default:"127.0.0.1" json:"host"`
+		Port            uint          `envconfig:"ADMIN_HTTP_SERVER_PORT" default:"8089" json:"port"`
+		ReadTimeout     time.Duration `envconfig:"ADMIN_HTTP_READ_TIMEOUT" default:"15s" json:"read_timeout"`
+		WriteTimeout    time.Duration `envconfig:"ADMIN_HTTP_WRITE_TIMEOUT" default:"15s" json:"write_timeout"`
+		IdleTimeout     time.Duration `envconfig:"ADMIN_HTTP_IDLE_TIMEOUT" default:"60s" json:"idle_timeout"`
+		ShutdownTimeout time.Duration `envconfig:"ADMIN_HTTP_SHUTDOWN_TIMEOUT" default:"30s" json:"shutdown_timeout"`
 	}
 
 	Auth struct {
@@ -81,6 +93,7 @@ type (
 		Address        string               `envconfig:"DEVICES_GRPC_ADDRESS" default:"svc-devices:9090" json:"address"`
 		Timeout        time.Duration        `envconfig:"DEVICES_TIMEOUT" default:"30s" json:"timeout"`
 		MaxRetries     uint                 `envconfig:"DEVICES_MAX_RETRIES" default:"3" json:"max_retries"`
+		MaxMessageSize uint                 `envconfig:"DEVICES_MAX_MESSAGE_SIZE" default:"4194304" json:"max_message_size"`
 		CircuitBreaker CircuitBreakerConfig `json:"circuit_breaker"`
 		TLS            TLSConfig            `json:"tls"`
 	}
@@ -118,6 +131,14 @@ type (
 		PoolTimeout   time.Duration `envconfig:"CACHE_POOL_TIMEOUT" default:"5s" json:"pool_timeout"`
 		MaxRetries    uint          `envconfig:"CACHE_MAX_RETRIES" default:"3" json:"max_retries"`
 		DefaultExpiry time.Duration `envconfig:"CACHE_DEFAULT_EXPIRY" default:"24h" json:"default_expiry"`
+	}
+
+	DevicesCache struct {
+		Enabled              bool          `envconfig:"DEVICES_CACHE_ENABLED" default:"true" json:"enabled"`
+		DeviceTTL            time.Duration `envconfig:"DEVICES_CACHE_DEVICE_TTL" default:"5m" json:"device_ttl"`
+		ListTTL              time.Duration `envconfig:"DEVICES_CACHE_LIST_TTL" default:"1m" json:"list_ttl"`
+		MaxAge               uint          `envconfig:"DEVICES_CACHE_MAX_AGE" default:"60" json:"max_age"`
+		StaleWhileRevalidate uint          `envconfig:"DEVICES_CACHE_STALE_REVALIDATE" default:"30" json:"stale_while_revalidate"`
 	}
 
 	ThrottledRateLimiting struct {

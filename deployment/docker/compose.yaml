@@ -267,9 +267,9 @@ services:
     networks:
       - internal
     environment:
-      SWAGGER_JSON: /oas/svc-devices-swagger-v1.json
+      SWAGGER_JSON: /oas/specs-swagger.json
     volumes:
-      - "./docs/openapi-spec/public:/oas"
+      - "./docs/contracts/openapi/devices/v1/public:/oas"
     labels:
       - "traefik.enable=true"
       - "traefik.http.services.swagger-ui.loadbalancer.server.port=8080"

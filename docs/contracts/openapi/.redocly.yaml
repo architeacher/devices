@@ -1,0 +1,12 @@
+extends:
+  - recommended
+
+apis:
+  main:
+    root: /spec/devices/v1/specs.yaml
+    decorators:
+      remove-x-internal: on
+
+rules:
+  no-unresolved-refs: error
+  no-invalid-schema-examples: warn

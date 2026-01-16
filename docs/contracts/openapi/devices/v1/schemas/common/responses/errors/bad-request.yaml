@@ -1,0 +1,33 @@
+description: Bad Request - The request was malformed or contains invalid syntax
+headers:
+  API-Version:
+    $ref: "../headers/headers.yaml#/ApiVersionHeader"
+  Request-Id:
+    $ref: "../headers/headers.yaml#/RequestIdHeader"
+  Correlation-Id:
+    $ref: "../headers/headers.yaml#/CorrelationIdHeader"
+  traceparent:
+    $ref: "../headers/headers.yaml#/TraceparentResponseHeader"
+  tracestate:
+    $ref: "../headers/headers.yaml#/TracestateResponseHeader"
+content:
+  application/json:
+    schema:
+      $ref: "entities/error.yaml#/Error"
+    examples:
+      invalid_json:
+        summary: Invalid JSON syntax
+        value:
+          code: "BAD_REQUEST"
+          message: "Invalid JSON syntax in request body"
+          requestId: "019234a5-6b7c-8d9e-0f12-34567890abcd"
+          traceId: "0af7651916cd43dd8448eb211c80319c"
+          timestamp: "2024-01-15T10:30:00Z"
+      missing_content_type:
+        summary: Missing Content-Type header
+        value:
+          code: "BAD_REQUEST"
+          message: "Content-Type header must be application/json"
+          requestId: "019234a5-6b7c-8d9e-0f12-34567890abcd"
+          traceId: "0af7651916cd43dd8448eb211c80319c"
+          timestamp: "2024-01-15T10:30:00Z"

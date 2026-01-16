@@ -1,0 +1,31 @@
+description: Precondition Failed - The If-Match header condition was not met
+headers:
+  API-Version:
+    $ref: "../headers/headers.yaml#/ApiVersionHeader"
+  Request-Id:
+    $ref: "../headers/headers.yaml#/RequestIdHeader"
+  Correlation-Id:
+    $ref: "../headers/headers.yaml#/CorrelationIdHeader"
+  traceparent:
+    $ref: "../headers/headers.yaml#/TraceparentResponseHeader"
+  tracestate:
+    $ref: "../headers/headers.yaml#/TracestateResponseHeader"
+  ETag:
+    $ref: "../headers/headers.yaml#/ETagHeader"
+content:
+  application/json:
+    schema:
+      $ref: "entities/error.yaml#/Error"
+    examples:
+      etag_mismatch:
+        summary: ETag mismatch - resource was modified
+        value:
+          code: "PRECONDITION_FAILED"
+          message: "Resource has been modified since last retrieval"
+          requestId: "019234a5-6b7c-8d9e-0f12-34567890abcd"
+          traceId: "0af7651916cd43dd8448eb211c80319c"
+          timestamp: "2024-01-15T10:30:00Z"
+          details:
+            - field: "If-Match"
+              message: "Provided ETag does not match current resource version"
+              code: "ETAG_MISMATCH"

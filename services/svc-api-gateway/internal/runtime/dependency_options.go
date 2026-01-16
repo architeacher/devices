@@ -6,9 +6,11 @@ import (
 	"net"
 	"net/http"
 
+	"github.com/architeacher/devices/pkg/decorator"
 	"github.com/architeacher/devices/pkg/logger"
 	"github.com/architeacher/devices/pkg/metrics/noop"
 	inboundhttp "github.com/architeacher/devices/services/svc-api-gateway/internal/adapters/inbound/http"
+	grpcclient "github.com/architeacher/devices/services/svc-api-gateway/internal/adapters/outbound/grpc"
 	"github.com/architeacher/devices/services/svc-api-gateway/internal/adapters/repos"
 	"github.com/architeacher/devices/services/svc-api-gateway/internal/adapters/services"
 	"github.com/architeacher/devices/services/svc-api-gateway/internal/config"
@@ -27,7 +29,8 @@ func defaultOptions(ctx context.Context) []DependencyOption {
 		WithDataRepositories(),
 		WithServices(),
 		WithApplication(),
-		WithHTTPServer(),
+		WithPublicHTTPServer(),
+		WithAdminHTTPServer(),
 		WithMetrics(),
 		WithTracing(),
 	}
@@ -151,24 +154,32 @@ func WithDataRepositories() DependencyOption {
 			d.repos.rateLimitStore = store
 		}
 
+		if d.config.DevicesCache.Enabled && d.infra.cacheClient != nil {
+			d.repos.devicesCache = repos.NewDevicesCacheRepository(d.infra.cacheClient, d.infra.logger)
+			d.infra.logger.Info().Msg("devices cache repository initialized")
+		}
+
 		return nil
 	}
 }
 
 func WithServices() DependencyOption {
 	return func(d *dependencies) error {
-		client, err := services.NewDevicesService(d.config)
+		conn, err := infrastructure.NewGRPCConnection(d.config)
 		if err != nil {
-			return fmt.Errorf("creating devices gRPC client: %w", err)
+			return fmt.Errorf("creating gRPC connection: %w", err)
 		}
+
+		client := grpcclient.NewClient(conn, d.config)
+		svc := services.NewDevicesService(client)
 
 		d.services = servicesDep{
-			devices:       client,
-			healthChecker: client,
+			devices:       svc,
+			healthChecker: svc,
 		}
 
-		d.cleanupFuncs["GRPC client"] = func(ctx context.Context) error {
-			return client.Close()
+		d.cleanupFuncs["gRPC connection"] = func(ctx context.Context) error {
+			return conn.Close()
 		}
 
 		return nil
@@ -177,9 +188,26 @@ func WithServices() DependencyOption {
 
 func WithApplication() DependencyOption {
 	return func(d *dependencies) error {
+		var cacheOpts *usecases.CacheOptions
+
+		if d.repos.devicesCache != nil {
+			cacheOpts = &usecases.CacheOptions{
+				Cache: d.repos.devicesCache,
+				GetDeviceConfig: decorator.CacheConfig{
+					Enabled: d.config.DevicesCache.Enabled,
+					TTL:     d.config.DevicesCache.DeviceTTL,
+				},
+				ListDeviceConfig: decorator.CacheConfig{
+					Enabled: d.config.DevicesCache.Enabled,
+					TTL:     d.config.DevicesCache.ListTTL,
+				},
+			}
+		}
+
 		webApp := usecases.NewWebApplication(
 			d.services.devices,
 			d.services.healthChecker,
+			cacheOpts,
 			d.infra.logger,
 			d.infra.metricsClient,
 			d.infra.tracerProvider,
@@ -193,9 +221,9 @@ func WithApplication() DependencyOption {
 	}
 }
 
-func WithHTTPServer() DependencyOption {
+func WithPublicHTTPServer() DependencyOption {
 	return func(d *dependencies) error {
-		cfg := d.config.HTTPServer
+		cfg := d.config.PublicHTTPServer
 
 		router := inboundhttp.NewRouter(inboundhttp.RouterConfig{
 			App:             d.apps.webApp,
@@ -206,9 +234,9 @@ func WithHTTPServer() DependencyOption {
 			MetricsClient:   d.infra.metricsClient,
 		})
 
-		d.infra.logger.Info().Msg("creating HTTP server...")
+		d.infra.logger.Info().Msg("creating public HTTP server...")
 
-		d.infra.httpServer = &http.Server{
+		d.infra.publicHttpServer = &http.Server{
 			Addr:         net.JoinHostPort(cfg.Host, fmt.Sprintf("%d", cfg.Port)),
 			Handler:      router,
 			ReadTimeout:  cfg.ReadTimeout,
@@ -216,9 +244,42 @@ func WithHTTPServer() DependencyOption {
 			IdleTimeout:  cfg.IdleTimeout,
 		}
 
-		d.cleanupFuncs["HTTP server"] = d.infra.httpServer.Shutdown
+		d.cleanupFuncs["public HTTP server"] = d.infra.publicHttpServer.Shutdown
 
-		d.infra.logger.Info().Str("addr", d.infra.httpServer.Addr).Msg("HTTP server created")
+		d.infra.logger.Info().Str("addr", d.infra.publicHttpServer.Addr).Msg("public HTTP server created")
+
+		return nil
+	}
+}
+
+func WithAdminHTTPServer() DependencyOption {
+	return func(d *dependencies) error {
+		cfg := d.config.AdminHTTPServer
+
+		if !cfg.Enabled {
+			d.infra.logger.Info().Msg("admin HTTP server disabled")
+
+			return nil
+		}
+
+		router := inboundhttp.NewAdminRouter(inboundhttp.AdminRouterConfig{
+			DevicesCache: d.repos.devicesCache,
+			Logger:       d.infra.logger,
+		})
+
+		d.infra.logger.Info().Msg("creating admin HTTP server...")
+
+		d.infra.adminHttpServer = &http.Server{
+			Addr:         net.JoinHostPort(cfg.Host, fmt.Sprintf("%d", cfg.Port)),
+			Handler:      router,
+			ReadTimeout:  cfg.ReadTimeout,
+			WriteTimeout: cfg.WriteTimeout,
+			IdleTimeout:  cfg.IdleTimeout,
+		}
+
+		d.cleanupFuncs["admin HTTP server"] = d.infra.adminHttpServer.Shutdown
+
+		d.infra.logger.Info().Str("addr", d.infra.adminHttpServer.Addr).Msg("admin HTTP server created")
 
 		return nil
 	}

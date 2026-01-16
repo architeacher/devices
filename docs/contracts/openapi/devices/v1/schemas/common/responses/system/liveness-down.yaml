@@ -1,0 +1,8 @@
+description: Service is not alive
+content:
+  application/json:
+    schema:
+      $ref: "entities/liveness.yaml#/Liveness"
+    examples:
+      down:
+        $ref: "examples/liveness.yaml#/down"

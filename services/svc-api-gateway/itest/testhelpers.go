@@ -17,6 +17,7 @@ import (
 	"github.com/architeacher/devices/pkg/logger"
 	"github.com/architeacher/devices/pkg/metrics/noop"
 	internalhttp "github.com/architeacher/devices/services/svc-api-gateway/internal/adapters/inbound/http"
+	grpcclient "github.com/architeacher/devices/services/svc-api-gateway/internal/adapters/outbound/grpc"
 	"github.com/architeacher/devices/services/svc-api-gateway/internal/adapters/services"
 	apiconfig "github.com/architeacher/devices/services/svc-api-gateway/internal/config"
 	"github.com/architeacher/devices/services/svc-api-gateway/internal/domain/model"
@@ -87,10 +88,10 @@ func (s *BaseTestSuite) DevicePath(id string) string {
 // IntegrationTestServer provides a full integration test environment with
 // PostgreSQL, gRPC svc-devices, and HTTP svc-api-gateway.
 type IntegrationTestServer struct {
-	HTTPServer   *httptest.Server
-	TestServer   *testutil.TestServer
-	GRPCClient   *services.DevicesService
-	grpcConn     *grpc.ClientConn
+	HTTPServer *httptest.Server
+	TestServer *testutil.TestServer
+	GRPCClient *services.DevicesService
+	grpcConn   *grpc.ClientConn
 }
 
 // NewIntegrationTestServer creates a complete integration test environment.
@@ -116,6 +117,24 @@ func NewIntegrationTestServer(ctx context.Context) (*IntegrationTestServer, erro
 		return nil, err
 	}
 
+	grpcOutbound, err := grpcclient.NewClient(
+		&apiconfig.ServiceConfig{
+			DevicesGRPCClient: apiconfig.DevicesGRPCClient{
+				Address:        grpcAddress,
+				Timeout:        10 * time.Second,
+				MaxRetries:     1,
+				CircuitBreaker: apiconfig.CircuitBreakerConfig{Enabled: false},
+			},
+		},
+		grpcclient.WithConnection(conn),
+	)
+	if err != nil {
+		conn.Close()
+		testServer.Close()
+
+		return nil, err
+	}
+
 	grpcClient, err := services.NewDevicesService(
 		&apiconfig.ServiceConfig{
 			DevicesGRPCClient: apiconfig.DevicesGRPCClient{
@@ -125,9 +144,10 @@ func NewIntegrationTestServer(ctx context.Context) (*IntegrationTestServer, erro
 				CircuitBreaker: apiconfig.CircuitBreakerConfig{Enabled: false},
 			},
 		},
-		services.WithConnection(conn),
+		services.WithConnection(grpcOutbound),
 	)
 	if err != nil {
+		grpcOutbound.Close()
 		conn.Close()
 		testServer.Close()
 
@@ -138,7 +158,7 @@ func NewIntegrationTestServer(ctx context.Context) (*IntegrationTestServer, erro
 	metricsClient := noop.NewMetricsClient()
 	tracerProvider := otelNoop.NewTracerProvider()
 
-	apiApp := usecases.NewWebApplication(grpcClient, grpcClient, log, metricsClient, tracerProvider)
+	apiApp := usecases.NewWebApplication(grpcClient, grpcClient, nil, log, metricsClient, tracerProvider)
 
 	cfg := &apiconfig.ServiceConfig{
 		App: apiconfig.App{
@@ -146,7 +166,7 @@ func NewIntegrationTestServer(ctx context.Context) (*IntegrationTestServer, erro
 			APIVersion:  "v1",
 			Env:         apiconfig.Environment{Name: "test"},
 		},
-		HTTPServer: apiconfig.HTTPServer{
+		PublicHTTPServer: apiconfig.PublicHTTPServer{
 			WriteTimeout: 15 * time.Second,
 		},
 		Auth: apiconfig.Auth{

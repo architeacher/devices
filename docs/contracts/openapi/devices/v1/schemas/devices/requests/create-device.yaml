@@ -1,0 +1,9 @@
+description: Request body for creating a new device
+required: true
+content:
+  application/json:
+    schema:
+      $ref: "entities/device.yaml#/CreateDevice"
+    examples:
+      basic:
+        $ref: "../examples/create-request.yaml#/basic"

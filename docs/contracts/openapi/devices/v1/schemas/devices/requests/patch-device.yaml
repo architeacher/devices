@@ -1,0 +1,11 @@
+description: Request body for partially updating a device (PATCH)
+required: true
+content:
+  application/json:
+    schema:
+      $ref: "entities/device.yaml#/PatchDevice"
+    examples:
+      patch_state:
+        $ref: "../examples/update-request.yaml#/patch_state"
+      patch_name:
+        $ref: "../examples/update-request.yaml#/patch_name"

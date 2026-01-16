@@ -137,50 +137,247 @@
 
 ---
 
-## System Diagrams
+### ADR-009: Cache-Aside Pattern at Query Decorator Level
 
-### C4 Context Diagram
+**Context**: Need efficient caching for device data to reduce the database load and improve response times, while maintaining cache consistency.
+
+**Decision**: Implement Cache-Aside pattern at the Query Decorator level in the API Gateway:
+- Cache at the **application layer** (Query decorators), not HTTP middleware
+- Use semantic cache keys (device ID) rather than URL-based keys
+- Async cache writes to avoid blocking responses
+- Automatic invalidation from Command handlers
+
+**Alternatives Considered**:
+1. **HTTP Middleware caching**: Rejected - URL-based keys make invalidation difficult
+2. **Service-level cache (svc-devices)**: Rejected - still pays gRPC overhead on cache hits
+3. **Two-tier cache (L1 gateway, L2 service)**: Rejected - YAGNI, complex cache coherency
+
+**Consequences**:
+- Cache hits bypass gRPC calls entirely
+- Easy invalidation by device ID
+- Full observability (cache hits/misses are logged, metriced, traced)
+- Decorator order ensures: `logging → metrics → tracing → cache → base`
+
+---
+
+### ADR-010: ETag-Based Conditional GET
+
+**Context**: Need HTTP caching support to reduce bandwidth and allow clients to validate cached responses.
+
+**Decision**: Implement ETag generation and conditional GET:
+- Generate ETags using xxhash for performance
+- Support `If-None-Match` header for conditional requests
+- Return `304 Not Modified` when ETag matches
+
+**Consequences**:
+- Reduced bandwidth for unchanged resources
+- Client-side caching enabled via `Cache-Control` headers
+- Compatible with CDN and proxy caches
+
+---
+
+### ADR-011: Shared Infrastructure Packages
+
+**Context**: Cross-cutting concerns like circuit breakers, logging, metrics, and decorators are needed across multiple services. Duplicating this code violates DRY and makes maintenance difficult.
+
+**Decision**: Extract reusable infrastructure code to `pkg/` as shared packages:
+- **`pkg/circuitbreaker`**: Generic circuit breaker with configurable thresholds and type-safe execution
+- **`pkg/decorator`**: Command/Query decorators for logging, metrics, tracing, and caching
+- **`pkg/logger`**: Structured logging with zerolog
+- **`pkg/metrics`**: OpenTelemetry metrics abstraction
+- **`pkg/idempotency`**: Idempotency key generation and context helpers
+
+**Design Principles**:
+- Packages have no dependencies on service-specific code
+- Use Go generics where type safety improves API ergonomics
+- Define sentinel errors in the package (e.g., `circuitbreaker.ErrCircuitOpen`)
+- Keep domain models clean - infrastructure errors don't belong in domain
+
+**Consequences**:
+- Single source of truth for cross-cutting concerns
+- Services map their config to generic package configs at the boundary
+- Domain models remain pure business concepts
+- Easier to test infrastructure in isolation
+
+---
+
+## C4 Model Diagrams
+
+The following diagrams follow the [C4 Model](https://c4model.com/) for visualizing software architecture, progressing from high-level context (L1) to detailed components (L3).
+
+### C4 Level 1: System Context
+
+Shows the Devices API system and its relationships with external actors and systems.
 
 ```mermaid
 graph TB
-    subgraph External
-        User[API Consumer]
-        OTEL[OpenTelemetry Collector]
+    subgraph ext [External Actors]
+        User["👤 API Consumer<br/>[Person]<br/>Manages device inventory"]
     end
 
-    subgraph System[Devices API System]
-        API[Devices API]
+    subgraph obs [Observability]
+        OTEL["📊 OpenTelemetry Collector<br/>[External System]<br/>Receives traces and metrics"]
     end
 
-    User -->|HTTPS/REST| API
-    API -->|Traces/Metrics| OTEL
+    subgraph sys ["Devices API System [Software System]"]
+        API["🔌 Devices Management API<br/>Provides RESTful API for<br/>device CRUD operations"]
+    end
+
+    subgraph infra [Infrastructure Services]
+        Vault[("🔐 HashiCorp Vault<br/>[External System]<br/>Secrets management")]
+        KeyDB[("⚡ KeyDB<br/>[External System]<br/>Response caching")]
+        Postgres[("🗄️ PostgreSQL<br/>[External System]<br/>Device persistence")]
+    end
+
+    User -->|"HTTPS/REST<br/>Device operations"| API
+    API -->|"OTLP<br/>Traces, Metrics"| OTEL
+    API -->|"Vault API<br/>Fetch secrets"| Vault
+    API -->|"Redis Protocol<br/>Cache read/write"| KeyDB
+    API -->|"SQL/pgx<br/>Device CRUD"| Postgres
 ```
 
-### C4 Container Diagram
+### C4 Level 2: Container Diagram
+
+Zooms into the Devices API system showing the deployable containers and their interactions.
 
 ```mermaid
 graph TB
-    User[API Consumer]
+    User["👤 API Consumer"]
 
-    subgraph System[Devices System]
-        Traefik[Traefik<br/>Reverse Proxy]
-        Gateway[api-gateway<br/>Go/Chi]
-        Devices[svc-devices<br/>Go/gRPC]
-        DB[(PostgreSQL)]
-        Vault[(Vault<br/>Secrets)]
-        KeyDB[(KeyDB<br/>Cache)]
+    subgraph boundary ["Devices System [System Boundary]"]
+        subgraph entry [Entry Point]
+            Traefik["🚦 Traefik<br/>[Container: Reverse Proxy]<br/>TLS termination, routing"]
+        end
+
+        subgraph services [Application Services]
+            Gateway["🌐 api-gateway<br/>[Container: Go/Chi]<br/>REST API, Auth, Validation,<br/>Rate Limiting, Caching"]
+            Devices["⚙️ svc-devices<br/>[Container: Go/gRPC]<br/>Business Logic, CRUD,<br/>Domain Rules"]
+        end
     end
 
-    User -->|HTTPS| Traefik
-    Traefik -->|HTTP| Gateway
-    Gateway -->|gRPC| Devices
-    Gateway -->|Secrets| Vault
-    Gateway -->|Cache| KeyDB
-    Devices -->|SQL| DB
-    Devices -->|Secrets| Vault
+    subgraph infra [Infrastructure]
+        DB[("🗄️ PostgreSQL<br/>[Container: Database]<br/>Device persistence")]
+        Vault[("🔐 Vault<br/>[Container: Secrets]<br/>Credentials, Keys")]
+        KeyDB[("⚡ KeyDB<br/>[Container: Cache]<br/>Response caching,<br/>Rate limit state")]
+    end
+
+    User -->|"HTTPS"| Traefik
+    Traefik -->|"HTTP"| Gateway
+    Gateway -->|"gRPC/Protobuf"| Devices
+    Gateway -->|"Vault API"| Vault
+    Gateway -->|"Redis Protocol"| KeyDB
+    Devices -->|"SQL/pgx"| DB
+    Devices -->|"Vault API"| Vault
 ```
+
+### C4 Level 3: api-gateway Components
+
+Zooms into the api-gateway container showing internal components and their relationships.
+
+```mermaid
+graph TB
+    subgraph "api-gateway [Container]"
+        subgraph inbound [Inbound Adapters]
+            Router["🛣️ HTTP Router<br/>[Component: Chi]<br/>Route registration"]
+            MW["🔒 Middleware Pipeline<br/>[Component]<br/>Auth, RateLimit, Idempotency,<br/>ETag, CORS, Recovery"]
+            Handlers["📡 HTTP Handlers<br/>[Component]<br/>Devices, Admin, Health"]
+        end
+
+        subgraph usecases [Use Cases - CQRS]
+            Commands["✏️ Commands<br/>[Component]<br/>Create, Update,<br/>Patch, Delete"]
+            Queries["🔍 Queries<br/>[Component]<br/>Get, List, Health"]
+            Decorators["🎀 Decorators<br/>[Component]<br/>Logging, Metrics,<br/>Tracing, Cache"]
+        end
+
+        subgraph outbound [Outbound Adapters]
+            GRPCClient["📤 DevicesService<br/>[Component: gRPC Client]<br/>Circuit Breaker, Retry"]
+            CacheRepo["💾 DevicesCache<br/>[Component: Repository]<br/>KeyDB adapter"]
+            IdempRepo["🔑 IdempotencyCache<br/>[Component: Repository]"]
+            RateLimitRepo["⏱️ RateLimitStore<br/>[Component: Repository]"]
+            VaultRepo["🔐 VaultRepository<br/>[Component]"]
+        end
+
+        subgraph domain [Domain]
+            Models["📋 Device Model<br/>[Component]<br/>ID, State, Filter"]
+        end
+    end
+
+    Router --> MW
+    MW --> Handlers
+    Handlers --> Commands
+    Handlers --> Queries
+    Decorators -.->|wraps| Commands
+    Decorators -.->|wraps| Queries
+    Commands --> GRPCClient
+    Queries --> GRPCClient
+    Queries -.->|cache read| CacheRepo
+    Commands -.->|invalidate| CacheRepo
+    MW -.->|check/store| IdempRepo
+    MW -.->|limit check| RateLimitRepo
+    GRPCClient --> VaultRepo
+```
+
+---
+
+### C4 Level 3: svc-devices Components
+
+Zooms into the svc-devices container showing internal components and their relationships.
+
+```mermaid
+graph TB
+    subgraph "svc-devices [Container]"
+        subgraph inbound [Inbound Adapters]
+            GRPCServer["📥 gRPC Server<br/>[Component]<br/>Device service endpoint"]
+            Interceptors["🔗 Interceptors<br/>[Component]<br/>Context, AccessLog"]
+            DevicesHandler["📡 DevicesHandler<br/>[Component]<br/>CRUD operations"]
+            HealthHandler["💚 HealthHandler<br/>[Component]<br/>Liveness, Readiness"]
+        end
+
+        subgraph usecases [Use Cases - CQRS]
+            Commands["✏️ Commands<br/>[Component]<br/>Create, Update,<br/>Patch, Delete"]
+            Queries["🔍 Queries<br/>[Component]<br/>Get, List, Health"]
+            Decorators["🎀 Decorators<br/>[Component]<br/>Logging, Metrics, Tracing"]
+        end
+
+        subgraph services [Services]
+            DevicesSvc["⚙️ DevicesService<br/>[Component]<br/>Business rules,<br/>State validation"]
+        end
+
+        subgraph outbound [Outbound Adapters]
+            PGRepo["🗄️ DevicesPostgresRepository<br/>[Component]<br/>Squirrel, pgx"]
+            Translator["🔄 CriteriaTranslator<br/>[Component]<br/>Filter to SQL"]
+            VaultRepo["🔐 VaultRepository<br/>[Component]"]
+        end
+
+        subgraph domain [Domain]
+            Models["📋 Device, State, Filter<br/>[Components]<br/>Business entities"]
+        end
+    end
+
+    GRPCServer --> Interceptors
+    Interceptors --> DevicesHandler
+    Interceptors --> HealthHandler
+    DevicesHandler --> Commands
+    DevicesHandler --> Queries
+    HealthHandler --> Queries
+    Decorators -.->|wraps| Commands
+    Decorators -.->|wraps| Queries
+    Commands --> DevicesSvc
+    Queries --> DevicesSvc
+    DevicesSvc --> PGRepo
+    PGRepo --> Translator
+    DevicesSvc -.->|secrets| VaultRepo
+```
+
+---
+
+## Supplementary Diagrams
+
+The following diagrams complement the C4 model by showing dynamic behavior, data flows, and operational aspects.
 
 ### Service Communication Sequence
+
+Shows the runtime interaction flow for a typical API request.
 
 ```mermaid
 sequenceDiagram
@@ -202,6 +399,8 @@ sequenceDiagram
 ```
 
 ### Data Flow Diagram
+
+Shows how data moves through the system layers.
 
 ```mermaid
 flowchart LR
@@ -232,41 +431,6 @@ flowchart LR
     GRPC --> UseCase
     UseCase --> Repo
     Repo --> PG
-```
-
-### Component Diagram - api-gateway
-
-```mermaid
-graph TB
-    subgraph Adapters[Adapters Layer]
-        HTTP[HTTP Handlers]
-        GRPC[gRPC Client]
-    end
-
-    subgraph UseCases[Use Cases Layer]
-        Commands[Commands]
-        Queries[Queries]
-    end
-
-    subgraph Domain[Domain Layer]
-        Models[Device Model]
-        Errors[Domain Errors]
-    end
-
-    subgraph Shared[Shared Components]
-        Decorators[Decorators<br/>Logging/Metrics/Tracing]
-        Backoff[Backoff Strategy]
-    end
-
-    HTTP --> Commands
-    HTTP --> Queries
-    Commands --> GRPC
-    Queries --> GRPC
-    Commands --> Models
-    Queries --> Models
-    Decorators --> Commands
-    Decorators --> Queries
-    GRPC --> Backoff
 ```
 
 ### State Diagram - Device
@@ -302,7 +466,7 @@ graph TB
             Swagger[swagger-ui:v5.31.0<br/>:8080]
             Gateway[api-gateway<br/>:8080]
             Devices[svc-devices<br/>:9090, :8081]
-            DB[(postgres:17<br/>:5432)]
+            DB[(postgres:18.1<br/>:5432)]
             Vault[(vault:1.21.1<br/>:8200)]
             VaultInit[vault-init<br/>initializer]
             KeyDB[(keydb:alpine<br/>:6379)]
@@ -321,4 +485,164 @@ graph TB
     VaultData --> Vault
     KeyDBData --> KeyDB
     VaultInit -->|init secrets| Vault
+```
+
+### Caching Flow Diagram
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Gateway as api-gateway
+    participant Cache as KeyDB
+    participant Devices as svc-devices
+    participant DB as PostgreSQL
+
+    Note over Gateway: Query Request Flow
+
+    Client->>Gateway: GET /v1/devices/{id}
+    Gateway->>Gateway: Check If-None-Match header
+
+    alt Cache Hit
+        Gateway->>Cache: GET device:v1:{id}
+        Cache-->>Gateway: Cached Device (HIT)
+        Gateway->>Gateway: Generate ETag
+        alt ETag Matches If-None-Match
+            Gateway-->>Client: 304 Not Modified
+        else ETag Different
+            Gateway-->>Client: 200 OK + Cache-Status: HIT
+        end
+    else Cache Miss
+        Gateway->>Cache: GET device:v1:{id}
+        Cache-->>Gateway: nil (MISS)
+        Gateway->>Devices: gRPC GetDevice
+        Devices->>DB: SELECT * FROM devices
+        DB-->>Devices: Device Row
+        Devices-->>Gateway: Device Response
+        Gateway--)Cache: SET device:v1:{id} (async)
+        Gateway->>Gateway: Generate ETag
+        Gateway-->>Client: 200 OK + Cache-Status: MISS
+    end
+
+    Note over Gateway: Command Request Flow (Invalidation)
+
+    Client->>Gateway: DELETE /v1/devices/{id}
+    Gateway->>Devices: gRPC DeleteDevice
+    Devices->>DB: DELETE FROM devices
+    DB-->>Devices: Success
+    Devices-->>Gateway: Success
+    Gateway--)Cache: DEL device:v1:{id} (async)
+    Gateway--)Cache: DEL devices:list:* (async)
+    Gateway-->>Client: 204 No Content
+```
+
+### Cache Decorator Chain
+
+```mermaid
+flowchart TB
+    subgraph Decorator Chain
+        direction TB
+        L[Logging Decorator] --> M[Metrics Decorator]
+        M --> T[Tracing Decorator]
+        T --> C[Caching Decorator]
+        C --> B[Base Query Handler]
+    end
+
+    subgraph Cache Operations
+        direction TB
+        C -->|on execute| CK{Cache<br/>Enabled?}
+        CK -->|no| B
+        CK -->|yes| CG[Cache.Get]
+        CG -->|hit| RH[Return Cached]
+        CG -->|miss| B
+        B --> CS[Cache.Set async]
+        CS --> R[Return Result]
+    end
+
+    subgraph Context Flow
+        direction LR
+        CTX[Request Context] --> STATUS[Cache Status]
+        STATUS --> HEADERS[Response Headers]
+    end
+```
+
+---
+
+### Middleware Pipeline Flowchart
+
+Shows the exact execution order of HTTP middleware in api-gateway.
+
+```mermaid
+flowchart TB
+    subgraph phase1 [Phase 1: Request Setup]
+        direction TB
+        M1["🌐 RealIP<br/>Extract client IP"] --> M2["⏱️ Timeout<br/>Request deadline"]
+        M2 --> M3["🔗 RequestTracking<br/>Correlation ID"]
+        M3 --> M4["🛡️ SecurityHeaders<br/>HSTS, CSP"]
+    end
+
+    subgraph phase2 [Phase 2: Security & Validation]
+        direction TB
+        M5["🌍 CORS<br/>Cross-origin"] --> M6["🚨 Recovery<br/>Panic handler"]
+        M6 --> M7["✅ RequestValidator<br/>OpenAPI + Auth"]
+        M7 --> M8["⚡ RateLimiting<br/>GCRA algorithm"]
+    end
+
+    subgraph phase3 [Phase 3: Idempotency & Deprecation]
+        direction TB
+        M9["🔑 Idempotency<br/>Duplicate detection"] --> M10["🌅 Sunset<br/>Deprecation headers"]
+    end
+
+    subgraph phase4 [Phase 4: Observability]
+        direction TB
+        M11["📝 AccessLogger<br/>Request logging"] --> M12["📊 Metrics<br/>HTTP metrics"]
+        M12 --> M13["🔍 Tracer<br/>Distributed tracing"]
+    end
+
+    subgraph phase5 [Phase 5: Caching]
+        direction TB
+        M14["🔄 Conditional<br/>If-None-Match"] --> M15["#️⃣ ETag<br/>Response hash"]
+    end
+
+    phase1 --> phase2
+    phase2 --> phase3
+    phase3 --> phase4
+    phase4 --> phase5
+    phase5 --> Handler["📡 HTTP Handler"]
+```
+
+---
+
+### Technology Stack Mind Map
+
+Overview of technologies used across the system.
+
+```mermaid
+mindmap
+    root((🔌 Devices API))
+        🌐 API Gateway
+            Chi Router
+            PASETO v4 Auth
+            OpenAPI 3.1
+            oapi-codegen v2
+            gobreaker Circuit Breaker
+        ⚙️ Devices Service
+            gRPC Server
+            Protobuf v3
+            Squirrel SQL Builder
+            pgx v5 Driver
+            scany Scanner
+        🏗️ Infrastructure
+            Traefik v3 Proxy
+            PostgreSQL 18
+            KeyDB Cache
+            HashiCorp Vault
+            Docker Compose
+        📊 Observability
+            OpenTelemetry SDK
+            Zerolog Logger
+            OTLP Exporter
+        🧪 Testing
+            Testify Suite
+            Testcontainers
+            Counterfeiter Mocks
 ```

@@ -1,0 +1,8 @@
+description: Cache is unavailable or unhealthy
+content:
+  application/json:
+    schema:
+      $ref: "entities/cache.yaml#/CacheHealth"
+    examples:
+      unavailable:
+        $ref: "../examples/cache.yaml#/health_unavailable"

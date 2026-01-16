@@ -1,0 +1,8 @@
+description: Service is alive
+content:
+  application/json:
+    schema:
+      $ref: "entities/liveness.yaml#/Liveness"
+    examples:
+      ok:
+        $ref: "examples/liveness.yaml#/ok"

@@ -1,0 +1,29 @@
+description: Not Acceptable - The requested media type is not supported
+headers:
+  API-Version:
+    $ref: "../headers/headers.yaml#/ApiVersionHeader"
+  Request-Id:
+    $ref: "../headers/headers.yaml#/RequestIdHeader"
+  Correlation-Id:
+    $ref: "../headers/headers.yaml#/CorrelationIdHeader"
+  traceparent:
+    $ref: "../headers/headers.yaml#/TraceparentResponseHeader"
+  tracestate:
+    $ref: "../headers/headers.yaml#/TracestateResponseHeader"
+content:
+  application/json:
+    schema:
+      $ref: "entities/error.yaml#/Error"
+    examples:
+      unsupported_media_type:
+        summary: Requested media type not supported
+        value:
+          code: "NOT_ACCEPTABLE"
+          message: "The requested media type is not supported. Supported: application/json"
+          requestId: "019234a5-6b7c-8d9e-0f12-34567890abcd"
+          traceId: "0af7651916cd43dd8448eb211c80319c"
+          timestamp: "2024-01-15T10:30:00Z"
+          details:
+            - field: "Accept"
+              message: "Unsupported media type: application/xml"
+              code: "UNSUPPORTED_MEDIA_TYPE"

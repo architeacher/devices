@@ -1,0 +1,68 @@
+CacheHealth:
+  type: object
+  description: Cache health status response
+  required:
+    - status
+  properties:
+    status:
+      type: string
+      enum:
+        - healthy
+        - unhealthy
+        - unavailable
+      description: Current health status of the cache
+      example: "healthy"
+    error:
+      type: string
+      description: Error message if cache is unavailable
+      example: "cache not configured"
+
+CachePurge:
+  type: object
+  description: Response after purging cache entries
+  required:
+    - status
+  properties:
+    status:
+      type: string
+      description: Result message of the purge operation
+      example: "all device caches purged"
+    id:
+      type: string
+      format: uuid
+      description: Device ID that was purged (only for single device purge)
+      example: "019234a5-6b7c-8d9e-0f12-34567890abcd"
+
+CachePatternPurge:
+  type: object
+  description: Response after purging cache entries by pattern
+  required:
+    - status
+    - pattern
+    - deleted
+  properties:
+    status:
+      type: string
+      description: Result message of the purge operation
+      example: "cache purged by pattern"
+    pattern:
+      type: string
+      description: The pattern that was used for purging
+      example: "device:*"
+    deleted:
+      type: integer
+      format: int64
+      minimum: 0
+      description: Number of cache entries deleted
+      example: 5
+
+CacheError:
+  type: object
+  description: Error response for cache operations
+  required:
+    - error
+  properties:
+    error:
+      type: string
+      description: Error message describing the failure
+      example: "cache not available"

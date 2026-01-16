@@ -212,3 +212,25 @@ func (c *KeydbClient) CompareAndSwapInt64(ctx context.Context, key string, old, 
 
 	return result == 1, nil
 }
+
+// TTL returns the remaining time-to-live of a key.
+func (c *KeydbClient) TTL(ctx context.Context, key string) time.Duration {
+	result, err := c.client.TTL(ctx, key).Result()
+	if err != nil {
+		c.logger.Warn().Err(err).Str("key", key).Msg("failed to get TTL")
+
+		return 0
+	}
+
+	return result
+}
+
+// Scan iterates over keys matching a pattern.
+func (c *KeydbClient) Scan(ctx context.Context, cursor uint64, pattern string, count int64) ([]string, uint64, error) {
+	keys, nextCursor, err := c.client.Scan(ctx, cursor, pattern, count).Result()
+	if err != nil {
+		return nil, 0, fmt.Errorf("scanning keys: %w", err)
+	}
+
+	return keys, nextCursor, nil
+}

@@ -1,0 +1,8 @@
+description: Service health status
+content:
+  application/json:
+    schema:
+      $ref: "entities/health.yaml#/Health"
+    examples:
+      ok:
+        $ref: "examples/health.yaml#/ok"

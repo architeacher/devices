@@ -68,8 +68,9 @@ devices/
 │   ├── svc-api-gateway/    # REST API (Chi router, PASETO auth, gRPC client)
 │   └── svc-devices/        # Internal gRPC service (PostgreSQL persistence)
 ├── docs/
-│   ├── openapi-spec/       # OpenAPI 3.1 specifications
-│   └── proto/              # Protobuf definitions
+│   ├── contracts/
+│   │   ├── openapi/        # OpenAPI 3.1 specifications
+│   │   └── proto/          # Protobuf definitions
 ├── pkg/                    # Shared code (logger, metrics, proto)
 ├── build/
 │   ├── mk/                 # Modular Makefiles
@@ -487,4 +488,4 @@ The following features are planned for future releases:
 ## Documentation
 
 - [Architecture](docs/architecture.md) - ADRs and system diagrams
-- [API Specification](docs/openapi-spec/devices/v1/svc-api-gateway.yaml) - OpenAPI spec
+- [API Specification](contracts/openapi/devices/v1/specs.yaml) - OpenAPI spec

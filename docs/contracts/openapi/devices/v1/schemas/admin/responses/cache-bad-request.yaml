@@ -1,0 +1,10 @@
+description: Invalid request (bad device ID format or missing required parameter)
+content:
+  application/json:
+    schema:
+      $ref: "entities/cache.yaml#/CacheError"
+    examples:
+      invalid_id:
+        $ref: "../examples/cache.yaml#/error_bad_request"
+      pattern_required:
+        $ref: "../examples/cache.yaml#/error_pattern_required"

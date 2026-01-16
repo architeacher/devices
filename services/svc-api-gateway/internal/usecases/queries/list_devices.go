@@ -12,6 +12,9 @@ import (
 )
 
 type (
+	// ListDevicesCache is the cache interface for ListDevicesQuery.
+	ListDevicesCache = decorator.Cache[ListDevicesQuery, *model.DeviceList]
+
 	ListDevicesQuery struct {
 		Filter model.DeviceFilter
 	}
@@ -31,6 +34,25 @@ func NewListDevicesQueryHandler(
 ) ListDevicesQueryHandler {
 	return decorator.ApplyQueryDecorators[ListDevicesQuery, *model.DeviceList](
 		listDevicesQueryHandler{deviceService: svc},
+		log,
+		metricsClient,
+		tracerProvider,
+	)
+}
+
+// NewListDevicesQueryHandlerWithCache creates a query handler with caching support.
+func NewListDevicesQueryHandlerWithCache(
+	svc ports.DevicesService,
+	cacheAdapter ListDevicesCache,
+	cacheConfig decorator.CacheConfig,
+	log logger.Logger,
+	metricsClient metrics.Client,
+	tracerProvider otelTrace.TracerProvider,
+) ListDevicesQueryHandler {
+	return decorator.ApplyQueryDecoratorsWithCache[ListDevicesQuery, *model.DeviceList](
+		listDevicesQueryHandler{deviceService: svc},
+		cacheAdapter,
+		cacheConfig,
 		log,
 		metricsClient,
 		tracerProvider,

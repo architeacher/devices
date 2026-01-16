@@ -1,0 +1,8 @@
+description: Cache not available
+content:
+  application/json:
+    schema:
+      $ref: "entities/cache.yaml#/CacheError"
+    examples:
+      unavailable:
+        $ref: "../examples/cache.yaml#/error_unavailable"

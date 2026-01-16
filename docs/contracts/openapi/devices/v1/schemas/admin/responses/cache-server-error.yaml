@@ -1,0 +1,8 @@
+description: Failed to purge cache
+content:
+  application/json:
+    schema:
+      $ref: "entities/cache.yaml#/CacheError"
+    examples:
+      error:
+        $ref: "../examples/cache.yaml#/error_server"

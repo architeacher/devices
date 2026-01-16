@@ -33,9 +33,9 @@ func TestInit_DefaultValues(t *testing.T) {
 	assert.Equal(t, "svc-api-gateway", cfg.App.ServiceName)
 	assert.Equal(t, "v1", cfg.App.APIVersion)
 
-	// HTTPServer defaults
-	assert.Equal(t, "0.0.0.0", cfg.HTTPServer.Host)
-	assert.Equal(t, uint(8088), cfg.HTTPServer.Port)
+	// PublicHTTPServer defaults
+	assert.Equal(t, "0.0.0.0", cfg.PublicHTTPServer.Host)
+	assert.Equal(t, uint(8088), cfg.PublicHTTPServer.Port)
 
 	// Auth defaults
 	assert.True(t, cfg.Auth.Enabled)
@@ -47,6 +47,9 @@ func TestInit_DefaultValues(t *testing.T) {
 	assert.Equal(t, "http://vault:8200", cfg.SecretsStorage.Address)
 	assert.Equal(t, "token", cfg.SecretsStorage.AuthMethod)
 	assert.Equal(t, "svc-api-gateway", cfg.SecretsStorage.MountPath)
+
+	// DevicesGRPCClient defaults
+	assert.Equal(t, uint(4194304), cfg.DevicesGRPCClient.MaxMessageSize) // 4 MiB
 }
 
 func TestGetEnvironment(t *testing.T) {

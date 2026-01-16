@@ -17,16 +17,18 @@ import (
 
 type (
 	infrastructureDep struct {
-		httpServer     *http.Server
-		cacheClient    *infrastructure.KeydbClient
-		logger         logger.Logger
-		metricsClient  metrics.Client
-		tracerProvider otelTrace.TracerProvider
+		publicHttpServer *http.Server
+		adminHttpServer  *http.Server
+		cacheClient      *infrastructure.KeydbClient
+		logger           logger.Logger
+		metricsClient    metrics.Client
+		tracerProvider   otelTrace.TracerProvider
 	}
 
 	repositories struct {
 		secretsRepo     ports.SecretsRepository
 		idempotencyRepo ports.IdempotencyCache
+		devicesCache    ports.DevicesCache
 		rateLimitStore  throttled.GCRAStoreCtx
 	}
 

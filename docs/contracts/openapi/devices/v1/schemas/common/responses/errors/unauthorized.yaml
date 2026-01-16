@@ -1,0 +1,38 @@
+description: Unauthorized - Authentication is required or has failed
+headers:
+  API-Version:
+    $ref: "../headers/headers.yaml#/ApiVersionHeader"
+  Request-Id:
+    $ref: "../headers/headers.yaml#/RequestIdHeader"
+  Correlation-Id:
+    $ref: "../headers/headers.yaml#/CorrelationIdHeader"
+  traceparent:
+    $ref: "../headers/headers.yaml#/TraceparentResponseHeader"
+  tracestate:
+    $ref: "../headers/headers.yaml#/TracestateResponseHeader"
+  WWW-Authenticate:
+    description: Authentication scheme information
+    schema:
+      type: string
+    example: "Bearer realm=\"devices-api\""
+content:
+  application/json:
+    schema:
+      $ref: "entities/error.yaml#/Error"
+    examples:
+      missing_token:
+        summary: Missing authentication token
+        value:
+          code: "UNAUTHORIZED"
+          message: "Authentication token is required"
+          requestId: "019234a5-6b7c-8d9e-0f12-34567890abcd"
+          traceId: "0af7651916cd43dd8448eb211c80319c"
+          timestamp: "2024-01-15T10:30:00Z"
+      invalid_token:
+        summary: Invalid or expired token
+        value:
+          code: "UNAUTHORIZED"
+          message: "Authentication token is invalid or expired"
+          requestId: "019234a5-6b7c-8d9e-0f12-34567890abcd"
+          traceId: "0af7651916cd43dd8448eb211c80319c"
+          timestamp: "2024-01-15T10:30:00Z"

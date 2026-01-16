@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- Made gRPC message size limits configurable via `DEVICES_MAX_MESSAGE_SIZE` environment variable (default: 4 MiB)
+- Extracted circuit breaker to shared `pkg/circuitbreaker` package with generic type support
+- Removed `ErrCircuitOpen` from domain model - now uses `circuitbreaker.ErrCircuitOpen` and `circuitbreaker.ErrTooManyRequests`
+
+## [0.5.0] - 2026-01-13
+
+### Added
+
+- Device data caching with the Cache-Aside pattern at API Gateway layer
+- ETag generation using xxhash for conditional GET support
+- Conditional GET middleware with `If-None-Match` header and 304 responses
+- Query caching decorator with configurable TTL per query type
+- Cache invalidation on Create, Update, Patch, and Delete operations
+- Internal admin handlers for cache purge operations
+- Makefile targets for cache management (`cache-purge`, `cache-purge-lists`, `cache-stats`)
+- Cache status headers: `Cache-Status`, `Cache-Key`, `Cache-TTL`
+- `Cache-Control` and `Last-Modified` response headers
+
+### Changed
+
+- Renamed `devices_repository.go` to `devices_postgres_repository.go` for clarity
+- Added `DevicesCache` configuration section with TTL settings
+- Command handlers now support cache invalidation via dependency injection
+
+### Infrastructure
+
+- Added `redis-cli` to API Gateway Docker image for cache management
+
 ## [0.4.0] - 2026-01-12
 
 ### Added

@@ -1,0 +1,20 @@
+description: Allowed methods for device resource
+headers:
+  Allow:
+    description: |
+      Comma-separated list of HTTP methods allowed for this resource.
+      Used in OPTIONS responses for capability discovery (RFC 7231 Section 7.4.1).
+    schema:
+      type: string
+    example: "GET, PUT, PATCH, DELETE, HEAD, OPTIONS"
+  Access-Control-Allow-Methods:
+    description: |
+      CORS header indicating which HTTP methods are allowed when accessing the resource.
+      Part of the CORS preflight response (Fetch Standard).
+    schema:
+      type: string
+    example: "GET, PUT, PATCH, DELETE, HEAD, OPTIONS"
+  Access-Control-Allow-Headers:
+    $ref: "../../common/responses/headers/headers.yaml#/AccessControlAllowHeadersHeader"
+  Access-Control-Max-Age:
+    $ref: "../../common/responses/headers/headers.yaml#/AccessControlMaxAgeHeader"

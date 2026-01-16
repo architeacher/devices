@@ -1,0 +1,9 @@
+description: Request body for fully updating a device (PUT)
+required: true
+content:
+  application/json:
+    schema:
+      $ref: "entities/device.yaml#/UpdateDevice"
+    examples:
+      full:
+        $ref: "../examples/update-request.yaml#/full"

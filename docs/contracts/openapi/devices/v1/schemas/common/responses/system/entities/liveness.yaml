@@ -1,0 +1,26 @@
+Liveness:
+  type: object
+  description: Liveness probe response
+  required:
+    - status
+    - timestamp
+    - version
+  properties:
+    status:
+      type: string
+      description: The liveness status of the service
+      enum:
+        - ok
+        - degraded
+        - down
+        - maintenance
+      example: "ok"
+    timestamp:
+      type: string
+      format: date-time
+      description: Timestamp of the liveness check
+      example: "2024-01-15T10:30:00Z"
+    version:
+      type: string
+      description: Service version
+      example: "v1.0.0"

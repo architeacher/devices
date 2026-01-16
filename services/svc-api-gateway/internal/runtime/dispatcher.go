@@ -70,7 +70,7 @@ func (c *ServiceCtx) startService() {
 			c.serverReady <- struct{}{}
 		}
 
-		addr := fmt.Sprintf(":%d", c.deps.config.HTTPServer.Port)
+		addr := fmt.Sprintf(":%d", c.deps.config.PublicHTTPServer.Port)
 		listener, err := net.Listen("tcp", addr)
 		if err != nil {
 			log.Fatalf("failed to listen on %s: %v", addr, err)
@@ -84,8 +84,34 @@ func (c *ServiceCtx) startService() {
 			close(c.serverReady)
 		}
 
-		if err := c.deps.infra.httpServer.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Fatalf("HTTPServer server error: %v", err)
+		if err := c.deps.infra.publicHttpServer.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Fatalf("PublicHTTPServer server error: %v", err)
+		}
+	}()
+
+	c.startAdminServer()
+}
+
+func (c *ServiceCtx) startAdminServer() {
+	if c.deps.infra.adminHttpServer == nil {
+		return
+	}
+
+	go func() {
+		cfg := c.deps.config.AdminHTTPServer
+		addr := net.JoinHostPort(cfg.Host, fmt.Sprintf("%d", cfg.Port))
+
+		listener, err := net.Listen("tcp", addr)
+		if err != nil {
+			log.Fatalf("failed to listen on admin server %s: %v", addr, err)
+		}
+
+		c.deps.infra.logger.Info().
+			Str("address", addr).
+			Msg("starting the admin http server")
+
+		if err := c.deps.infra.adminHttpServer.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Fatalf("admin PublicHTTPServer error: %v", err)
 		}
 	}()
 }
@@ -118,7 +144,7 @@ func (c *ServiceCtx) shutdown() {
 	c.serverStopFunc()
 
 	// Shutdown signal with a grace period of 30 seconds.
-	shutdownCtx, cancel := context.WithTimeout(c.serverCtx, c.deps.config.HTTPServer.ShutdownTimeout)
+	shutdownCtx, cancel := context.WithTimeout(c.serverCtx, c.deps.config.PublicHTTPServer.ShutdownTimeout)
 
 	go func() {
 		<-shutdownCtx.Done()

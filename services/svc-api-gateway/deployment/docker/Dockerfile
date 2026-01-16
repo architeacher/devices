@@ -1,5 +1,8 @@
 ARG     GO_VERSION
 
+# Redis CLI for cache operations
+FROM    redis:8-alpine AS redis-tools
+
 # Dev tooling stage (Air + Delve)
 FROM    golang:${GO_VERSION:-1.25}-alpine AS dev-tools
 
@@ -84,6 +87,11 @@ COPY    --from="dev-tools" \
         --chown="${APP_USER}:${APP_GROUP}" \
         "${SRC_ARTIFACTS_DIR}/air" \
         "${SRC_ARTIFACTS_DIR}/dlv" \
+        "${ARTIFACTS_DIR}/"
+
+COPY    --from="redis-tools" \
+        --chown="${APP_USER}:${APP_GROUP}" \
+        "/usr/local/bin/redis-cli" \
         "${ARTIFACTS_DIR}/"
 
 USER    "${APP_USER}"

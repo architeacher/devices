@@ -1,0 +1,160 @@
+ApiVersionHeader:
+  description: API version used for this response
+  schema:
+    type: string
+    enum: [v1]
+  example: v1
+
+LocationHeader:
+  description: URI of the newly created resource
+  schema:
+    type: string
+    format: uri
+  example: "/devices/019234a5-6b7c-8d9e-0f12-34567890abcd"
+
+RequestIdHeader:
+  description: Unique request identifier for tracing (per-request, always generated server-side)
+  schema:
+    type: string
+    format: uuid
+  example: "019234a5-6b7c-8d9e-0f12-34567890abcd"
+
+CorrelationIdHeader:
+  description: Correlation identifier for tracing requests across multiple services (can be provided by client or generated server-side)
+  schema:
+    type: string
+    format: uuid
+  example: "019234a5-6b7c-8d9e-0f12-34567890abcd"
+
+ETagHeader:
+  description: |
+    Entity tag for cache validation and optimistic concurrency control.
+    Use this value in If-Match or If-None-Match headers for subsequent requests.
+  schema:
+    type: string
+  example: '"a1b2c3d4e5f6"'
+
+CacheControlHeader:
+  description: |
+    Cache directives for the response.
+    - `private`: Response is specific to the user
+    - `max-age`: Maximum time in seconds the response can be cached
+    - `no-cache`: Must revalidate with server before using cached response
+  schema:
+    type: string
+  example: "private, max-age=300"
+
+LastModifiedHeader:
+  description: Timestamp when the resource was last modified
+  schema:
+    type: string
+    format: date-time
+  example: "Wed, 15 Jan 2024 14:45:00 GMT"
+
+RateLimitLimitHeader:
+  description: Maximum number of requests allowed per time window (RFC 6648 compliant)
+  schema:
+    type: integer
+  example: 100
+
+RateLimitRemainingHeader:
+  description: Number of requests remaining in the current time window (RFC 6648 compliant)
+  schema:
+    type: integer
+  example: 95
+
+RateLimitResetHeader:
+  description: Unix timestamp (seconds) when the rate limit window resets (RFC 6648 compliant)
+  schema:
+    type: integer
+  example: 1705320000
+
+RetryAfterHeader:
+  description: Number of seconds to wait before retrying the request
+  schema:
+    type: integer
+  example: 60
+
+ContentEncodingHeader:
+  description: Compression algorithm used for the response body
+  schema:
+    type: string
+    enum: [gzip, deflate, br, identity]
+  example: "gzip"
+
+VaryHeader:
+  description: Headers that affect response caching and content negotiation
+  schema:
+    type: string
+  example: "Accept-Encoding, Authorization"
+
+TraceparentResponseHeader:
+  description: W3C Trace Context parent header for distributed tracing
+  schema:
+    type: string
+  example: "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01"
+
+TracestateResponseHeader:
+  description: W3C Trace Context state header for vendor-specific trace data
+  schema:
+    type: string
+  example: "congo=t61rcWkgMzE"
+
+DeprecationHeader:
+  description: |
+    RFC 8594 compliant header indicating the API endpoint is deprecated.
+    When present and set to "true", clients should migrate to the successor version.
+  schema:
+    type: string
+    enum: ["true"]
+  example: "true"
+
+SunsetHeader:
+  description: |
+    RFC 8594 compliant header indicating when the deprecated API will be removed.
+    Date is formatted according to HTTP-date (RFC 7231).
+  schema:
+    type: string
+    format: date-time
+  example: "Wed, 31 Dec 2025 23:59:59 GMT"
+
+LinkSuccessorHeader:
+  description: |
+    RFC 8594 compliant Link header pointing to the successor API version.
+    Uses the "successor-version" relation type to indicate the replacement endpoint.
+  schema:
+    type: string
+  example: '</v2/devices>; rel="successor-version"'
+
+# CORS Headers (RFC 6454, Fetch Standard)
+AllowHeader:
+  description: |
+    Comma-separated list of HTTP methods allowed for this resource.
+    Used in OPTIONS responses for capability discovery (RFC 7231 Section 7.4.1).
+  schema:
+    type: string
+  example: "GET, POST, HEAD, OPTIONS"
+
+AccessControlAllowMethodsHeader:
+  description: |
+    CORS header indicating which HTTP methods are allowed when accessing the resource.
+    Part of the CORS preflight response (Fetch Standard).
+  schema:
+    type: string
+  example: "GET, POST, HEAD, OPTIONS"
+
+AccessControlAllowHeadersHeader:
+  description: |
+    CORS header indicating which HTTP headers can be used during the actual request.
+    Part of the CORS preflight response (Fetch Standard).
+  schema:
+    type: string
+  example: "Authorization, Content-Type, Request-Id, Correlation-Id, API-Version, If-Match, If-None-Match, traceparent, tracestate"
+
+AccessControlMaxAgeHeader:
+  description: |
+    CORS header indicating how long the results of a preflight request can be cached.
+    Value is in seconds (Fetch Standard).
+  schema:
+    type: integer
+  example: 86400

@@ -8,6 +8,10 @@ VERSION ?= "v1"
 
 MOCKS_DIR := services/svc-devices/internal/mocks
 
+CACHE_HOST ?= keydb
+CACHE_PORT ?= 6379
+CACHE_PASSWORD ?= ""
+
 .PHONY: $(ENV_FILE) $(DOT_ENV)
 $(ENV_FILE) $(DOT_ENV):
 	cat .envrc.dist | tee "$(ENV_FILE)" "$(DOT_ENV)" > /dev/null
@@ -35,6 +39,11 @@ set-hosts: ## Update local hosts.
 .PHONY: init
 init: $(ENV_FILE) init-services set-hosts certify
 	$(MAKE) generate-api
+
+.PHONY: check-docker
+check-docker: ## 🐳 Check if Docker daemon is running.
+	@docker info > /dev/null 2>&1 || \
+		{ printf "${ERROR_CLR}${MSG_PRFX} Docker is not running. Please start Docker Desktop.${MSG_SFX}${NO_CLR}\n"; exit 1; }
 
 .PHONY: start
 start: ## 🐳 Start the Docker containers.
@@ -74,16 +83,25 @@ certify: study ## 📜 Certify .localhost and .dev TLDs.
 		"${PROJECT_NAME}.dev" "*.${PROJECT_NAME}.dev"
 	cp "$$(mkcert -CAROOT)/rootCA.pem" "${CERTS_DIR}/"
 
+.PHONY: lint-api
+lint-api: ## 🔍 Lint and validate OpenAPI specification.
+	$(call printMessage,"🔍  Linting OpenAPI specification",$(INFO_CLR))
+	docker run --rm \
+		-v "${CURDIR}/docs/contracts/openapi":/spec \
+		-w "/spec" \
+		redocly/cli:latest lint \
+		"devices/${VERSION}/specs.yaml" \
+		--config .redocly.yaml
+
 .PHONY: generate-api
-generate-api: ## 🤖 Generate API specs from OpenAPI definition.
+generate-api: lint-api ## 🤖 Generate API specs from OpenAPI definition.
 	$(call printMessage,"🤖  Generating API specs",$(INFO_CLR))
 	docker run --rm \
-		-v "${CURDIR}/docs/openapi-spec":/spec \
+		-v "${CURDIR}/docs/contracts/openapi":/spec \
 		-w "/spec" \
-		redocly/cli:2.13.0 bundle \
-	    "devices/${VERSION}/svc-api-gateway.yaml" \
-		-d \
-		--output "devices/${VERSION}/public/svc-api-gateway-swagger.json" \
+		redocly/cli:latest bundle \
+		"devices/${VERSION}/specs.yaml" \
+		--output "devices/${VERSION}/public/specs-swagger.json" \
 		--ext json \
 		--config .redocly.yaml \
 	&& \
@@ -123,7 +141,7 @@ test-unit: generate-mocks ## 🧪 Run unit tests with race detection.
 	done
 
 .PHONY: test-integration
-test-integration: ## 🔗 Run integration tests with race detection (requires Docker).
+test-integration: check-docker ## 🔗 Run integration tests with race detection (requires Docker).
 	$(call printMessage,"🔗  Running integration tests",$(INFO_CLR))
 	for dir in ${SERVICES_DIR}/*/; do \
 		if [ -f "$${dir}go.mod" ] && [ -d "$${dir}itest" ]; then \
@@ -131,3 +149,41 @@ test-integration: ## 🔗 Run integration tests with race detection (requires Do
 			(cd "$${dir}" && go test -v -race -tags=integration ./itest/...) || exit 1; \
 		fi \
 	done
+
+.PHONY: cache-purge
+cache-purge: ## 🗑️ Purge all device caches from KeyDB.
+	$(call printMessage,"🗑️  Purging all device caches",$(INFO_CLR))
+	docker compose exec svc-api-gateway /artifacts/redis-cli -h "${CACHE_HOST}" -p "${CACHE_PORT}" \
+		$(if ${CACHE_PASSWORD},-a "${CACHE_PASSWORD}" --no-auth-warning,) \
+		EVAL "local cursor = '0'; local count = 0; repeat local result = redis.call('SCAN', cursor, 'MATCH', 'device*', 'COUNT', 1000); cursor = result[1]; for _,k in ipairs(result[2]) do redis.call('DEL', k); count = count + 1; end; until cursor == '0'; return count" 0
+
+.PHONY: cache-purge-lists
+cache-purge-lists: ## 🗑️ Purge device list caches only from KeyDB.
+	$(call printMessage,"🗑️  Purging device list caches",$(INFO_CLR))
+	docker compose exec svc-api-gateway /artifacts/redis-cli -h "${CACHE_HOST}" -p "${CACHE_PORT}" \
+		$(if ${CACHE_PASSWORD},-a "${CACHE_PASSWORD}" --no-auth-warning,) \
+		EVAL "local cursor = '0'; local count = 0; repeat local result = redis.call('SCAN', cursor, 'MATCH', 'devices:list*', 'COUNT', 1000); cursor = result[1]; for _,k in ipairs(result[2]) do redis.call('DEL', k); count = count + 1; end; until cursor == '0'; return count" 0
+
+.PHONY: cache-purge-device
+cache-purge-device: ## 🗑️ Purge a specific device cache by ID (usage: make cache-purge-device ID=<uuid>).
+	$(call printMessage,"🗑️  Purging device cache for ID: ${ID}",$(INFO_CLR))
+ifndef ID
+	$(error ID is required. Usage: make cache-purge-device ID=<uuid>)
+endif
+	docker compose exec svc-api-gateway /artifacts/redis-cli -h "${CACHE_HOST}" -p "${CACHE_PORT}" \
+		$(if ${CACHE_PASSWORD},-a "${CACHE_PASSWORD}" --no-auth-warning,) \
+		DEL "device:v1:${ID}"
+
+.PHONY: cache-stats
+cache-stats: ## 📊 Show cache statistics from KeyDB.
+	$(call printMessage,"📊  Cache statistics",$(INFO_CLR))
+	docker compose exec svc-api-gateway /artifacts/redis-cli -h "${CACHE_HOST}" -p "${CACHE_PORT}" \
+		$(if ${CACHE_PASSWORD},-a "${CACHE_PASSWORD}" --no-auth-warning,) \
+		INFO memory | grep -E "used_memory_human|maxmemory_human|expired_keys|evicted_keys"
+
+.PHONY: cache-keys
+cache-keys: ## 🔑 List all device cache keys (for debugging).
+	$(call printMessage,"🔑  Listing device cache keys",$(INFO_CLR))
+	docker compose exec svc-api-gateway /artifacts/redis-cli -h "${CACHE_HOST}" -p "${CACHE_PORT}" \
+		$(if ${CACHE_PASSWORD},-a "${CACHE_PASSWORD}" --no-auth-warning,) \
+		EVAL "local cursor = '0'; local keys = {}; repeat local result = redis.call('SCAN', cursor, 'MATCH', 'device*', 'COUNT', 100); cursor = result[1]; for _,k in ipairs(result[2]) do table.insert(keys, k); end; until cursor == '0'; return keys" 0

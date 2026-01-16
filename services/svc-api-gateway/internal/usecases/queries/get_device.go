@@ -12,6 +12,9 @@ import (
 )
 
 type (
+	// GetDeviceCache is the cache interface for GetDeviceQuery.
+	GetDeviceCache = decorator.Cache[GetDeviceQuery, *model.Device]
+
 	GetDeviceQuery struct {
 		ID model.DeviceID
 	}
@@ -31,6 +34,25 @@ func NewGetDeviceQueryHandler(
 ) GetDeviceQueryHandler {
 	return decorator.ApplyQueryDecorators[GetDeviceQuery, *model.Device](
 		getDeviceQueryHandler{deviceService: svc},
+		log,
+		metricsClient,
+		tracerProvider,
+	)
+}
+
+// NewGetDeviceQueryHandlerWithCache creates a query handler with caching support.
+func NewGetDeviceQueryHandlerWithCache(
+	svc ports.DevicesService,
+	cacheAdapter GetDeviceCache,
+	cacheConfig decorator.CacheConfig,
+	log logger.Logger,
+	metricsClient metrics.Client,
+	tracerProvider otelTrace.TracerProvider,
+) GetDeviceQueryHandler {
+	return decorator.ApplyQueryDecoratorsWithCache[GetDeviceQuery, *model.Device](
+		getDeviceQueryHandler{deviceService: svc},
+		cacheAdapter,
+		cacheConfig,
 		log,
 		metricsClient,
 		tracerProvider,

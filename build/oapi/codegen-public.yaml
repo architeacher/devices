@@ -1,0 +1,11 @@
+package: public
+generate:
+  models: true
+  chi-server: true
+  embedded-spec: true
+output: ../../internal/adapters/inbound/http/handlers/public/http_server_gen.go
+output-options:
+  skip-prune: true
+  include-tags:
+    - Devices
+    - System

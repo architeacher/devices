@@ -1,0 +1,3803 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Devices API Gateway",
+    "description": "A REST API for managing device resources with full CRUD operations and filtering capabilities.\n\n## Device Domain\n\nEach device contains:\n- **Id**: Unique identifier (UUID v7)\n- **Name**: Device name\n- **Brand**: Device manufacturer/brand\n- **State**: Current state (available, in-use, inactive)\n- **Creation Time**: Timestamp when the device was created\n\n## Business Rules\n\n- Creation time cannot be updated\n- Name and brand properties cannot be updated if the device is in use\n- In-use devices cannot be deleted\n\n## API Versioning\n\nThis API uses semantic versioning and supports multiple versioning strategies:\n\n### Version Strategy\n- **URL Path Versioning**: `/v1/` (primary method)\n- **Header Versioning**: `API-Version: v1` header (alternative)\n\n### Version Information\n- All responses include `API-Version` header indicating the version used\n- Version-specific changes are documented in the changelog\n- Breaking changes require major version increment\n\n### API Deprecation (RFC 8594)\nWhen an API version is deprecated, all responses will include:\n- `Deprecation: true` - Indicates the endpoint is deprecated\n- `Sunset: <date>` - RFC 7231 HTTP-date when the API will be removed\n- `Link: <url>; rel=\"successor-version\"` - URI of the replacement API\n\nThese headers help clients migrate to newer versions before sunset.\n\n## Security\n\nThis API uses PASETO token authentication:\n- **PASETO tokens**: Platform-Agnostic Security Tokens - secure, stateless authentication\n\n## Security Headers\n\nAll responses include standard security headers:\n- `X-Content-Type-Options: nosniff`\n- `X-Frame-Options: DENY`\n- `X-XSS-Protection: 1; mode=block`\n- `Strict-Transport-Security: max-age=31536000; includeSubDomains`\n- `Content-Security-Policy: default-src 'self'`\n- `Referrer-Policy: strict-origin-when-cross-origin`\n- `Permissions-Policy: camera=(), microphone=(), geolocation=()`\n",
+    "version": "1.0.0",
+    "contact": {
+      "name": "Devices API Support",
+      "url": "https://github.com/architeacher/devices"
+    },
+    "license": {
+      "name": "MIT",
+      "url": "https://opensource.org/licenses/MIT"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://api.devices.dev/{version}",
+      "description": "Local development server",
+      "variables": {
+        "version": {
+          "default": "v1",
+          "enum": [
+            "v1"
+          ],
+          "description": "The API version to use"
+        }
+      }
+    },
+    {
+      "url": "https://api.devices.com/{version}",
+      "description": "Production server",
+      "variables": {
+        "version": {
+          "default": "v1",
+          "enum": [
+            "v1"
+          ],
+          "description": "The API version to use"
+        }
+      }
+    }
+  ],
+  "security": [
+    {
+      "PasetoAuth": []
+    }
+  ],
+  "tags": [
+    {
+      "name": "Devices",
+      "description": "Device management operations"
+    },
+    {
+      "name": "System",
+      "description": "System liveness, readiness, and health probes"
+    }
+  ],
+  "paths": {
+    "/devices": {
+      "post": {
+        "summary": "Create a new device",
+        "description": "Creates a new device resource. The device will be assigned a unique UUID v7 identifier\nand the creation time will be automatically set to the current timestamp.\n",
+        "operationId": "createDevice",
+        "tags": [
+          "Devices"
+        ],
+        "security": [
+          {
+            "PasetoAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AuthorizationHeader"
+          },
+          {
+            "$ref": "#/components/parameters/ApiVersionHeader"
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          },
+          {
+            "$ref": "#/components/parameters/TraceparentHeader"
+          },
+          {
+            "$ref": "#/components/parameters/TracestateHeader"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKeyHeader"
+          },
+          {
+            "$ref": "#/components/parameters/AcceptHeader"
+          }
+        ],
+        "requestBody": {
+          "$ref": "#/components/requestBodies/create-device"
+        },
+        "responses": {
+          "201": {
+            "$ref": "#/components/responses/device-created"
+          },
+          "400": {
+            "$ref": "#/components/responses/bad-request"
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorized"
+          },
+          "406": {
+            "$ref": "#/components/responses/not-acceptable"
+          },
+          "422": {
+            "$ref": "#/components/responses/unprocessable-entity"
+          },
+          "429": {
+            "$ref": "#/components/responses/rate-limit"
+          },
+          "500": {
+            "$ref": "#/components/responses/server-error"
+          }
+        }
+      },
+      "get": {
+        "summary": "List all devices",
+        "description": "Retrieves a paginated list of all devices. Supports filtering by brand and state,\nand full-text search across name and brand fields using the `q` parameter.\n",
+        "operationId": "listDevices",
+        "tags": [
+          "Devices"
+        ],
+        "security": [
+          {
+            "PasetoAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AuthorizationHeader"
+          },
+          {
+            "$ref": "#/components/parameters/ApiVersionHeader"
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          },
+          {
+            "$ref": "#/components/parameters/TraceparentHeader"
+          },
+          {
+            "$ref": "#/components/parameters/TracestateHeader"
+          },
+          {
+            "$ref": "#/components/parameters/PageParam"
+          },
+          {
+            "$ref": "#/components/parameters/SizeParam"
+          },
+          {
+            "$ref": "#/components/parameters/BrandFilterParam"
+          },
+          {
+            "$ref": "#/components/parameters/StateFilterParam"
+          },
+          {
+            "$ref": "#/components/parameters/SortParam"
+          },
+          {
+            "$ref": "#/components/parameters/SearchParam"
+          },
+          {
+            "$ref": "#/components/parameters/CursorParam"
+          },
+          {
+            "$ref": "#/components/parameters/FieldsParam"
+          },
+          {
+            "$ref": "#/components/parameters/IfNoneMatchHeader"
+          },
+          {
+            "$ref": "#/components/parameters/AcceptEncodingHeader"
+          },
+          {
+            "$ref": "#/components/parameters/AcceptHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/devices-list"
+          },
+          "304": {
+            "$ref": "#/components/responses/not-modified"
+          },
+          "400": {
+            "$ref": "#/components/responses/bad-request"
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorized"
+          },
+          "406": {
+            "$ref": "#/components/responses/not-acceptable"
+          },
+          "429": {
+            "$ref": "#/components/responses/rate-limit"
+          },
+          "500": {
+            "$ref": "#/components/responses/server-error"
+          }
+        }
+      },
+      "head": {
+        "summary": "Get devices collection metadata",
+        "description": "Returns headers only for the devices collection (no response body).\nUseful for checking collection size or validating cached data via ETag.\n",
+        "operationId": "headDevices",
+        "tags": [
+          "Devices"
+        ],
+        "security": [
+          {
+            "PasetoAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AuthorizationHeader"
+          },
+          {
+            "$ref": "#/components/parameters/ApiVersionHeader"
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          },
+          {
+            "$ref": "#/components/parameters/TraceparentHeader"
+          },
+          {
+            "$ref": "#/components/parameters/TracestateHeader"
+          },
+          {
+            "$ref": "#/components/parameters/PageParam"
+          },
+          {
+            "$ref": "#/components/parameters/SizeParam"
+          },
+          {
+            "$ref": "#/components/parameters/BrandFilterParam"
+          },
+          {
+            "$ref": "#/components/parameters/StateFilterParam"
+          },
+          {
+            "$ref": "#/components/parameters/SortParam"
+          },
+          {
+            "$ref": "#/components/parameters/SearchParam"
+          },
+          {
+            "$ref": "#/components/parameters/CursorParam"
+          },
+          {
+            "$ref": "#/components/parameters/IfNoneMatchHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/devices-head"
+          },
+          "304": {
+            "$ref": "#/components/responses/not-modified"
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorized"
+          },
+          "429": {
+            "$ref": "#/components/responses/rate-limit"
+          },
+          "500": {
+            "$ref": "#/components/responses/server-error"
+          }
+        }
+      },
+      "options": {
+        "summary": "Get allowed methods for devices collection",
+        "description": "Returns the HTTP methods allowed for the devices collection.\nUsed for CORS preflight requests and capability discovery.\n",
+        "operationId": "optionsDevices",
+        "tags": [
+          "Devices"
+        ],
+        "security": [],
+        "responses": {
+          "204": {
+            "$ref": "#/components/responses/devices-options"
+          },
+          "400": {
+            "$ref": "#/components/responses/bad-request"
+          }
+        }
+      }
+    },
+    "/devices/{deviceId}": {
+      "get": {
+        "summary": "Get a device by ID",
+        "description": "Retrieves a single device by its unique identifier.",
+        "operationId": "getDevice",
+        "tags": [
+          "Devices"
+        ],
+        "security": [
+          {
+            "PasetoAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AuthorizationHeader"
+          },
+          {
+            "$ref": "#/components/parameters/ApiVersionHeader"
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          },
+          {
+            "$ref": "#/components/parameters/TraceparentHeader"
+          },
+          {
+            "$ref": "#/components/parameters/TracestateHeader"
+          },
+          {
+            "$ref": "#/components/parameters/DeviceIdParam"
+          },
+          {
+            "$ref": "#/components/parameters/FieldsParam"
+          },
+          {
+            "$ref": "#/components/parameters/IfNoneMatchHeader"
+          },
+          {
+            "$ref": "#/components/parameters/AcceptEncodingHeader"
+          },
+          {
+            "$ref": "#/components/parameters/AcceptHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/device-retrieved"
+          },
+          "304": {
+            "$ref": "#/components/responses/not-modified"
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/not-found"
+          },
+          "406": {
+            "$ref": "#/components/responses/not-acceptable"
+          },
+          "429": {
+            "$ref": "#/components/responses/rate-limit"
+          },
+          "500": {
+            "$ref": "#/components/responses/server-error"
+          }
+        }
+      },
+      "put": {
+        "summary": "Fully update a device",
+        "description": "Fully updates an existing device. All fields must be provided.\n\n**Business Rules:**\n- Creation time cannot be updated (will be ignored if provided)\n- Name and brand cannot be updated if the device state is \"in-use\"\n",
+        "operationId": "updateDevice",
+        "tags": [
+          "Devices"
+        ],
+        "security": [
+          {
+            "PasetoAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AuthorizationHeader"
+          },
+          {
+            "$ref": "#/components/parameters/ApiVersionHeader"
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          },
+          {
+            "$ref": "#/components/parameters/TraceparentHeader"
+          },
+          {
+            "$ref": "#/components/parameters/TracestateHeader"
+          },
+          {
+            "$ref": "#/components/parameters/DeviceIdParam"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatchHeader"
+          },
+          {
+            "$ref": "#/components/parameters/AcceptHeader"
+          }
+        ],
+        "requestBody": {
+          "$ref": "#/components/requestBodies/update-device"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/device-updated"
+          },
+          "400": {
+            "$ref": "#/components/responses/bad-request"
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/not-found"
+          },
+          "406": {
+            "$ref": "#/components/responses/not-acceptable"
+          },
+          "409": {
+            "$ref": "#/components/responses/conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/precondition-failed"
+          },
+          "422": {
+            "$ref": "#/components/responses/unprocessable-entity"
+          },
+          "429": {
+            "$ref": "#/components/responses/rate-limit"
+          },
+          "500": {
+            "$ref": "#/components/responses/server-error"
+          }
+        }
+      },
+      "patch": {
+        "summary": "Partially update a device",
+        "description": "Partially updates an existing device. Only provided fields will be updated.\n\n**Business Rules:**\n- Creation time cannot be updated (will be ignored if provided)\n- Name and brand cannot be updated if the device state is \"in-use\"\n",
+        "operationId": "patchDevice",
+        "tags": [
+          "Devices"
+        ],
+        "security": [
+          {
+            "PasetoAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AuthorizationHeader"
+          },
+          {
+            "$ref": "#/components/parameters/ApiVersionHeader"
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          },
+          {
+            "$ref": "#/components/parameters/TraceparentHeader"
+          },
+          {
+            "$ref": "#/components/parameters/TracestateHeader"
+          },
+          {
+            "$ref": "#/components/parameters/DeviceIdParam"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatchHeader"
+          },
+          {
+            "$ref": "#/components/parameters/AcceptHeader"
+          }
+        ],
+        "requestBody": {
+          "$ref": "#/components/requestBodies/patch-device"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/device-updated"
+          },
+          "400": {
+            "$ref": "#/components/responses/bad-request"
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/not-found"
+          },
+          "406": {
+            "$ref": "#/components/responses/not-acceptable"
+          },
+          "409": {
+            "$ref": "#/components/responses/conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/precondition-failed"
+          },
+          "422": {
+            "$ref": "#/components/responses/unprocessable-entity"
+          },
+          "429": {
+            "$ref": "#/components/responses/rate-limit"
+          },
+          "500": {
+            "$ref": "#/components/responses/server-error"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete a device",
+        "description": "Deletes a device by its unique identifier.\n\n**Business Rules:**\n- Devices with state \"in-use\" cannot be deleted\n",
+        "operationId": "deleteDevice",
+        "tags": [
+          "Devices"
+        ],
+        "security": [
+          {
+            "PasetoAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AuthorizationHeader"
+          },
+          {
+            "$ref": "#/components/parameters/ApiVersionHeader"
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          },
+          {
+            "$ref": "#/components/parameters/TraceparentHeader"
+          },
+          {
+            "$ref": "#/components/parameters/TracestateHeader"
+          },
+          {
+            "$ref": "#/components/parameters/DeviceIdParam"
+          }
+        ],
+        "responses": {
+          "204": {
+            "$ref": "#/components/responses/device-deleted"
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/not-found"
+          },
+          "409": {
+            "$ref": "#/components/responses/conflict"
+          },
+          "429": {
+            "$ref": "#/components/responses/rate-limit"
+          },
+          "500": {
+            "$ref": "#/components/responses/server-error"
+          }
+        }
+      },
+      "head": {
+        "summary": "Get device metadata",
+        "description": "Returns headers only for a single device (no response body).\nUseful for checking if a device exists or validating cached data via ETag.\n",
+        "operationId": "headDevice",
+        "tags": [
+          "Devices"
+        ],
+        "security": [
+          {
+            "PasetoAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AuthorizationHeader"
+          },
+          {
+            "$ref": "#/components/parameters/ApiVersionHeader"
+          },
+          {
+            "$ref": "#/components/parameters/RequestIdHeader"
+          },
+          {
+            "$ref": "#/components/parameters/TraceparentHeader"
+          },
+          {
+            "$ref": "#/components/parameters/TracestateHeader"
+          },
+          {
+            "$ref": "#/components/parameters/DeviceIdParam"
+          },
+          {
+            "$ref": "#/components/parameters/IfNoneMatchHeader"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/device-head"
+          },
+          "304": {
+            "$ref": "#/components/responses/not-modified"
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/not-found"
+          },
+          "429": {
+            "$ref": "#/components/responses/rate-limit"
+          },
+          "500": {
+            "$ref": "#/components/responses/server-error"
+          }
+        }
+      },
+      "options": {
+        "summary": "Get allowed methods for device resource",
+        "description": "Returns the HTTP methods allowed for this device resource.\nUsed for CORS preflight requests and capability discovery.\n",
+        "operationId": "optionsDevice",
+        "tags": [
+          "Devices"
+        ],
+        "security": [],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/DeviceIdParam"
+          }
+        ],
+        "responses": {
+          "204": {
+            "$ref": "#/components/responses/device-options"
+          },
+          "400": {
+            "$ref": "#/components/responses/bad-request"
+          }
+        }
+      }
+    },
+    "/liveness": {
+      "get": {
+        "summary": "Liveness probe",
+        "description": "Simple liveness check to determine if the service is running.\nUsed by orchestrators (like Kubernetes) to determine if the container should be restarted.\n",
+        "operationId": "livenessCheck",
+        "tags": [
+          "System"
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/liveness-ok"
+          },
+          "429": {
+            "$ref": "#/components/responses/rate-limit"
+          },
+          "503": {
+            "$ref": "#/components/responses/liveness-down"
+          }
+        }
+      }
+    },
+    "/readiness": {
+      "get": {
+        "summary": "Readiness probe",
+        "description": "Comprehensive readiness check to determine if the service is ready to accept traffic.\nChecks all critical dependencies including database and downstream services.\nUsed by orchestrators to determine if traffic should be routed to this instance.\n",
+        "operationId": "readinessCheck",
+        "tags": [
+          "System"
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/readiness-ok"
+          },
+          "429": {
+            "$ref": "#/components/responses/rate-limit"
+          },
+          "503": {
+            "$ref": "#/components/responses/readiness-down"
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Health check",
+        "description": "Comprehensive health check with detailed system information including uptime.\nThis endpoint provides the same dependency status as readiness but includes\nadditional system metrics. Protected with basic authentication.\n",
+        "operationId": "healthCheck",
+        "tags": [
+          "System"
+        ],
+        "security": [
+          {
+            "BasicAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/health-ok"
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorized"
+          },
+          "503": {
+            "$ref": "#/components/responses/health-down"
+          }
+        }
+      }
+    },
+    "/admin/cache/health": {
+      "get": {
+        "summary": "Check cache health status",
+        "description": "Returns the current health status of the cache subsystem.\nThis endpoint is served on the internal admin port (default: 8089).\n",
+        "operationId": "getCacheHealth",
+        "tags": [
+          "Admin"
+        ],
+        "security": [
+          {
+            "BasicAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/cache-health-ok"
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorized"
+          },
+          "503": {
+            "$ref": "#/components/responses/cache-health-unavailable"
+          }
+        }
+      }
+    },
+    "/admin/cache/devices": {
+      "delete": {
+        "summary": "Purge all device caches",
+        "description": "Removes all cached device data including individual devices and list caches.\nThis endpoint is served on the internal admin port (default: 8089).\n",
+        "operationId": "purgeAllDeviceCaches",
+        "tags": [
+          "Admin"
+        ],
+        "security": [
+          {
+            "BasicAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/cache-purge-all-devices"
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/cache-server-error"
+          },
+          "503": {
+            "$ref": "#/components/responses/cache-unavailable"
+          }
+        }
+      }
+    },
+    "/admin/cache/devices/{deviceId}": {
+      "delete": {
+        "summary": "Purge cache for a specific device",
+        "description": "Removes cached data for a single device by its ID.\nThis endpoint is served on the internal admin port (default: 8089).\n",
+        "operationId": "purgeDeviceCache",
+        "tags": [
+          "Admin"
+        ],
+        "security": [
+          {
+            "BasicAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/DeviceIdParam"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/cache-purge-device"
+          },
+          "400": {
+            "$ref": "#/components/responses/cache-bad-request"
+          },
+          "500": {
+            "$ref": "#/components/responses/cache-server-error"
+          },
+          "503": {
+            "$ref": "#/components/responses/cache-unavailable"
+          }
+        }
+      }
+    },
+    "/admin/cache/devices/lists": {
+      "delete": {
+        "summary": "Purge all device list caches",
+        "description": "Removes all cached device list queries.\nIndividual device caches are not affected.\nThis endpoint is served on the internal admin port (default: 8089).\n",
+        "operationId": "purgeDeviceListCaches",
+        "tags": [
+          "Admin"
+        ],
+        "security": [
+          {
+            "BasicAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/cache-purge-lists"
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/cache-server-error"
+          },
+          "503": {
+            "$ref": "#/components/responses/cache-unavailable"
+          }
+        }
+      }
+    },
+    "/admin/cache/pattern": {
+      "delete": {
+        "summary": "Purge cache entries by pattern",
+        "description": "Removes all cache entries matching a specified pattern.\nSupports glob-style patterns (e.g., `device:*`, `devices:list:*`).\nThis endpoint is served on the internal admin port (default: 8089).\n",
+        "operationId": "purgeCacheByPattern",
+        "tags": [
+          "Admin"
+        ],
+        "security": [
+          {
+            "BasicAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CachePatternParam"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/cache-purge-pattern"
+          },
+          "400": {
+            "$ref": "#/components/responses/cache-bad-request"
+          },
+          "500": {
+            "$ref": "#/components/responses/cache-server-error"
+          },
+          "503": {
+            "$ref": "#/components/responses/cache-unavailable"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "parameters": {
+      "ApiVersionHeader": {
+        "name": "API-Version",
+        "in": "header",
+        "required": false,
+        "description": "API version to use for this request. If not specified, defaults to v1.\nSupported versions: v1\n",
+        "schema": {
+          "type": "string",
+          "enum": [
+            "v1"
+          ],
+          "default": "v1"
+        },
+        "example": "v1"
+      },
+      "RequestIdHeader": {
+        "name": "Request-Id",
+        "in": "header",
+        "required": false,
+        "description": "Unique request identifier for tracing and debugging purposes (per-request, always generated server-side).\nRFC 6648 compliant (no X- prefix).\n",
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "example": "019234a5-6b7c-8d9e-0f12-34567890abcd"
+      },
+      "DeviceIdParam": {
+        "name": "deviceId",
+        "in": "path",
+        "required": true,
+        "description": "The unique identifier of the device (UUID v7)",
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "example": "019234a5-6b7c-8d9e-0f12-34567890abcd"
+      },
+      "PageParam": {
+        "name": "page",
+        "in": "query",
+        "required": false,
+        "description": "Page number for pagination (1-indexed)",
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1
+        },
+        "example": 1
+      },
+      "SizeParam": {
+        "name": "size",
+        "in": "query",
+        "required": false,
+        "description": "Number of items per page",
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 20
+        },
+        "example": 20
+      },
+      "BrandFilterParam": {
+        "name": "brand",
+        "in": "query",
+        "required": false,
+        "description": "Filter by brand(s). Comma-separated for OR matching.\nExample: ?brand=Apple,Samsung\n",
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "maxItems": 10
+        },
+        "style": "form",
+        "explode": false,
+        "example": [
+          "Apple"
+        ]
+      },
+      "StateFilterParam": {
+        "name": "state",
+        "in": "query",
+        "required": false,
+        "description": "Filter by state(s). Comma-separated for OR matching.\nExample: ?state=available,inactive\n",
+        "schema": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/DeviceState"
+          },
+          "maxItems": 3
+        },
+        "style": "form",
+        "explode": false,
+        "example": [
+          "available"
+        ]
+      },
+      "SortParam": {
+        "name": "sort",
+        "in": "query",
+        "required": false,
+        "description": "Fields to sort results by. Comma-separated for multi-field sorting.\nPrefix with `-` for descending order.\nSupported fields: name, brand, state, createdAt, updatedAt\nExample: ?sort=-createdAt,name (sort by createdAt DESC, then name ASC)\n",
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^-?(name|brand|state|createdAt|updatedAt)$"
+          },
+          "maxItems": 5,
+          "default": [
+            "-createdAt"
+          ]
+        },
+        "style": "form",
+        "explode": false,
+        "example": [
+          "-createdAt",
+          "name"
+        ]
+      },
+      "FieldsParam": {
+        "name": "fields",
+        "in": "query",
+        "required": false,
+        "description": "Field projection to control which fields are returned in the response.\n\n**Default behavior (no fields parameter):**\nReturns essential fields only: `id`, `name`, `brand`, `state`\n\n**With fields parameter:**\nReturns only the specified fields. Use comma-separated list.\n\n**Supported fields:**\n- `id` - Device unique identifier (always included)\n- `name` - Device name\n- `brand` - Device manufacturer\n- `state` - Device state (available, in-use, inactive)\n- `createdAt` - Creation timestamp\n- `updatedAt` - Last update timestamp\n- `links` - HATEOAS navigation links\n\n**Nested fields syntax:**\nUse `field:(subfield1,subfield2)` for nested objects.\nExample: `links:(self)` returns only the self link.\n",
+        "schema": {
+          "type": "string",
+          "pattern": "^[a-zA-Z,:()]+$"
+        },
+        "examples": {
+          "essential": {
+            "value": "id,name,brand,state",
+            "summary": "Essential fields only"
+          },
+          "withTimestamps": {
+            "value": "id,name,brand,state,createdAt,updatedAt",
+            "summary": "Include timestamps"
+          },
+          "withLinks": {
+            "value": "id,name,state,links:(self)",
+            "summary": "Include HATEOAS links"
+          }
+        }
+      },
+      "SearchParam": {
+        "name": "q",
+        "in": "query",
+        "required": false,
+        "description": "Full-text search query across name and brand fields.\nUses PostgreSQL full-text search with English language stemming.\n\n**Features:**\n- Matches word variations (e.g., \"running\" matches \"run\")\n- Case-insensitive search\n- Searches both name and brand fields\n\n**Examples:**\n- `?q=iPhone` - matches \"iPhone 15 Pro\", \"My iPhone\", etc.\n- `?q=Samsung` - matches devices with Samsung brand\n- `?q=Galaxy` - matches \"Galaxy S24\", \"Galaxy Tab\", etc.\n\n**Combining with filters:**\n- `?q=iPhone&state=available` - available iPhones only\n- `?q=Pro&brand=Apple` - Apple devices with \"Pro\" in name\n",
+        "schema": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 255
+        },
+        "example": "iPhone"
+      },
+      "CursorParam": {
+        "name": "cursor",
+        "in": "query",
+        "required": false,
+        "description": "Opaque cursor for keyset-based pagination.\nWhen provided, the `page` parameter is ignored.\n\n**Usage:**\n1. First request: Don't include cursor (uses page-based pagination)\n2. Subsequent requests: Use `pagination.nextCursor` or `pagination.previousCursor` from previous response\n\n**Benefits over offset pagination:**\n- Stable results even when data changes between requests\n- Better performance for large datasets (no OFFSET scanning)\n- Consistent page sizes\n\n**Note:** Cursors are opaque strings - do not parse or modify them.\n",
+        "schema": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "example": "eyJmIjoiLWNyZWF0ZWRBdCIsInYiOiIyMDI0LTAxLTE1VDEwOjMwOjAwWiIsImlkIjoiNTUwZTg0MDAtZTI5Yi00MWQ0LWE3MTYtNDQ2NjU1NDQwMDAwIiwiZCI6Im5leHQifQ"
+      },
+      "IfMatchHeader": {
+        "name": "If-Match",
+        "in": "header",
+        "required": false,
+        "description": "ETag value for optimistic concurrency control.\nThe request will only succeed if the current resource ETag matches this value.\n",
+        "schema": {
+          "type": "string"
+        },
+        "example": "\"a1b2c3d4e5f6\""
+      },
+      "IfNoneMatchHeader": {
+        "name": "If-None-Match",
+        "in": "header",
+        "required": false,
+        "description": "ETag value for conditional requests.\nFor GET: Returns 304 Not Modified if the resource hasn't changed.\nFor PUT/PATCH: Prevents updates if resource exists (use \"*\").\n",
+        "schema": {
+          "type": "string"
+        },
+        "example": "\"a1b2c3d4e5f6\""
+      },
+      "AuthorizationHeader": {
+        "name": "Authorization",
+        "in": "header",
+        "required": true,
+        "description": "PASETO v4 bearer token for authentication.\nFormat: Bearer v4.public.{payload}.{signature}\n",
+        "schema": {
+          "type": "string",
+          "pattern": "^Bearer v4\\.(public|local)\\..+$"
+        },
+        "example": "Bearer v4.public.eyJleHAiOiIyMDI0LTAxLTE1VDEyOjAwOjAwWiIsImlhdCI6IjIwMjQtMDEtMTVUMTA6MDA6MDBaIiwic3ViIjoiMDE5MjM0YTUtNmI3Yy04ZDllLTBmMTItMzQ1Njc4OTBhYmNkIn0.signature"
+      },
+      "IdempotencyKeyHeader": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": true,
+        "description": "Unique key to ensure idempotent POST requests.\nIf the same key is sent again within the TTL window (24 hours),\nthe server returns the cached response instead of creating a duplicate.\n\n**Requirements:**\n- Must be a valid UUID v7\n- Must be unique per logical operation\n- Cached for 24 hours\n",
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "example": "019234a5-6b7c-8d9e-0f12-34567890abcd"
+      },
+      "AcceptEncodingHeader": {
+        "name": "Accept-Encoding",
+        "in": "header",
+        "required": false,
+        "description": "Accepted compression algorithms for the response.\nServer will use the best matching algorithm.\n",
+        "schema": {
+          "type": "string"
+        },
+        "example": "gzip, deflate, br"
+      },
+      "AcceptHeader": {
+        "name": "Accept",
+        "in": "header",
+        "required": false,
+        "description": "Media type(s) acceptable for the response.\nCurrently only `application/json` is supported.\n\nIf not specified, defaults to `application/json`.\nIf an unsupported media type is requested, returns 406 Not Acceptable.\n",
+        "schema": {
+          "type": "string",
+          "default": "application/json"
+        },
+        "example": "application/json"
+      },
+      "TraceparentHeader": {
+        "name": "traceparent",
+        "in": "header",
+        "required": false,
+        "description": "W3C Trace Context header for distributed tracing (OpenTelemetry compatible).\n\nFormat: `{version}-{trace-id}-{parent-id}-{trace-flags}`\n- version: 2 hex digits (always \"00\")\n- trace-id: 32 hex digits (16 bytes)\n- parent-id: 16 hex digits (8 bytes)\n- trace-flags: 2 hex digits (sampling flag)\n\nIf not provided, the server will generate a new trace context.\n",
+        "schema": {
+          "type": "string",
+          "pattern": "^00-[a-f0-9]{32}-[a-f0-9]{16}-[0-9a-f]{2}$"
+        },
+        "example": "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01"
+      },
+      "TracestateHeader": {
+        "name": "tracestate",
+        "in": "header",
+        "required": false,
+        "description": "W3C Trace Context state header for vendor-specific trace data.\nComma-separated list of key=value pairs.\n",
+        "schema": {
+          "type": "string"
+        },
+        "example": "congo=t61rcWkgMzE,rojo=00f067aa0ba902b7"
+      },
+      "CachePatternParam": {
+        "name": "pattern",
+        "in": "query",
+        "required": true,
+        "description": "Glob-style pattern to match cache keys.\nExamples: `device:*`, `devices:list:v1:*`\n",
+        "schema": {
+          "type": "string"
+        },
+        "example": "device:*"
+      }
+    },
+    "securitySchemes": {
+      "PasetoAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "PASETO",
+        "description": "PASETO (Platform-Agnostic Security Tokens) v4 token.\nA secure, stateless token format for authentication.\nFormat: Bearer v4.public.{payload}.{signature}\n"
+      },
+      "BasicAuth": {
+        "type": "http",
+        "scheme": "basic",
+        "description": "Basic HTTP authentication for administrative endpoints"
+      }
+    },
+    "schemas": {
+      "DeviceState": {
+        "type": "string",
+        "description": "The current state of the device",
+        "enum": [
+          "available",
+          "in-use",
+          "inactive"
+        ],
+        "example": "available",
+        "x-enum-descriptions": {
+          "available": "Device is available for use",
+          "in-use": "Device is currently being used (name/brand cannot be updated, cannot be deleted)",
+          "inactive": "Device is inactive and not available for use"
+        }
+      },
+      "DeviceLinks": {
+        "type": "object",
+        "description": "HATEOAS links for device navigation",
+        "properties": {
+          "self": {
+            "type": "string",
+            "format": "uri-reference",
+            "description": "Link to this device resource",
+            "example": "/devices/019234a5-6b7c-8d9e-0f12-34567890abcd"
+          }
+        }
+      },
+      "Device": {
+        "type": "object",
+        "description": "A device resource",
+        "required": [
+          "id",
+          "name",
+          "brand",
+          "state",
+          "createdAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique identifier for the device (UUID v7)",
+            "example": "019234a5-6b7c-8d9e-0f12-34567890abcd"
+          },
+          "name": {
+            "type": "string",
+            "description": "The name of the device",
+            "minLength": 1,
+            "maxLength": 255,
+            "example": "iPhone 15 Pro"
+          },
+          "brand": {
+            "type": "string",
+            "description": "The brand/manufacturer of the device",
+            "minLength": 1,
+            "maxLength": 100,
+            "example": "Apple"
+          },
+          "state": {
+            "$ref": "#/components/schemas/DeviceState"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp when the device was created (immutable)",
+            "example": "2024-01-15T10:30:00Z"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp when the device was last updated",
+            "example": "2024-01-15T14:45:00Z"
+          },
+          "links": {
+            "$ref": "#/components/schemas/DeviceLinks"
+          }
+        }
+      },
+      "Meta": {
+        "type": "object",
+        "description": "Response metadata containing tracing information and API versioning.\nAll successful responses include this field to support observability and debugging.\n",
+        "required": [
+          "requestId",
+          "apiVersion"
+        ],
+        "properties": {
+          "requestId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique identifier for this specific request.\nMatches the `Request-Id` response header.\nUse this for correlating logs and debugging.\n",
+            "example": "019234a5-6b7c-8d9e-0f12-34567890abcd"
+          },
+          "traceId": {
+            "type": "string",
+            "description": "W3C Trace Context trace ID extracted from the traceparent header.\nPresent only when distributed tracing is enabled.\nUse this to trace requests across multiple services.\n",
+            "example": "0af7651916cd43dd8448eb211c80319c"
+          },
+          "apiVersion": {
+            "type": "string",
+            "description": "API version used to process this request",
+            "enum": [
+              "v1"
+            ],
+            "example": "v1"
+          }
+        }
+      },
+      "PaginationLinks": {
+        "type": "object",
+        "description": "HATEOAS links for pagination navigation",
+        "properties": {
+          "self": {
+            "type": "string",
+            "format": "uri-reference",
+            "description": "Link to the current page",
+            "example": "/devices?page=1&size=20"
+          },
+          "first": {
+            "type": "string",
+            "format": "uri-reference",
+            "description": "Link to the first page",
+            "example": "/devices?page=1&size=20"
+          },
+          "last": {
+            "type": "string",
+            "format": "uri-reference",
+            "description": "Link to the last page",
+            "example": "/devices?page=8&size=20"
+          },
+          "next": {
+            "type": "string",
+            "format": "uri-reference",
+            "nullable": true,
+            "description": "Link to the next page (null if on last page)",
+            "example": "/devices?page=2&size=20"
+          },
+          "previous": {
+            "type": "string",
+            "format": "uri-reference",
+            "nullable": true,
+            "description": "Link to the previous page (null if on first page)",
+            "example": null
+          }
+        }
+      },
+      "Pagination": {
+        "type": "object",
+        "description": "Pagination metadata for list responses",
+        "required": [
+          "page",
+          "size",
+          "totalItems",
+          "totalPages"
+        ],
+        "properties": {
+          "page": {
+            "type": "integer",
+            "description": "Current page number (1-indexed)",
+            "minimum": 1,
+            "example": 1
+          },
+          "size": {
+            "type": "integer",
+            "description": "Number of items per page",
+            "minimum": 1,
+            "maximum": 100,
+            "example": 20
+          },
+          "totalItems": {
+            "type": "integer",
+            "description": "Total number of items across all pages",
+            "minimum": 0,
+            "example": 150
+          },
+          "totalPages": {
+            "type": "integer",
+            "description": "Total number of pages",
+            "minimum": 0,
+            "example": 8
+          },
+          "hasNext": {
+            "type": "boolean",
+            "description": "Whether there is a next page",
+            "example": true
+          },
+          "hasPrevious": {
+            "type": "boolean",
+            "description": "Whether there is a previous page",
+            "example": false
+          },
+          "nextCursor": {
+            "type": "string",
+            "description": "Opaque cursor for fetching the next page using keyset pagination.\nOnly present when hasNext is true.\n",
+            "example": "eyJmIjoiLWNyZWF0ZWRBdCIsInYiOiIyMDI0LTAxLTE1VDEwOjMwOjAwWiIsImlkIjoiNTUwZTg0MDAtZTI5Yi00MWQ0LWE3MTYtNDQ2NjU1NDQwMDAwIiwiZCI6Im5leHQifQ"
+          },
+          "previousCursor": {
+            "type": "string",
+            "description": "Opaque cursor for fetching the previous page using keyset pagination.\nOnly present when hasPrevious is true.\n",
+            "example": "eyJmIjoiLWNyZWF0ZWRBdCIsInYiOiIyMDI0LTAxLTE1VDEyOjAwOjAwWiIsImlkIjoiNTUwZTg0MDAtZTI5Yi00MWQ0LWE3MTYtNDQ2NjU1NDQwMDAxIiwiZCI6InByZXYifQ"
+          },
+          "links": {
+            "$ref": "#/components/schemas/PaginationLinks"
+          }
+        }
+      },
+      "DevicesListEnvelope": {
+        "type": "object",
+        "description": "Response envelope containing a paginated list of devices with metadata",
+        "required": [
+          "data",
+          "meta",
+          "pagination"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "description": "List of devices",
+            "items": {
+              "$ref": "#/components/schemas/Device"
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/Pagination"
+          }
+        }
+      },
+      "ErrorDetail": {
+        "type": "object",
+        "description": "Detailed information about a specific error",
+        "required": [
+          "field",
+          "message"
+        ],
+        "properties": {
+          "field": {
+            "type": "string",
+            "description": "The field that caused the error",
+            "example": "name"
+          },
+          "message": {
+            "type": "string",
+            "description": "Description of what is wrong with the field",
+            "example": "name is required"
+          },
+          "code": {
+            "type": "string",
+            "description": "Machine-readable error code for this specific error",
+            "example": "REQUIRED_FIELD"
+          }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "description": "Standard error response format",
+        "required": [
+          "code",
+          "message",
+          "requestId",
+          "timestamp"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Machine-readable error code",
+            "example": "VALIDATION_ERROR"
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable error message",
+            "example": "The request body contains invalid data"
+          },
+          "requestId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique request identifier for tracing",
+            "example": "019234a5-6b7c-8d9e-0f12-34567890abcd"
+          },
+          "traceId": {
+            "type": "string",
+            "description": "W3C Trace Context trace ID for distributed tracing (from traceparent header)",
+            "example": "0af7651916cd43dd8448eb211c80319c"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp when the error occurred",
+            "example": "2024-01-15T10:30:00Z"
+          },
+          "details": {
+            "type": "array",
+            "description": "Additional error details for validation errors",
+            "items": {
+              "$ref": "#/components/schemas/ErrorDetail"
+            }
+          }
+        }
+      },
+      "CreateDevice": {
+        "type": "object",
+        "description": "Request body for creating a new device",
+        "required": [
+          "name",
+          "brand"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "The name of the device",
+            "minLength": 1,
+            "maxLength": 255,
+            "example": "iPhone 15 Pro"
+          },
+          "brand": {
+            "type": "string",
+            "description": "The brand/manufacturer of the device",
+            "minLength": 1,
+            "maxLength": 100,
+            "example": "Apple"
+          },
+          "state": {
+            "$ref": "#/components/schemas/DeviceState",
+            "description": "Initial state of the device (defaults to \"available\" if not provided)",
+            "default": "available"
+          }
+        }
+      },
+      "DeviceEnvelope": {
+        "type": "object",
+        "description": "Response envelope containing a single device with metadata",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/Device"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        }
+      },
+      "UpdateDevice": {
+        "type": "object",
+        "description": "Request body for fully updating a device (PUT)",
+        "required": [
+          "name",
+          "brand",
+          "state"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "The name of the device.\n**Note:** Cannot be updated if the device state is \"in-use\"\n",
+            "minLength": 1,
+            "maxLength": 255,
+            "example": "iPhone 15 Pro Max"
+          },
+          "brand": {
+            "type": "string",
+            "description": "The brand/manufacturer of the device.\n**Note:** Cannot be updated if the device state is \"in-use\"\n",
+            "minLength": 1,
+            "maxLength": 100,
+            "example": "Apple"
+          },
+          "state": {
+            "$ref": "#/components/schemas/DeviceState",
+            "description": "The state of the device"
+          }
+        }
+      },
+      "PatchDevice": {
+        "type": "object",
+        "description": "Request body for partially updating a device (PATCH)",
+        "minProperties": 1,
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "The name of the device.\n**Note:** Cannot be updated if the device state is \"in-use\"\n",
+            "minLength": 1,
+            "maxLength": 255,
+            "example": "iPhone 15 Pro Max"
+          },
+          "brand": {
+            "type": "string",
+            "description": "The brand/manufacturer of the device.\n**Note:** Cannot be updated if the device state is \"in-use\"\n",
+            "minLength": 1,
+            "maxLength": 100,
+            "example": "Apple"
+          },
+          "state": {
+            "$ref": "#/components/schemas/DeviceState",
+            "description": "The state of the device"
+          }
+        }
+      },
+      "Liveness": {
+        "type": "object",
+        "description": "Liveness probe response",
+        "required": [
+          "status",
+          "timestamp",
+          "version"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "The liveness status of the service",
+            "enum": [
+              "ok",
+              "degraded",
+              "down",
+              "maintenance"
+            ],
+            "example": "ok"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp of the liveness check",
+            "example": "2024-01-15T10:30:00Z"
+          },
+          "version": {
+            "type": "string",
+            "description": "Service version",
+            "example": "v1.0.0"
+          }
+        }
+      },
+      "DependencyCheck": {
+        "type": "object",
+        "description": "Status of a single dependency",
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "The status of the dependency",
+            "enum": [
+              "up",
+              "down",
+              "degraded",
+              "unknown"
+            ],
+            "example": "up"
+          },
+          "latencyMs": {
+            "type": "integer",
+            "description": "Latency of the last health check in milliseconds",
+            "minimum": 0,
+            "example": 5
+          },
+          "message": {
+            "type": "string",
+            "description": "Additional information about the dependency status",
+            "example": "Connected to PostgreSQL 16.1"
+          },
+          "lastChecked": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp of the last health check for this dependency",
+            "example": "2024-01-15T10:30:00Z"
+          },
+          "error": {
+            "type": "string",
+            "description": "Error message if the dependency is unhealthy",
+            "example": "connection refused"
+          },
+          "details": {
+            "type": "object",
+            "description": "Additional dependency-specific details",
+            "additionalProperties": true
+          }
+        }
+      },
+      "PoolStats": {
+        "type": "object",
+        "description": "Connection pool statistics",
+        "properties": {
+          "hits": {
+            "type": "integer",
+            "description": "Number of successful pool hits",
+            "minimum": 0,
+            "example": 15234
+          },
+          "misses": {
+            "type": "integer",
+            "description": "Number of pool misses",
+            "minimum": 0,
+            "example": 42
+          },
+          "timeouts": {
+            "type": "integer",
+            "description": "Number of connection timeouts",
+            "minimum": 0,
+            "example": 0
+          },
+          "waitCount": {
+            "type": "integer",
+            "description": "Number of times a connection was waited for",
+            "minimum": 0,
+            "example": 128
+          },
+          "waitDurationNs": {
+            "type": "integer",
+            "description": "Total time spent waiting for connections in nanoseconds",
+            "minimum": 0,
+            "example": 5000000
+          },
+          "totalConnections": {
+            "type": "integer",
+            "description": "Total number of connections in the pool",
+            "minimum": 0,
+            "example": 10
+          },
+          "idleConnections": {
+            "type": "integer",
+            "description": "Number of idle connections in the pool",
+            "minimum": 0,
+            "example": 5
+          },
+          "staleConnections": {
+            "type": "integer",
+            "description": "Number of stale connections removed from the pool",
+            "minimum": 0,
+            "example": 2
+          }
+        }
+      },
+      "CacheDependencyCheck": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/DependencyCheck"
+          },
+          {
+            "type": "object",
+            "description": "Cache dependency check with pool statistics",
+            "properties": {
+              "details": {
+                "type": "object",
+                "description": "Cache-specific details",
+                "properties": {
+                  "totalKeys": {
+                    "type": "integer",
+                    "description": "Total number of keys in the cache",
+                    "minimum": 0,
+                    "example": 1024
+                  },
+                  "poolStats": {
+                    "$ref": "#/components/schemas/PoolStats"
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "Readiness": {
+        "type": "object",
+        "description": "Readiness probe response with dependency status",
+        "required": [
+          "status",
+          "timestamp",
+          "checks"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "The overall readiness status of the service",
+            "enum": [
+              "ok",
+              "degraded",
+              "down",
+              "maintenance"
+            ],
+            "example": "ok"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp of the readiness check",
+            "example": "2024-01-15T10:30:00Z"
+          },
+          "version": {
+            "type": "string",
+            "description": "Service version (optional)",
+            "example": "v1.0.0"
+          },
+          "checks": {
+            "type": "object",
+            "description": "Status of individual dependency checks grouped by category",
+            "required": [
+              "infra",
+              "services"
+            ],
+            "properties": {
+              "infra": {
+                "type": "object",
+                "description": "Infrastructure dependencies (storage, cache, etc.)",
+                "required": [
+                  "storage"
+                ],
+                "properties": {
+                  "storage": {
+                    "$ref": "#/components/schemas/DependencyCheck"
+                  },
+                  "cache": {
+                    "$ref": "#/components/schemas/CacheDependencyCheck"
+                  }
+                }
+              },
+              "services": {
+                "type": "object",
+                "description": "Service dependencies (downstream services)",
+                "required": [
+                  "devices"
+                ],
+                "properties": {
+                  "devices": {
+                    "$ref": "#/components/schemas/DependencyCheck"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "VersionInfo": {
+        "type": "object",
+        "description": "Version information about the service",
+        "required": [
+          "api",
+          "build"
+        ],
+        "properties": {
+          "api": {
+            "type": "string",
+            "description": "API version",
+            "example": "v1"
+          },
+          "build": {
+            "type": "string",
+            "description": "Build version or commit hash",
+            "example": "1.0.0-abc1234"
+          },
+          "go": {
+            "type": "string",
+            "description": "Go runtime version",
+            "example": "go1.25"
+          }
+        }
+      },
+      "UptimeInfo": {
+        "type": "object",
+        "description": "Service uptime information",
+        "required": [
+          "startedAt",
+          "duration"
+        ],
+        "properties": {
+          "startedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp when the service started",
+            "example": "2024-01-15T08:00:00Z"
+          },
+          "duration": {
+            "type": "string",
+            "description": "Human-readable uptime duration",
+            "example": "2h30m15s"
+          },
+          "durationSeconds": {
+            "type": "integer",
+            "description": "Uptime in seconds",
+            "minimum": 0,
+            "example": 9015
+          }
+        }
+      },
+      "MemoryInfo": {
+        "type": "object",
+        "description": "Memory usage information",
+        "properties": {
+          "allocMb": {
+            "type": "number",
+            "format": "float",
+            "description": "Current memory allocation in MB",
+            "example": 45.5
+          },
+          "totalAllocMb": {
+            "type": "number",
+            "format": "float",
+            "description": "Total memory allocated since start in MB",
+            "example": 1024.8
+          },
+          "sysMb": {
+            "type": "number",
+            "format": "float",
+            "description": "Total memory obtained from the OS in MB",
+            "example": 72.3
+          },
+          "gcCycles": {
+            "type": "integer",
+            "description": "Number of completed GC cycles",
+            "minimum": 0,
+            "example": 156
+          }
+        }
+      },
+      "SystemInfo": {
+        "type": "object",
+        "description": "System resource information",
+        "properties": {
+          "memory": {
+            "$ref": "#/components/schemas/MemoryInfo"
+          },
+          "goroutines": {
+            "type": "integer",
+            "description": "Number of active goroutines",
+            "minimum": 0,
+            "example": 42
+          },
+          "cpuCores": {
+            "type": "integer",
+            "description": "Number of CPU cores available",
+            "minimum": 1,
+            "example": 8
+          }
+        }
+      },
+      "Health": {
+        "type": "object",
+        "description": "Comprehensive health check response with system metrics",
+        "required": [
+          "status",
+          "timestamp",
+          "version",
+          "uptime",
+          "checks"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "The overall health status of the service",
+            "enum": [
+              "ok",
+              "degraded",
+              "down",
+              "maintenance"
+            ],
+            "example": "ok"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp of the health check",
+            "example": "2024-01-15T10:30:00Z"
+          },
+          "version": {
+            "$ref": "#/components/schemas/VersionInfo"
+          },
+          "uptime": {
+            "$ref": "#/components/schemas/UptimeInfo"
+          },
+          "checks": {
+            "type": "object",
+            "description": "Status of individual dependency checks grouped by category",
+            "required": [
+              "infra",
+              "services"
+            ],
+            "properties": {
+              "infra": {
+                "type": "object",
+                "description": "Infrastructure dependencies (storage, cache, etc.)",
+                "required": [
+                  "storage"
+                ],
+                "properties": {
+                  "storage": {
+                    "$ref": "#/components/schemas/DependencyCheck"
+                  },
+                  "cache": {
+                    "$ref": "#/components/schemas/CacheDependencyCheck"
+                  }
+                }
+              },
+              "services": {
+                "type": "object",
+                "description": "Service dependencies (downstream services)",
+                "required": [
+                  "devices"
+                ],
+                "properties": {
+                  "devices": {
+                    "$ref": "#/components/schemas/DependencyCheck"
+                  }
+                }
+              }
+            }
+          },
+          "system": {
+            "$ref": "#/components/schemas/SystemInfo"
+          }
+        }
+      },
+      "CacheHealth": {
+        "type": "object",
+        "description": "Cache health status response",
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "healthy",
+              "unhealthy",
+              "unavailable"
+            ],
+            "description": "Current health status of the cache",
+            "example": "healthy"
+          },
+          "error": {
+            "type": "string",
+            "description": "Error message if cache is unavailable",
+            "example": "cache not configured"
+          }
+        }
+      },
+      "CachePurge": {
+        "type": "object",
+        "description": "Response after purging cache entries",
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "Result message of the purge operation",
+            "example": "all device caches purged"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Device ID that was purged (only for single device purge)",
+            "example": "019234a5-6b7c-8d9e-0f12-34567890abcd"
+          }
+        }
+      },
+      "CacheError": {
+        "type": "object",
+        "description": "Error response for cache operations",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "Error message describing the failure",
+            "example": "cache not available"
+          }
+        }
+      },
+      "CachePatternPurge": {
+        "type": "object",
+        "description": "Response after purging cache entries by pattern",
+        "required": [
+          "status",
+          "pattern",
+          "deleted"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "Result message of the purge operation",
+            "example": "cache purged by pattern"
+          },
+          "pattern": {
+            "type": "string",
+            "description": "The pattern that was used for purging",
+            "example": "device:*"
+          },
+          "deleted": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Number of cache entries deleted",
+            "example": 5
+          }
+        }
+      }
+    },
+    "headers": {
+      "ApiVersionHeader": {
+        "description": "API version used for this response",
+        "schema": {
+          "type": "string",
+          "enum": [
+            "v1"
+          ]
+        },
+        "example": "v1"
+      },
+      "RequestIdHeader": {
+        "description": "Unique request identifier for tracing (per-request, always generated server-side)",
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "example": "019234a5-6b7c-8d9e-0f12-34567890abcd"
+      },
+      "CorrelationIdHeader": {
+        "description": "Correlation identifier for tracing requests across multiple services (can be provided by client or generated server-side)",
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "example": "019234a5-6b7c-8d9e-0f12-34567890abcd"
+      },
+      "ETagHeader": {
+        "description": "Entity tag for cache validation and optimistic concurrency control.\nUse this value in If-Match or If-None-Match headers for subsequent requests.\n",
+        "schema": {
+          "type": "string"
+        },
+        "example": "\"a1b2c3d4e5f6\""
+      },
+      "CacheControlHeader": {
+        "description": "Cache directives for the response.\n- `private`: Response is specific to the user\n- `max-age`: Maximum time in seconds the response can be cached\n- `no-cache`: Must revalidate with server before using cached response\n",
+        "schema": {
+          "type": "string"
+        },
+        "example": "private, max-age=300"
+      },
+      "RateLimitLimitHeader": {
+        "description": "Maximum number of requests allowed per time window (RFC 6648 compliant)",
+        "schema": {
+          "type": "integer"
+        },
+        "example": 100
+      },
+      "RateLimitRemainingHeader": {
+        "description": "Number of requests remaining in the current time window (RFC 6648 compliant)",
+        "schema": {
+          "type": "integer"
+        },
+        "example": 95
+      },
+      "RateLimitResetHeader": {
+        "description": "Unix timestamp (seconds) when the rate limit window resets (RFC 6648 compliant)",
+        "schema": {
+          "type": "integer"
+        },
+        "example": 1705320000
+      },
+      "ContentEncodingHeader": {
+        "description": "Compression algorithm used for the response body",
+        "schema": {
+          "type": "string",
+          "enum": [
+            "gzip",
+            "deflate",
+            "br",
+            "identity"
+          ]
+        },
+        "example": "gzip"
+      },
+      "VaryHeader": {
+        "description": "Headers that affect response caching and content negotiation",
+        "schema": {
+          "type": "string"
+        },
+        "example": "Accept-Encoding, Authorization"
+      },
+      "TraceparentResponseHeader": {
+        "description": "W3C Trace Context parent header for distributed tracing",
+        "schema": {
+          "type": "string"
+        },
+        "example": "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01"
+      },
+      "TracestateResponseHeader": {
+        "description": "W3C Trace Context state header for vendor-specific trace data",
+        "schema": {
+          "type": "string"
+        },
+        "example": "congo=t61rcWkgMzE"
+      },
+      "RetryAfterHeader": {
+        "description": "Number of seconds to wait before retrying the request",
+        "schema": {
+          "type": "integer"
+        },
+        "example": 60
+      },
+      "LocationHeader": {
+        "description": "URI of the newly created resource",
+        "schema": {
+          "type": "string",
+          "format": "uri"
+        },
+        "example": "/devices/019234a5-6b7c-8d9e-0f12-34567890abcd"
+      },
+      "AccessControlAllowHeadersHeader": {
+        "description": "CORS header indicating which HTTP headers can be used during the actual request.\nPart of the CORS preflight response (Fetch Standard).\n",
+        "schema": {
+          "type": "string"
+        },
+        "example": "Authorization, Content-Type, Request-Id, Correlation-Id, API-Version, If-Match, If-None-Match, traceparent, tracestate"
+      },
+      "AccessControlMaxAgeHeader": {
+        "description": "CORS header indicating how long the results of a preflight request can be cached.\nValue is in seconds (Fetch Standard).\n",
+        "schema": {
+          "type": "integer"
+        },
+        "example": 86400
+      },
+      "LastModifiedHeader": {
+        "description": "Timestamp when the resource was last modified",
+        "schema": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "example": "Wed, 15 Jan 2024 14:45:00 GMT"
+      }
+    },
+    "examples": {
+      "list": {
+        "summary": "List of devices",
+        "value": {
+          "data": [
+            {
+              "id": "019234a5-6b7c-8d9e-0f12-34567890abcd",
+              "name": "iPhone 15 Pro",
+              "brand": "Apple",
+              "state": "available",
+              "createdAt": "2024-01-15T10:30:00Z",
+              "updatedAt": "2024-01-15T10:30:00Z",
+              "links": {
+                "self": "/devices/019234a5-6b7c-8d9e-0f12-34567890abcd"
+              }
+            },
+            {
+              "id": "019234a5-6b7c-8d9e-0f12-34567890abce",
+              "name": "Galaxy S24 Ultra",
+              "brand": "Samsung",
+              "state": "in-use",
+              "createdAt": "2024-01-14T08:15:00Z",
+              "updatedAt": "2024-01-15T09:00:00Z",
+              "links": {
+                "self": "/devices/019234a5-6b7c-8d9e-0f12-34567890abce"
+              }
+            },
+            {
+              "id": "019234a5-6b7c-8d9e-0f12-34567890abcf",
+              "name": "Pixel 8 Pro",
+              "brand": "Google",
+              "state": "inactive",
+              "createdAt": "2024-01-13T14:20:00Z",
+              "updatedAt": "2024-01-13T14:20:00Z",
+              "links": {
+                "self": "/devices/019234a5-6b7c-8d9e-0f12-34567890abcf"
+              }
+            }
+          ],
+          "meta": {
+            "requestId": "550e8400-e29b-41d4-a716-446655440000",
+            "traceId": "0af7651916cd43dd8448eb211c80319c",
+            "apiVersion": "v1"
+          },
+          "pagination": {
+            "page": 1,
+            "size": 20,
+            "totalItems": 3,
+            "totalPages": 1,
+            "hasNext": false,
+            "hasPrevious": false
+          }
+        }
+      },
+      "basic": {
+        "summary": "Create a new device with default state",
+        "value": {
+          "name": "iPhone 15 Pro",
+          "brand": "Apple"
+        }
+      },
+      "created": {
+        "summary": "Newly created device",
+        "value": {
+          "data": {
+            "id": "019234a5-6b7c-8d9e-0f12-34567890abcd",
+            "name": "iPhone 15 Pro",
+            "brand": "Apple",
+            "state": "available",
+            "createdAt": "2024-01-15T10:30:00Z",
+            "updatedAt": "2024-01-15T10:30:00Z",
+            "links": {
+              "self": "/devices/019234a5-6b7c-8d9e-0f12-34567890abcd"
+            }
+          },
+          "meta": {
+            "requestId": "550e8400-e29b-41d4-a716-446655440000",
+            "traceId": "0af7651916cd43dd8448eb211c80319c",
+            "apiVersion": "v1"
+          }
+        }
+      },
+      "device": {
+        "summary": "Existing device",
+        "value": {
+          "data": {
+            "id": "019234a5-6b7c-8d9e-0f12-34567890abcd",
+            "name": "iPhone 15 Pro",
+            "brand": "Apple",
+            "state": "in-use",
+            "createdAt": "2024-01-15T10:30:00Z",
+            "updatedAt": "2024-01-15T14:45:00Z",
+            "links": {
+              "self": "/devices/019234a5-6b7c-8d9e-0f12-34567890abcd"
+            }
+          },
+          "meta": {
+            "requestId": "550e8400-e29b-41d4-a716-446655440001",
+            "traceId": "1bf7651916cd43dd8448eb211c80319d",
+            "apiVersion": "v1"
+          }
+        }
+      },
+      "full": {
+        "summary": "Fully update a device",
+        "value": {
+          "name": "iPhone 15 Pro Max",
+          "brand": "Apple",
+          "state": "in-use"
+        }
+      },
+      "updated": {
+        "summary": "Updated device",
+        "value": {
+          "data": {
+            "id": "019234a5-6b7c-8d9e-0f12-34567890abcd",
+            "name": "iPhone 15 Pro Max",
+            "brand": "Apple",
+            "state": "in-use",
+            "createdAt": "2024-01-15T10:30:00Z",
+            "updatedAt": "2024-01-15T16:20:00Z",
+            "links": {
+              "self": "/devices/019234a5-6b7c-8d9e-0f12-34567890abcd"
+            }
+          },
+          "meta": {
+            "requestId": "550e8400-e29b-41d4-a716-446655440002",
+            "traceId": "2cf7651916cd43dd8448eb211c80319e",
+            "apiVersion": "v1"
+          }
+        }
+      },
+      "patched": {
+        "summary": "Partially updated device",
+        "value": {
+          "data": {
+            "id": "019234a5-6b7c-8d9e-0f12-34567890abcd",
+            "name": "iPhone 15 Pro",
+            "brand": "Apple",
+            "state": "inactive",
+            "createdAt": "2024-01-15T10:30:00Z",
+            "updatedAt": "2024-01-15T18:00:00Z",
+            "links": {
+              "self": "/devices/019234a5-6b7c-8d9e-0f12-34567890abcd"
+            }
+          },
+          "meta": {
+            "requestId": "550e8400-e29b-41d4-a716-446655440003",
+            "traceId": "3df7651916cd43dd8448eb211c80319f",
+            "apiVersion": "v1"
+          }
+        }
+      },
+      "patch_state": {
+        "summary": "Update only the device state",
+        "value": {
+          "state": "inactive"
+        }
+      },
+      "patch_name": {
+        "summary": "Update only the device name",
+        "value": {
+          "name": "iPhone 15 Pro Max 256GB"
+        }
+      },
+      "ok": {
+        "summary": "Service is alive and healthy",
+        "value": {
+          "status": "ok",
+          "timestamp": "2024-01-15T10:30:00Z",
+          "version": "v1.0.0"
+        }
+      },
+      "down": {
+        "summary": "Service is not alive",
+        "value": {
+          "status": "down",
+          "timestamp": "2024-01-15T10:30:00Z",
+          "version": "v1.0.0"
+        }
+      },
+      "readiness_ok": {
+        "summary": "Service is ready to accept traffic",
+        "value": {
+          "status": "ok",
+          "timestamp": "2024-01-15T10:30:00Z",
+          "version": "v1.0.0",
+          "checks": {
+            "infra": {
+              "storage": {
+                "status": "up",
+                "latencyMs": 5,
+                "message": "Connected to PostgreSQL 16.1",
+                "lastChecked": "2024-01-15T10:30:00Z"
+              },
+              "cache": {
+                "status": "up",
+                "latencyMs": 1,
+                "message": "Redis connected",
+                "lastChecked": "2024-01-15T10:30:00Z",
+                "details": {
+                  "totalKeys": 1024,
+                  "poolStats": {
+                    "hits": 15234,
+                    "misses": 42,
+                    "timeouts": 0,
+                    "waitCount": 128,
+                    "waitDurationNs": 5000000,
+                    "totalConnections": 10,
+                    "idleConnections": 5,
+                    "staleConnections": 2
+                  }
+                }
+              }
+            },
+            "services": {
+              "devices": {
+                "status": "up",
+                "latencyMs": 2,
+                "message": "gRPC connection established",
+                "lastChecked": "2024-01-15T10:30:00Z"
+              }
+            }
+          }
+        }
+      },
+      "readiness_down": {
+        "summary": "Service is not ready (storage down)",
+        "value": {
+          "status": "down",
+          "timestamp": "2024-01-15T10:30:00Z",
+          "version": "v1.0.0",
+          "checks": {
+            "infra": {
+              "storage": {
+                "status": "down",
+                "latencyMs": 0,
+                "message": "Connection refused",
+                "lastChecked": "2024-01-15T10:30:00Z",
+                "error": "dial tcp 127.0.0.1:5432: connection refused"
+              },
+              "cache": {
+                "status": "up",
+                "latencyMs": 1,
+                "message": "Redis connected",
+                "lastChecked": "2024-01-15T10:30:00Z",
+                "details": {
+                  "totalKeys": 1024,
+                  "poolStats": {
+                    "hits": 15234,
+                    "misses": 42,
+                    "timeouts": 0,
+                    "waitCount": 128,
+                    "waitDurationNs": 5000000,
+                    "totalConnections": 10,
+                    "idleConnections": 5,
+                    "staleConnections": 2
+                  }
+                }
+              }
+            },
+            "services": {
+              "devices": {
+                "status": "up",
+                "latencyMs": 2,
+                "message": "gRPC connection established",
+                "lastChecked": "2024-01-15T10:30:00Z"
+              }
+            }
+          }
+        }
+      },
+      "health_ok": {
+        "summary": "Service is healthy",
+        "value": {
+          "status": "ok",
+          "timestamp": "2024-01-15T10:30:00Z",
+          "version": {
+            "api": "v1",
+            "build": "1.0.0-abc1234",
+            "go": "go1.25"
+          },
+          "uptime": {
+            "startedAt": "2024-01-15T08:00:00Z",
+            "duration": "2h30m15s",
+            "durationSeconds": 9015
+          },
+          "checks": {
+            "infra": {
+              "storage": {
+                "status": "up",
+                "latencyMs": 5,
+                "message": "Connected to PostgreSQL 16.1",
+                "lastChecked": "2024-01-15T10:30:00Z"
+              },
+              "cache": {
+                "status": "up",
+                "latencyMs": 1,
+                "message": "Redis connected",
+                "lastChecked": "2024-01-15T10:30:00Z",
+                "details": {
+                  "totalKeys": 1024,
+                  "poolStats": {
+                    "hits": 15234,
+                    "misses": 42,
+                    "timeouts": 0,
+                    "waitCount": 128,
+                    "waitDurationNs": 5000000,
+                    "totalConnections": 10,
+                    "idleConnections": 5,
+                    "staleConnections": 2
+                  }
+                }
+              }
+            },
+            "services": {
+              "devices": {
+                "status": "up",
+                "latencyMs": 2,
+                "message": "gRPC connection established",
+                "lastChecked": "2024-01-15T10:30:00Z"
+              }
+            }
+          },
+          "system": {
+            "memory": {
+              "allocMb": 45.5,
+              "totalAllocMb": 1024.8,
+              "sysMb": 72.3,
+              "gcCycles": 156
+            },
+            "goroutines": 42,
+            "cpuCores": 8
+          }
+        }
+      },
+      "health_down": {
+        "summary": "Service is unhealthy",
+        "value": {
+          "status": "down",
+          "timestamp": "2024-01-15T10:30:00Z",
+          "version": {
+            "api": "v1",
+            "build": "1.0.0-abc1234",
+            "go": "go1.25"
+          },
+          "uptime": {
+            "startedAt": "2024-01-15T08:00:00Z",
+            "duration": "2h30m15s",
+            "durationSeconds": 9015
+          },
+          "checks": {
+            "infra": {
+              "storage": {
+                "status": "down",
+                "latencyMs": 0,
+                "message": "Connection refused",
+                "lastChecked": "2024-01-15T10:30:00Z",
+                "error": "dial tcp 127.0.0.1:5432: connection refused"
+              },
+              "cache": {
+                "status": "up",
+                "latencyMs": 1,
+                "message": "Redis connected",
+                "lastChecked": "2024-01-15T10:30:00Z",
+                "details": {
+                  "totalKeys": 1024,
+                  "poolStats": {
+                    "hits": 15234,
+                    "misses": 42,
+                    "timeouts": 0,
+                    "waitCount": 128,
+                    "waitDurationNs": 5000000,
+                    "totalConnections": 10,
+                    "idleConnections": 5,
+                    "staleConnections": 2
+                  }
+                }
+              }
+            },
+            "services": {
+              "devices": {
+                "status": "up",
+                "latencyMs": 2,
+                "message": "gRPC connection established",
+                "lastChecked": "2024-01-15T10:30:00Z"
+              }
+            }
+          },
+          "system": {
+            "memory": {
+              "allocMb": 45.5,
+              "totalAllocMb": 1024.8,
+              "sysMb": 72.3,
+              "gcCycles": 156
+            },
+            "goroutines": 42,
+            "cpuCores": 8
+          }
+        }
+      },
+      "cache_health_ok": {
+        "summary": "Cache is healthy",
+        "value": {
+          "status": "healthy"
+        }
+      },
+      "health_unavailable": {
+        "summary": "Cache is unavailable",
+        "value": {
+          "status": "unavailable",
+          "error": "cache not configured"
+        }
+      },
+      "purge_all_devices": {
+        "summary": "All device caches purged",
+        "value": {
+          "status": "all device caches purged"
+        }
+      },
+      "error_server": {
+        "summary": "Server error",
+        "value": {
+          "error": "failed to purge cache"
+        }
+      },
+      "error_unavailable": {
+        "summary": "Cache not available",
+        "value": {
+          "error": "cache not available"
+        }
+      },
+      "purge_single_device": {
+        "summary": "Single device cache purged",
+        "value": {
+          "status": "device cache purged",
+          "id": "019234a5-6b7c-8d9e-0f12-34567890abcd"
+        }
+      },
+      "error_bad_request": {
+        "summary": "Invalid request",
+        "value": {
+          "error": "invalid device ID format"
+        }
+      },
+      "error_pattern_required": {
+        "summary": "Pattern parameter required",
+        "value": {
+          "error": "pattern query parameter is required"
+        }
+      },
+      "purge_lists": {
+        "summary": "Device list caches purged",
+        "value": {
+          "status": "device list caches purged"
+        }
+      },
+      "purge_pattern": {
+        "summary": "Cache purged by pattern",
+        "value": {
+          "status": "cache purged by pattern",
+          "pattern": "device:*",
+          "deleted": 5
+        }
+      }
+    },
+    "responses": {
+      "devices-list": {
+        "description": "List of devices retrieved successfully",
+        "headers": {
+          "API-Version": {
+            "$ref": "#/components/headers/ApiVersionHeader"
+          },
+          "Request-Id": {
+            "$ref": "#/components/headers/RequestIdHeader"
+          },
+          "Correlation-Id": {
+            "$ref": "#/components/headers/CorrelationIdHeader"
+          },
+          "ETag": {
+            "$ref": "#/components/headers/ETagHeader"
+          },
+          "Cache-Control": {
+            "$ref": "#/components/headers/CacheControlHeader"
+          },
+          "RateLimit-Limit": {
+            "$ref": "#/components/headers/RateLimitLimitHeader"
+          },
+          "RateLimit-Remaining": {
+            "$ref": "#/components/headers/RateLimitRemainingHeader"
+          },
+          "RateLimit-Reset": {
+            "$ref": "#/components/headers/RateLimitResetHeader"
+          },
+          "Content-Encoding": {
+            "$ref": "#/components/headers/ContentEncodingHeader"
+          },
+          "Vary": {
+            "$ref": "#/components/headers/VaryHeader"
+          },
+          "traceparent": {
+            "$ref": "#/components/headers/TraceparentResponseHeader"
+          },
+          "tracestate": {
+            "$ref": "#/components/headers/TracestateResponseHeader"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/DevicesListEnvelope"
+            },
+            "examples": {
+              "list": {
+                "$ref": "#/components/examples/list"
+              }
+            }
+          }
+        }
+      },
+      "not-modified": {
+        "description": "Not Modified - Resource unchanged since last request (ETag matched)",
+        "headers": {
+          "API-Version": {
+            "$ref": "#/components/headers/ApiVersionHeader"
+          },
+          "ETag": {
+            "$ref": "#/components/headers/ETagHeader"
+          },
+          "Cache-Control": {
+            "$ref": "#/components/headers/CacheControlHeader"
+          },
+          "traceparent": {
+            "$ref": "#/components/headers/TraceparentResponseHeader"
+          },
+          "tracestate": {
+            "$ref": "#/components/headers/TracestateResponseHeader"
+          }
+        }
+      },
+      "bad-request": {
+        "description": "Bad Request - The request was malformed or contains invalid syntax",
+        "headers": {
+          "API-Version": {
+            "$ref": "#/components/headers/ApiVersionHeader"
+          },
+          "Request-Id": {
+            "$ref": "#/components/headers/RequestIdHeader"
+          },
+          "Correlation-Id": {
+            "$ref": "#/components/headers/CorrelationIdHeader"
+          },
+          "traceparent": {
+            "$ref": "#/components/headers/TraceparentResponseHeader"
+          },
+          "tracestate": {
+            "$ref": "#/components/headers/TracestateResponseHeader"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "examples": {
+              "invalid_json": {
+                "summary": "Invalid JSON syntax",
+                "value": {
+                  "code": "BAD_REQUEST",
+                  "message": "Invalid JSON syntax in request body",
+                  "requestId": "019234a5-6b7c-8d9e-0f12-34567890abcd",
+                  "traceId": "0af7651916cd43dd8448eb211c80319c",
+                  "timestamp": "2024-01-15T10:30:00Z"
+                }
+              },
+              "missing_content_type": {
+                "summary": "Missing Content-Type header",
+                "value": {
+                  "code": "BAD_REQUEST",
+                  "message": "Content-Type header must be application/json",
+                  "requestId": "019234a5-6b7c-8d9e-0f12-34567890abcd",
+                  "traceId": "0af7651916cd43dd8448eb211c80319c",
+                  "timestamp": "2024-01-15T10:30:00Z"
+                }
+              }
+            }
+          }
+        }
+      },
+      "unauthorized": {
+        "description": "Unauthorized - Authentication is required or has failed",
+        "headers": {
+          "API-Version": {
+            "$ref": "#/components/headers/ApiVersionHeader"
+          },
+          "Request-Id": {
+            "$ref": "#/components/headers/RequestIdHeader"
+          },
+          "Correlation-Id": {
+            "$ref": "#/components/headers/CorrelationIdHeader"
+          },
+          "traceparent": {
+            "$ref": "#/components/headers/TraceparentResponseHeader"
+          },
+          "tracestate": {
+            "$ref": "#/components/headers/TracestateResponseHeader"
+          },
+          "WWW-Authenticate": {
+            "description": "Authentication scheme information",
+            "schema": {
+              "type": "string"
+            },
+            "example": "Bearer realm=\"devices-api\""
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "examples": {
+              "missing_token": {
+                "summary": "Missing authentication token",
+                "value": {
+                  "code": "UNAUTHORIZED",
+                  "message": "Authentication token is required",
+                  "requestId": "019234a5-6b7c-8d9e-0f12-34567890abcd",
+                  "traceId": "0af7651916cd43dd8448eb211c80319c",
+                  "timestamp": "2024-01-15T10:30:00Z"
+                }
+              },
+              "invalid_token": {
+                "summary": "Invalid or expired token",
+                "value": {
+                  "code": "UNAUTHORIZED",
+                  "message": "Authentication token is invalid or expired",
+                  "requestId": "019234a5-6b7c-8d9e-0f12-34567890abcd",
+                  "traceId": "0af7651916cd43dd8448eb211c80319c",
+                  "timestamp": "2024-01-15T10:30:00Z"
+                }
+              }
+            }
+          }
+        }
+      },
+      "not-acceptable": {
+        "description": "Not Acceptable - The requested media type is not supported",
+        "headers": {
+          "API-Version": {
+            "$ref": "#/components/headers/ApiVersionHeader"
+          },
+          "Request-Id": {
+            "$ref": "#/components/headers/RequestIdHeader"
+          },
+          "Correlation-Id": {
+            "$ref": "#/components/headers/CorrelationIdHeader"
+          },
+          "traceparent": {
+            "$ref": "#/components/headers/TraceparentResponseHeader"
+          },
+          "tracestate": {
+            "$ref": "#/components/headers/TracestateResponseHeader"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "examples": {
+              "unsupported_media_type": {
+                "summary": "Requested media type not supported",
+                "value": {
+                  "code": "NOT_ACCEPTABLE",
+                  "message": "The requested media type is not supported. Supported: application/json",
+                  "requestId": "019234a5-6b7c-8d9e-0f12-34567890abcd",
+                  "traceId": "0af7651916cd43dd8448eb211c80319c",
+                  "timestamp": "2024-01-15T10:30:00Z",
+                  "details": [
+                    {
+                      "field": "Accept",
+                      "message": "Unsupported media type: application/xml",
+                      "code": "UNSUPPORTED_MEDIA_TYPE"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "rate-limit": {
+        "description": "Too Many Requests - Rate limit has been exceeded",
+        "headers": {
+          "API-Version": {
+            "$ref": "#/components/headers/ApiVersionHeader"
+          },
+          "Request-Id": {
+            "$ref": "#/components/headers/RequestIdHeader"
+          },
+          "Correlation-Id": {
+            "$ref": "#/components/headers/CorrelationIdHeader"
+          },
+          "traceparent": {
+            "$ref": "#/components/headers/TraceparentResponseHeader"
+          },
+          "tracestate": {
+            "$ref": "#/components/headers/TracestateResponseHeader"
+          },
+          "Retry-After": {
+            "$ref": "#/components/headers/RetryAfterHeader"
+          },
+          "RateLimit-Limit": {
+            "$ref": "#/components/headers/RateLimitLimitHeader"
+          },
+          "RateLimit-Remaining": {
+            "$ref": "#/components/headers/RateLimitRemainingHeader"
+          },
+          "RateLimit-Reset": {
+            "$ref": "#/components/headers/RateLimitResetHeader"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "examples": {
+              "rate_limited": {
+                "summary": "Rate limit exceeded",
+                "value": {
+                  "code": "RATE_LIMIT_EXCEEDED",
+                  "message": "Rate limit exceeded. Please retry after 60 seconds",
+                  "requestId": "019234a5-6b7c-8d9e-0f12-34567890abcd",
+                  "traceId": "0af7651916cd43dd8448eb211c80319c",
+                  "timestamp": "2024-01-15T10:30:00Z"
+                }
+              }
+            }
+          }
+        }
+      },
+      "server-error": {
+        "description": "Internal Server Error - An unexpected error occurred",
+        "headers": {
+          "API-Version": {
+            "$ref": "#/components/headers/ApiVersionHeader"
+          },
+          "Request-Id": {
+            "$ref": "#/components/headers/RequestIdHeader"
+          },
+          "Correlation-Id": {
+            "$ref": "#/components/headers/CorrelationIdHeader"
+          },
+          "traceparent": {
+            "$ref": "#/components/headers/TraceparentResponseHeader"
+          },
+          "tracestate": {
+            "$ref": "#/components/headers/TracestateResponseHeader"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "examples": {
+              "internal_error": {
+                "summary": "Internal server error",
+                "value": {
+                  "code": "INTERNAL_ERROR",
+                  "message": "An unexpected error occurred. Please try again later",
+                  "requestId": "019234a5-6b7c-8d9e-0f12-34567890abcd",
+                  "traceId": "0af7651916cd43dd8448eb211c80319c",
+                  "timestamp": "2024-01-15T10:30:00Z"
+                }
+              },
+              "database_error": {
+                "summary": "Database connection error",
+                "value": {
+                  "code": "INTERNAL_ERROR",
+                  "message": "Service temporarily unavailable. Please try again later",
+                  "requestId": "019234a5-6b7c-8d9e-0f12-34567890abcd",
+                  "traceId": "0af7651916cd43dd8448eb211c80319c",
+                  "timestamp": "2024-01-15T10:30:00Z"
+                }
+              }
+            }
+          }
+        }
+      },
+      "device-created": {
+        "description": "Device created successfully",
+        "headers": {
+          "API-Version": {
+            "$ref": "#/components/headers/ApiVersionHeader"
+          },
+          "Location": {
+            "$ref": "#/components/headers/LocationHeader"
+          },
+          "Request-Id": {
+            "$ref": "#/components/headers/RequestIdHeader"
+          },
+          "Correlation-Id": {
+            "$ref": "#/components/headers/CorrelationIdHeader"
+          },
+          "RateLimit-Limit": {
+            "$ref": "#/components/headers/RateLimitLimitHeader"
+          },
+          "RateLimit-Remaining": {
+            "$ref": "#/components/headers/RateLimitRemainingHeader"
+          },
+          "RateLimit-Reset": {
+            "$ref": "#/components/headers/RateLimitResetHeader"
+          },
+          "Content-Encoding": {
+            "$ref": "#/components/headers/ContentEncodingHeader"
+          },
+          "Vary": {
+            "$ref": "#/components/headers/VaryHeader"
+          },
+          "traceparent": {
+            "$ref": "#/components/headers/TraceparentResponseHeader"
+          },
+          "tracestate": {
+            "$ref": "#/components/headers/TracestateResponseHeader"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/DeviceEnvelope"
+            },
+            "examples": {
+              "created": {
+                "$ref": "#/components/examples/created"
+              }
+            }
+          }
+        }
+      },
+      "unprocessable-entity": {
+        "description": "Unprocessable Entity - The request was well-formed but contains semantic errors",
+        "headers": {
+          "API-Version": {
+            "$ref": "#/components/headers/ApiVersionHeader"
+          },
+          "Request-Id": {
+            "$ref": "#/components/headers/RequestIdHeader"
+          },
+          "Correlation-Id": {
+            "$ref": "#/components/headers/CorrelationIdHeader"
+          },
+          "traceparent": {
+            "$ref": "#/components/headers/TraceparentResponseHeader"
+          },
+          "tracestate": {
+            "$ref": "#/components/headers/TracestateResponseHeader"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "examples": {
+              "validation_error": {
+                "summary": "Validation errors",
+                "value": {
+                  "code": "VALIDATION_ERROR",
+                  "message": "The request body contains validation errors",
+                  "requestId": "019234a5-6b7c-8d9e-0f12-34567890abcd",
+                  "traceId": "0af7651916cd43dd8448eb211c80319c",
+                  "timestamp": "2024-01-15T10:30:00Z",
+                  "details": [
+                    {
+                      "field": "name",
+                      "message": "name is required",
+                      "code": "REQUIRED_FIELD"
+                    },
+                    {
+                      "field": "brand",
+                      "message": "brand must be between 1 and 100 characters",
+                      "code": "INVALID_LENGTH"
+                    }
+                  ]
+                }
+              },
+              "invalid_state": {
+                "summary": "Invalid state value",
+                "value": {
+                  "code": "VALIDATION_ERROR",
+                  "message": "The request body contains validation errors",
+                  "requestId": "019234a5-6b7c-8d9e-0f12-34567890abcd",
+                  "traceId": "0af7651916cd43dd8448eb211c80319c",
+                  "timestamp": "2024-01-15T10:30:00Z",
+                  "details": [
+                    {
+                      "field": "state",
+                      "message": "state must be one of: available, in-use, inactive",
+                      "code": "INVALID_ENUM_VALUE"
+                    }
+                  ]
+                }
+              },
+              "invalid_uuid": {
+                "summary": "Invalid UUID format",
+                "value": {
+                  "code": "VALIDATION_ERROR",
+                  "message": "The request contains an invalid identifier",
+                  "requestId": "019234a5-6b7c-8d9e-0f12-34567890abcd",
+                  "traceId": "0af7651916cd43dd8448eb211c80319c",
+                  "timestamp": "2024-01-15T10:30:00Z",
+                  "details": [
+                    {
+                      "field": "deviceId",
+                      "message": "deviceId must be a valid UUID",
+                      "code": "INVALID_FORMAT"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "devices-options": {
+        "description": "Allowed methods for devices collection",
+        "headers": {
+          "Allow": {
+            "description": "Comma-separated list of HTTP methods allowed for this resource.\nUsed in OPTIONS responses for capability discovery (RFC 7231 Section 7.4.1).\n",
+            "schema": {
+              "type": "string"
+            },
+            "example": "GET, POST, HEAD, OPTIONS"
+          },
+          "Access-Control-Allow-Methods": {
+            "description": "CORS header indicating which HTTP methods are allowed when accessing the resource.\nPart of the CORS preflight response (Fetch Standard).\n",
+            "schema": {
+              "type": "string"
+            },
+            "example": "GET, POST, HEAD, OPTIONS"
+          },
+          "Access-Control-Allow-Headers": {
+            "$ref": "#/components/headers/AccessControlAllowHeadersHeader"
+          },
+          "Access-Control-Max-Age": {
+            "$ref": "#/components/headers/AccessControlMaxAgeHeader"
+          }
+        }
+      },
+      "devices-head": {
+        "description": "Collection metadata returned",
+        "headers": {
+          "API-Version": {
+            "$ref": "#/components/headers/ApiVersionHeader"
+          },
+          "Request-Id": {
+            "$ref": "#/components/headers/RequestIdHeader"
+          },
+          "Correlation-Id": {
+            "$ref": "#/components/headers/CorrelationIdHeader"
+          },
+          "ETag": {
+            "$ref": "#/components/headers/ETagHeader"
+          },
+          "Cache-Control": {
+            "$ref": "#/components/headers/CacheControlHeader"
+          },
+          "Total-Count": {
+            "description": "Total number of items matching the query",
+            "schema": {
+              "type": "integer"
+            },
+            "example": 150
+          },
+          "Content-Length": {
+            "description": "Size of the response body in bytes (if GET were used)",
+            "schema": {
+              "type": "integer"
+            },
+            "example": 4096
+          },
+          "traceparent": {
+            "$ref": "#/components/headers/TraceparentResponseHeader"
+          },
+          "tracestate": {
+            "$ref": "#/components/headers/TracestateResponseHeader"
+          }
+        }
+      },
+      "device-retrieved": {
+        "description": "Device retrieved successfully",
+        "headers": {
+          "API-Version": {
+            "$ref": "#/components/headers/ApiVersionHeader"
+          },
+          "Request-Id": {
+            "$ref": "#/components/headers/RequestIdHeader"
+          },
+          "Correlation-Id": {
+            "$ref": "#/components/headers/CorrelationIdHeader"
+          },
+          "ETag": {
+            "$ref": "#/components/headers/ETagHeader"
+          },
+          "Cache-Control": {
+            "$ref": "#/components/headers/CacheControlHeader"
+          },
+          "Last-Modified": {
+            "$ref": "#/components/headers/LastModifiedHeader"
+          },
+          "RateLimit-Limit": {
+            "$ref": "#/components/headers/RateLimitLimitHeader"
+          },
+          "RateLimit-Remaining": {
+            "$ref": "#/components/headers/RateLimitRemainingHeader"
+          },
+          "RateLimit-Reset": {
+            "$ref": "#/components/headers/RateLimitResetHeader"
+          },
+          "Content-Encoding": {
+            "$ref": "#/components/headers/ContentEncodingHeader"
+          },
+          "Vary": {
+            "$ref": "#/components/headers/VaryHeader"
+          },
+          "traceparent": {
+            "$ref": "#/components/headers/TraceparentResponseHeader"
+          },
+          "tracestate": {
+            "$ref": "#/components/headers/TracestateResponseHeader"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/DeviceEnvelope"
+            },
+            "examples": {
+              "device": {
+                "$ref": "#/components/examples/device"
+              }
+            }
+          }
+        }
+      },
+      "not-found": {
+        "description": "Not Found - The requested resource does not exist",
+        "headers": {
+          "API-Version": {
+            "$ref": "#/components/headers/ApiVersionHeader"
+          },
+          "Request-Id": {
+            "$ref": "#/components/headers/RequestIdHeader"
+          },
+          "Correlation-Id": {
+            "$ref": "#/components/headers/CorrelationIdHeader"
+          },
+          "traceparent": {
+            "$ref": "#/components/headers/TraceparentResponseHeader"
+          },
+          "tracestate": {
+            "$ref": "#/components/headers/TracestateResponseHeader"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "examples": {
+              "device_not_found": {
+                "summary": "Device not found",
+                "value": {
+                  "code": "NOT_FOUND",
+                  "message": "Device with ID '019234a5-6b7c-8d9e-0f12-34567890abcd' not found",
+                  "requestId": "019234a5-6b7c-8d9e-0f12-34567890abcd",
+                  "traceId": "0af7651916cd43dd8448eb211c80319c",
+                  "timestamp": "2024-01-15T10:30:00Z"
+                }
+              }
+            }
+          }
+        }
+      },
+      "device-updated": {
+        "description": "Device updated successfully",
+        "headers": {
+          "API-Version": {
+            "$ref": "#/components/headers/ApiVersionHeader"
+          },
+          "Request-Id": {
+            "$ref": "#/components/headers/RequestIdHeader"
+          },
+          "Correlation-Id": {
+            "$ref": "#/components/headers/CorrelationIdHeader"
+          },
+          "ETag": {
+            "$ref": "#/components/headers/ETagHeader"
+          },
+          "RateLimit-Limit": {
+            "$ref": "#/components/headers/RateLimitLimitHeader"
+          },
+          "RateLimit-Remaining": {
+            "$ref": "#/components/headers/RateLimitRemainingHeader"
+          },
+          "RateLimit-Reset": {
+            "$ref": "#/components/headers/RateLimitResetHeader"
+          },
+          "Content-Encoding": {
+            "$ref": "#/components/headers/ContentEncodingHeader"
+          },
+          "Vary": {
+            "$ref": "#/components/headers/VaryHeader"
+          },
+          "traceparent": {
+            "$ref": "#/components/headers/TraceparentResponseHeader"
+          },
+          "tracestate": {
+            "$ref": "#/components/headers/TracestateResponseHeader"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/DeviceEnvelope"
+            },
+            "examples": {
+              "updated": {
+                "$ref": "#/components/examples/updated"
+              },
+              "patched": {
+                "$ref": "#/components/examples/patched"
+              }
+            }
+          }
+        }
+      },
+      "conflict": {
+        "description": "Conflict - The request conflicts with the current state of the resource",
+        "headers": {
+          "API-Version": {
+            "$ref": "#/components/headers/ApiVersionHeader"
+          },
+          "Request-Id": {
+            "$ref": "#/components/headers/RequestIdHeader"
+          },
+          "Correlation-Id": {
+            "$ref": "#/components/headers/CorrelationIdHeader"
+          },
+          "traceparent": {
+            "$ref": "#/components/headers/TraceparentResponseHeader"
+          },
+          "tracestate": {
+            "$ref": "#/components/headers/TracestateResponseHeader"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "examples": {
+              "device_in_use_delete": {
+                "summary": "Cannot delete device that is in use",
+                "value": {
+                  "code": "CONFLICT",
+                  "message": "Cannot delete device: device is currently in use",
+                  "requestId": "019234a5-6b7c-8d9e-0f12-34567890abcd",
+                  "traceId": "0af7651916cd43dd8448eb211c80319c",
+                  "timestamp": "2024-01-15T10:30:00Z"
+                }
+              },
+              "device_in_use_update": {
+                "summary": "Cannot update name/brand of device that is in use",
+                "value": {
+                  "code": "CONFLICT",
+                  "message": "Cannot update name or brand: device is currently in use",
+                  "requestId": "019234a5-6b7c-8d9e-0f12-34567890abcd",
+                  "traceId": "0af7651916cd43dd8448eb211c80319c",
+                  "timestamp": "2024-01-15T10:30:00Z",
+                  "details": [
+                    {
+                      "field": "name",
+                      "message": "Cannot be updated while device is in use",
+                      "code": "IMMUTABLE_FIELD"
+                    },
+                    {
+                      "field": "brand",
+                      "message": "Cannot be updated while device is in use",
+                      "code": "IMMUTABLE_FIELD"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "precondition-failed": {
+        "description": "Precondition Failed - The If-Match header condition was not met",
+        "headers": {
+          "API-Version": {
+            "$ref": "#/components/headers/ApiVersionHeader"
+          },
+          "Request-Id": {
+            "$ref": "#/components/headers/RequestIdHeader"
+          },
+          "Correlation-Id": {
+            "$ref": "#/components/headers/CorrelationIdHeader"
+          },
+          "traceparent": {
+            "$ref": "#/components/headers/TraceparentResponseHeader"
+          },
+          "tracestate": {
+            "$ref": "#/components/headers/TracestateResponseHeader"
+          },
+          "ETag": {
+            "$ref": "#/components/headers/ETagHeader"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "examples": {
+              "etag_mismatch": {
+                "summary": "ETag mismatch - resource was modified",
+                "value": {
+                  "code": "PRECONDITION_FAILED",
+                  "message": "Resource has been modified since last retrieval",
+                  "requestId": "019234a5-6b7c-8d9e-0f12-34567890abcd",
+                  "traceId": "0af7651916cd43dd8448eb211c80319c",
+                  "timestamp": "2024-01-15T10:30:00Z",
+                  "details": [
+                    {
+                      "field": "If-Match",
+                      "message": "Provided ETag does not match current resource version",
+                      "code": "ETAG_MISMATCH"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "device-deleted": {
+        "description": "Device deleted successfully",
+        "headers": {
+          "API-Version": {
+            "$ref": "#/components/headers/ApiVersionHeader"
+          },
+          "Request-Id": {
+            "$ref": "#/components/headers/RequestIdHeader"
+          },
+          "Correlation-Id": {
+            "$ref": "#/components/headers/CorrelationIdHeader"
+          },
+          "RateLimit-Limit": {
+            "$ref": "#/components/headers/RateLimitLimitHeader"
+          },
+          "RateLimit-Remaining": {
+            "$ref": "#/components/headers/RateLimitRemainingHeader"
+          },
+          "RateLimit-Reset": {
+            "$ref": "#/components/headers/RateLimitResetHeader"
+          },
+          "traceparent": {
+            "$ref": "#/components/headers/TraceparentResponseHeader"
+          },
+          "tracestate": {
+            "$ref": "#/components/headers/TracestateResponseHeader"
+          }
+        }
+      },
+      "device-options": {
+        "description": "Allowed methods for device resource",
+        "headers": {
+          "Allow": {
+            "description": "Comma-separated list of HTTP methods allowed for this resource.\nUsed in OPTIONS responses for capability discovery (RFC 7231 Section 7.4.1).\n",
+            "schema": {
+              "type": "string"
+            },
+            "example": "GET, PUT, PATCH, DELETE, HEAD, OPTIONS"
+          },
+          "Access-Control-Allow-Methods": {
+            "description": "CORS header indicating which HTTP methods are allowed when accessing the resource.\nPart of the CORS preflight response (Fetch Standard).\n",
+            "schema": {
+              "type": "string"
+            },
+            "example": "GET, PUT, PATCH, DELETE, HEAD, OPTIONS"
+          },
+          "Access-Control-Allow-Headers": {
+            "$ref": "#/components/headers/AccessControlAllowHeadersHeader"
+          },
+          "Access-Control-Max-Age": {
+            "$ref": "#/components/headers/AccessControlMaxAgeHeader"
+          }
+        }
+      },
+      "device-head": {
+        "description": "Device exists",
+        "headers": {
+          "API-Version": {
+            "$ref": "#/components/headers/ApiVersionHeader"
+          },
+          "Request-Id": {
+            "$ref": "#/components/headers/RequestIdHeader"
+          },
+          "Correlation-Id": {
+            "$ref": "#/components/headers/CorrelationIdHeader"
+          },
+          "ETag": {
+            "$ref": "#/components/headers/ETagHeader"
+          },
+          "Cache-Control": {
+            "$ref": "#/components/headers/CacheControlHeader"
+          },
+          "Last-Modified": {
+            "$ref": "#/components/headers/LastModifiedHeader"
+          },
+          "Content-Length": {
+            "description": "Size of the response body in bytes (if GET were used)",
+            "schema": {
+              "type": "integer"
+            },
+            "example": 256
+          },
+          "traceparent": {
+            "$ref": "#/components/headers/TraceparentResponseHeader"
+          },
+          "tracestate": {
+            "$ref": "#/components/headers/TracestateResponseHeader"
+          }
+        }
+      },
+      "liveness-ok": {
+        "description": "Service is alive",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Liveness"
+            },
+            "examples": {
+              "ok": {
+                "$ref": "#/components/examples/ok"
+              }
+            }
+          }
+        }
+      },
+      "liveness-down": {
+        "description": "Service is not alive",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Liveness"
+            },
+            "examples": {
+              "down": {
+                "$ref": "#/components/examples/down"
+              }
+            }
+          }
+        }
+      },
+      "readiness-ok": {
+        "description": "Service is ready to accept traffic",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Readiness"
+            },
+            "examples": {
+              "ok": {
+                "$ref": "#/components/examples/readiness_ok"
+              }
+            }
+          }
+        }
+      },
+      "readiness-down": {
+        "description": "Service is not ready (dependencies unavailable)",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Readiness"
+            },
+            "examples": {
+              "down": {
+                "$ref": "#/components/examples/readiness_down"
+              }
+            }
+          }
+        }
+      },
+      "health-ok": {
+        "description": "Service health status",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Health"
+            },
+            "examples": {
+              "ok": {
+                "$ref": "#/components/examples/health_ok"
+              }
+            }
+          }
+        }
+      },
+      "health-down": {
+        "description": "Service is unhealthy",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Health"
+            },
+            "examples": {
+              "down": {
+                "$ref": "#/components/examples/health_down"
+              }
+            }
+          }
+        }
+      },
+      "cache-health-ok": {
+        "description": "Cache is healthy",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/CacheHealth"
+            },
+            "examples": {
+              "ok": {
+                "$ref": "#/components/examples/cache_health_ok"
+              }
+            }
+          }
+        }
+      },
+      "cache-health-unavailable": {
+        "description": "Cache is unavailable or unhealthy",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/CacheHealth"
+            },
+            "examples": {
+              "unavailable": {
+                "$ref": "#/components/examples/health_unavailable"
+              }
+            }
+          }
+        }
+      },
+      "cache-purge-all-devices": {
+        "description": "All device caches purged successfully",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/CachePurge"
+            },
+            "examples": {
+              "purged": {
+                "$ref": "#/components/examples/purge_all_devices"
+              }
+            }
+          }
+        }
+      },
+      "cache-server-error": {
+        "description": "Failed to purge cache",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/CacheError"
+            },
+            "examples": {
+              "error": {
+                "$ref": "#/components/examples/error_server"
+              }
+            }
+          }
+        }
+      },
+      "cache-unavailable": {
+        "description": "Cache not available",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/CacheError"
+            },
+            "examples": {
+              "unavailable": {
+                "$ref": "#/components/examples/error_unavailable"
+              }
+            }
+          }
+        }
+      },
+      "cache-purge-device": {
+        "description": "Device cache purged successfully",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/CachePurge"
+            },
+            "examples": {
+              "purged": {
+                "$ref": "#/components/examples/purge_single_device"
+              }
+            }
+          }
+        }
+      },
+      "cache-bad-request": {
+        "description": "Invalid request (bad device ID format or missing required parameter)",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/CacheError"
+            },
+            "examples": {
+              "invalid_id": {
+                "$ref": "#/components/examples/error_bad_request"
+              },
+              "pattern_required": {
+                "$ref": "#/components/examples/error_pattern_required"
+              }
+            }
+          }
+        }
+      },
+      "cache-purge-lists": {
+        "description": "Device list caches purged successfully",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/CachePurge"
+            },
+            "examples": {
+              "purged": {
+                "$ref": "#/components/examples/purge_lists"
+              }
+            }
+          }
+        }
+      },
+      "cache-purge-pattern": {
+        "description": "Cache entries matching pattern purged successfully",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/CachePatternPurge"
+            },
+            "examples": {
+              "purged": {
+                "$ref": "#/components/examples/purge_pattern"
+              }
+            }
+          }
+        }
+      }
+    },
+    "requestBodies": {
+      "create-device": {
+        "description": "Request body for creating a new device",
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/CreateDevice"
+            },
+            "examples": {
+              "basic": {
+                "$ref": "#/components/examples/basic"
+              }
+            }
+          }
+        }
+      },
+      "update-device": {
+        "description": "Request body for fully updating a device (PUT)",
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/UpdateDevice"
+            },
+            "examples": {
+              "full": {
+                "$ref": "#/components/examples/full"
+              }
+            }
+          }
+        }
+      },
+      "patch-device": {
+        "description": "Request body for partially updating a device (PATCH)",
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/PatchDevice"
+            },
+            "examples": {
+              "patch_state": {
+                "$ref": "#/components/examples/patch_state"
+              },
+              "patch_name": {
+                "$ref": "#/components/examples/patch_name"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

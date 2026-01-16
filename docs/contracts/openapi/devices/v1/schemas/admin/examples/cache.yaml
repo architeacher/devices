@@ -1,0 +1,56 @@
+# Cache health examples
+health_ok:
+  summary: Cache is healthy
+  value:
+    status: "healthy"
+
+health_unavailable:
+  summary: Cache is unavailable
+  value:
+    status: "unavailable"
+    error: "cache not configured"
+
+# Cache purge examples
+purge_all_devices:
+  summary: All device caches purged
+  value:
+    status: "all device caches purged"
+
+purge_single_device:
+  summary: Single device cache purged
+  value:
+    status: "device cache purged"
+    id: "019234a5-6b7c-8d9e-0f12-34567890abcd"
+
+purge_lists:
+  summary: Device list caches purged
+  value:
+    status: "device list caches purged"
+
+purge_pattern:
+  summary: Cache purged by pattern
+  value:
+    status: "cache purged by pattern"
+    pattern: "device:*"
+    deleted: 5
+
+# Error examples
+error_bad_request:
+  summary: Invalid request
+  value:
+    error: "invalid device ID format"
+
+error_pattern_required:
+  summary: Pattern parameter required
+  value:
+    error: "pattern query parameter is required"
+
+error_server:
+  summary: Server error
+  value:
+    error: "failed to purge cache"
+
+error_unavailable:
+  summary: Cache not available
+  value:
+    error: "cache not available"
