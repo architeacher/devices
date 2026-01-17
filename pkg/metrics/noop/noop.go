@@ -1,3 +1,5 @@
+// Package noop provides a no-operation metrics client implementation
+// for use in testing or when metrics collection is disabled.
 package noop
 
 import (

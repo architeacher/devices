@@ -1,3 +1,5 @@
+// Package metrics provides OpenTelemetry metrics instrumentation utilities
+// including counter, histogram, and gauge registration helpers.
 package metrics
 
 import (

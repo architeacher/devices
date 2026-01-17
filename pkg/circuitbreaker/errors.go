@@ -1,6 +1,8 @@
 package circuitbreaker
 
-import "errors"
+import (
+	"errors"
+)
 
 // Sentinel errors for circuit breaker states.
 var (

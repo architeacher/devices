@@ -1,3 +1,5 @@
+// Package logger provides a structured logging wrapper around zerolog
+// with support for context-aware logging, request tracing, and multiple output formats.
 package logger
 
 import (
@@ -10,8 +12,6 @@ import (
 	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel/trace"
 )
-
-type contextKey string
 
 const (
 	JSONLoggingFormat = "json"
@@ -28,9 +28,13 @@ const (
 	ContextKeyCorrelationID contextKey = "correlationID"
 )
 
-type Logger struct {
-	zerolog.Logger
-}
+type (
+	contextKey string
+
+	Logger struct {
+		zerolog.Logger
+	}
+)
 
 func New(level, format string) Logger {
 	return NewWithWriter(level, format, os.Stdout)
@@ -91,4 +95,3 @@ func (l Logger) WithContext(ctx context.Context) zerolog.Logger {
 
 	return logger
 }
-

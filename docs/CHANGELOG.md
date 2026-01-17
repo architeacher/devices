@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Made gRPC message size limits configurable via `DEVICES_MAX_MESSAGE_SIZE` environment variable (default: 4 MiB)
+
+### CI
+
 - Extracted circuit breaker to shared `pkg/circuitbreaker` package with generic type support
 - Removed `ErrCircuitOpen` from domain model - now uses `circuitbreaker.ErrCircuitOpen` and `circuitbreaker.ErrTooManyRequests`
 

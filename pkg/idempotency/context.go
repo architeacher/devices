@@ -1,12 +1,18 @@
+// Package idempotency provides utilities for implementing idempotent HTTP requests.
+// It includes key validation, context management, and cache key generation.
 package idempotency
 
-import "context"
-
-type contextKey string
+import (
+	"context"
+)
 
 const (
 	// ContextKeyIdempotency is the context key for the idempotency key.
 	ContextKeyIdempotency contextKey = "idempotencyKey"
+)
+
+type (
+	contextKey string
 )
 
 // FromContext retrieves the idempotency key from context.

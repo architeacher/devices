@@ -1,3 +1,5 @@
+// Package circuitbreaker provides a generic wrapper around gobreaker for resilient service calls.
+// It implements the circuit breaker pattern to prevent cascading failures in distributed systems.
 package circuitbreaker
 
 import (
@@ -6,11 +8,13 @@ import (
 	"github.com/sony/gobreaker/v2"
 )
 
-// CircuitBreaker wraps gobreaker to provide resilience for service calls.
-// It uses generics to provide type-safe execution without interface boxing.
-type CircuitBreaker[T any] struct {
-	cb *gobreaker.CircuitBreaker[T]
-}
+type (
+	// CircuitBreaker wraps gobreaker to provide resilience for service calls.
+	// It uses generics to provide type-safe execution without interface boxing.
+	CircuitBreaker[T any] struct {
+		cb *gobreaker.CircuitBreaker[T]
+	}
+)
 
 // New creates a new circuit breaker with the given configuration.
 // Returns nil if the circuit breaker is disabled in the configuration.
