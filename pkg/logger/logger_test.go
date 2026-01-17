@@ -6,8 +6,9 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/architeacher/devices/pkg/logger"
 	"github.com/stretchr/testify/require"
+
+	"github.com/architeacher/devices/pkg/logger"
 )
 
 func TestNew(t *testing.T) {
@@ -104,4 +105,3 @@ func TestWithContext(t *testing.T) {
 		})
 	}
 }
-

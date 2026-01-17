@@ -1,0 +1,44 @@
+# GitHub Actions workflow for golangci-lint
+# Runs on pull requests and pushes to main
+
+name: Lint
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  # Required for golangci-lint to add annotations
+  pull-requests: read
+
+jobs:
+  lint:
+    name: golangci-lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # Build golangci-lint from source to avoid Go version mismatch.
+      # Pre-built binaries are compiled with Go 1.24, but project targets Go 1.25.5.
+      # The action's goinstall mode doesn't correctly handle v2 module paths.
+      - name: Install golangci-lint
+        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.1.6
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          install-mode: none
+          args: --out-format=github-actions
+          skip-cache: false

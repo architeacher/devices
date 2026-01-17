@@ -1,0 +1,196 @@
+# golangci-lint v2 configuration for Devices API project
+# Documentation: https://golangci-lint.run/usage/configuration/
+
+version: "2"
+
+# Run configuration
+run:
+  # Timeout for analysis
+  timeout: 5m
+  # Include test files in analysis
+  tests: true
+  # Allow multiple parallel golangci-lint instances
+  allow-parallel-runners: true
+  # Number of parallel workers
+  concurrency: 4
+
+# Output configuration (v2 format)
+output:
+  formats:
+    text:
+      # Print linter name in output
+      print-linter-name: true
+      # Print issued lines
+      print-issued-lines: true
+      # Use colors
+      colors: true
+  # Sort results by file, linter, severity
+  sort-order:
+    - file
+    - linter
+  # Show statistics per linter
+  show-stats: true
+
+# Formatters configuration (v2 - separated from linters)
+formatters:
+  enable:
+    - gofmt        # Check formatting
+    - goimports    # Check import ordering
+  settings:
+    goimports:
+      # Local package prefixes for grouping
+      local-prefixes:
+        - github.com/architeacher/devices
+  exclusions:
+    # Generated files
+    generated: lax
+    # Paths to skip
+    paths:
+      - .artifacts
+      - .certs
+      - .data
+      - mocks
+      - node_modules
+      - vendor
+      - ".*_gen\\.go$"
+      - ".*\\.pb\\.go$"
+      - ".*/http_server_gen\\.go$"
+      - ".*_generated\\.go$"
+      - ".*/mock_.*\\.go$"
+
+# Linters configuration
+linters:
+  # Start with no linters, then enable specific ones
+  default: none
+  enable:
+    # Common linters (standard Go best practices) - enabled by default in v2
+    - errcheck     # Check for unhandled errors
+    - govet        # Report suspicious constructs
+    - ineffassign  # Detect ineffectual assignments
+    - staticcheck  # Advanced static analysis (includes gosimple in v2)
+    - unused       # Find unused code
+    - misspell     # Find misspelled words
+    - decorder     # Declaration order
+    - grouper      # Grouping blocks (const, type, var, import)
+    - goconst      # Detect repeated literals
+
+  # Linter-specific settings
+  settings:
+    # errcheck: Check for unhandled errors
+    errcheck:
+      # Check for type assertions without ok
+      check-type-assertions: true
+      # Check for blank identifier assignments
+      check-blank: false
+
+    # govet: Report suspicious constructs
+    govet:
+      # Enable all analyzers
+      enable-all: true
+      # Disable specific analyzers if needed
+      disable:
+        - fieldalignment  # Can be noisy
+
+    # decorder: Declaration order enforcement
+    decorder:
+      # Order of declarations
+      dec-order:
+        - const
+        - type
+        - var
+        - func
+      # Enable declaration order checking
+      disable-dec-order-check: false
+      # Check init func placement
+      disable-init-func-first-check: false
+      # Disable type declaration order check (exported first)
+      disable-dec-num-check: true
+
+    # grouper: Grouping enforcement
+    grouper:
+      # Require single const block
+      const-require-single-const: true
+      const-require-grouping: true
+      # Require single type block
+      type-require-single-type: true
+      type-require-grouping: true
+      # Require single var block
+      var-require-single-var: true
+      var-require-grouping: true
+      # Import grouping
+      import-require-single-import: true
+      import-require-grouping: true
+
+    # goconst: Magic value detection
+    goconst:
+      # Minimum string length to check
+      min-len: 2
+      # Minimum occurrences to trigger
+      min-occurrences: 2
+      # Also match existing constants
+      match-constant: true
+      # Check numeric literals too
+      numbers: true
+      # Minimum value for numeric constants
+      min: 2
+      # Maximum value for numeric constants
+      max: 2
+
+    # misspell: Find misspelled words
+    misspell:
+      # Use US English spelling
+      locale: US
+
+    # staticcheck: Advanced static analysis
+    staticcheck:
+      # Enable all checks
+      checks:
+        - all
+
+  # Paths to exclude from linting
+  exclusions:
+    # Generated files
+    generated: lax
+    # Paths to skip
+    paths:
+      - vendor
+      - .artifacts
+      - .data
+      - .certs
+      - node_modules
+      - mocks
+      - ".*_gen\\.go$"
+      - ".*\\.pb\\.go$"
+      - ".*/http_server_gen\\.go$"
+      - ".*_generated\\.go$"
+      - ".*/mock_.*\\.go$"
+    # Rules to exclude specific linters from paths
+    rules:
+      # Exclude linters from test files
+      - path: "_test\\.go$"
+        linters:
+          - goconst
+          - decorder
+          - grouper
+      # Exclude linters from generated files
+      - path: "_gen\\.go$"
+        linters:
+          - decorder
+          - grouper
+          - goconst
+      # Exclude errcheck for deferred Close calls (common pattern)
+      - source: "defer .*\\.Close\\(\\)"
+        linters:
+          - errcheck
+
+# Issue filtering and configuration
+issues:
+  # Maximum issues count per linter (0 = unlimited)
+  max-issues-per-linter: 0
+  # Maximum count of issues with the same text (0 = unlimited)
+  max-same-issues: 0
+
+# Severity configuration
+severity:
+  # Default severity for issues (error = CI-blocking)
+  default: error

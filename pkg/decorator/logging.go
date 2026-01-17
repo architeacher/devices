@@ -7,10 +7,17 @@ import (
 	"github.com/architeacher/devices/pkg/logger"
 )
 
-type commandLoggingDecorator[C Command, R any] struct {
-	base   CommandHandler[C, R]
-	logger logger.Logger
-}
+type (
+	commandLoggingDecorator[C Command, R any] struct {
+		base   CommandHandler[C, R]
+		logger logger.Logger
+	}
+
+	queryLoggingDecorator[Q Query, R Result] struct {
+		base   QueryHandler[Q, R]
+		logger logger.Logger
+	}
+)
 
 func (d commandLoggingDecorator[C, R]) Handle(ctx context.Context, cmd C) (result R, err error) {
 	d.logger.Trace().
@@ -28,11 +35,6 @@ func (d commandLoggingDecorator[C, R]) Handle(ctx context.Context, cmd C) (resul
 	}()
 
 	return d.base.Handle(ctx, cmd)
-}
-
-type queryLoggingDecorator[Q Query, R Result] struct {
-	base   QueryHandler[Q, R]
-	logger logger.Logger
 }
 
 func (d queryLoggingDecorator[Q, R]) Execute(ctx context.Context, query Q) (result R, err error) {

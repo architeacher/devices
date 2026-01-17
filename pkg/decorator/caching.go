@@ -1,8 +1,17 @@
+// Package decorator provides decorators for command and query handlers
+// implementing cross-cutting concerns like logging, metrics, tracing, and caching.
 package decorator
 
 import (
 	"context"
 	"time"
+)
+
+const (
+	CacheStatusHit    CacheStatus = "HIT"
+	CacheStatusMiss   CacheStatus = "MISS"
+	CacheStatusBypass CacheStatus = "BYPASS"
+	CacheStatusError  CacheStatus = "ERROR"
 )
 
 type (
@@ -41,13 +50,6 @@ type (
 	}
 )
 
-const (
-	CacheStatusHit    CacheStatus = "HIT"
-	CacheStatusMiss   CacheStatus = "MISS"
-	CacheStatusBypass CacheStatus = "BYPASS"
-	CacheStatusError  CacheStatus = "ERROR"
-)
-
 // WithCacheStatus adds cache status to context.
 func WithCacheStatus(ctx context.Context, status CacheStatus) context.Context {
 	return context.WithValue(ctx, cacheStatusKey{}, status)
@@ -79,21 +81,21 @@ func (d queryCachingDecorator[Q, R]) Execute(ctx context.Context, query Q) (R, e
 	var zero R
 
 	if !d.config.Enabled || d.cache == nil {
-		ctx = WithCacheStatus(ctx, CacheStatusBypass)
+		_ = WithCacheStatus(ctx, CacheStatusBypass)
 
 		return d.base.Execute(ctx, query)
 	}
 
 	cached, hit, err := d.cache.Get(ctx, query)
 	if err == nil && hit {
-		ctx = WithCacheStatus(ctx, CacheStatusHit)
+		_ = WithCacheStatus(ctx, CacheStatusHit)
 
 		return cached, nil
 	}
 
 	result, err := d.base.Execute(ctx, query)
 	if err != nil {
-		ctx = WithCacheStatus(ctx, CacheStatusMiss)
+		_ = WithCacheStatus(ctx, CacheStatusMiss)
 
 		return zero, err
 	}
@@ -103,7 +105,7 @@ func (d queryCachingDecorator[Q, R]) Execute(ctx context.Context, query Q) (R, e
 		_ = d.cache.Set(bgCtx, query, result, d.config.TTL)
 	}()
 
-	ctx = WithCacheStatus(ctx, CacheStatusMiss)
+	_ = WithCacheStatus(ctx, CacheStatusMiss)
 
 	return result, nil
 }

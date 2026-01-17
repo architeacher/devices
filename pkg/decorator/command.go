@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"strings"
 
+	otelTrace "go.opentelemetry.io/otel/trace"
+
 	"github.com/architeacher/devices/pkg/logger"
 	"github.com/architeacher/devices/pkg/metrics"
-	otelTrace "go.opentelemetry.io/otel/trace"
 )
 
 type (

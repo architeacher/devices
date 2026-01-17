@@ -7,8 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/architeacher/devices/pkg/decorator"
 	"github.com/stretchr/testify/require"
+
+	"github.com/architeacher/devices/pkg/decorator"
 )
 
 type testQuery struct {
@@ -20,12 +21,12 @@ type testResult struct {
 }
 
 type mockCache struct {
-	mu      sync.RWMutex
-	data    map[string]testResult
-	getCnt  int
-	setCnt  int
-	getErr  error
-	setErr  error
+	mu       sync.RWMutex
+	data     map[string]testResult
+	getCnt   int
+	setCnt   int
+	getErr   error
+	setErr   error
 	setDelay time.Duration
 }
 
