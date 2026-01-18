@@ -10,7 +10,6 @@ import (
 
 	"github.com/architeacher/devices/services/svc-api-gateway/internal/adapters/inbound/http/handlers/shared"
 	"github.com/architeacher/devices/services/svc-api-gateway/internal/domain/model"
-	"github.com/architeacher/devices/services/svc-api-gateway/internal/ports"
 	"github.com/architeacher/devices/services/svc-api-gateway/internal/usecases"
 	"github.com/architeacher/devices/services/svc-api-gateway/internal/usecases/commands"
 	"github.com/architeacher/devices/services/svc-api-gateway/internal/usecases/queries"
@@ -51,7 +50,6 @@ type (
 
 	DeviceHandler struct {
 		app       *usecases.WebApplication
-		cache     ports.DevicesCache
 		startTime time.Time
 	}
 

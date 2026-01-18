@@ -159,6 +159,7 @@ linters:
       - .certs
       - node_modules
       - mocks
+      - specs
       - ".*_gen\\.go$"
       - ".*\\.pb\\.go$"
       - ".*/http_server_gen\\.go$"

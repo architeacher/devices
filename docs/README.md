@@ -400,7 +400,8 @@ api-version: v1
 
 | Feature | Status | Description |
 |---------|--------|-------------|
-| **Response Caching** | ⚠️ Partial | ETag/If-None-Match headers supported; KeyDB-backed caching not implemented |
+| **Response Compression** | ✅ Full | Gzip, Brotli, and Deflate with RFC 7231 quality-aware algorithm selection, content-type filtering, configurable min-size threshold, writer pooling, and OpenTelemetry metrics |
+| **Response Caching** | ⚠️ Partial | KeyDB-backed application caching implemented; HTTP cache headers (ETag, Cache-Control, If-None-Match) not yet integrated into response pipeline |
 
 #### Observability & Operations
 

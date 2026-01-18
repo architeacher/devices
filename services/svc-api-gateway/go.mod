@@ -11,6 +11,7 @@ tool github.com/maxbrunsfeld/counterfeiter/v6
 
 require (
 	github.com/alicebob/miniredis/v2 v2.35.0
+	github.com/andybalholm/brotli v1.0.5
 	github.com/architeacher/devices v0.0.0-20251229233942-d8e0dbae8d44
 	github.com/architeacher/devices/services/svc-devices v0.0.0-20251226020229-b5b4ef256601
 	github.com/cenkalti/backoff/v5 v5.0.3

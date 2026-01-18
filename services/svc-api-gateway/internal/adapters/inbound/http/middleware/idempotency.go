@@ -174,7 +174,7 @@ func (r *responseRecorder) Write(b []byte) (int, error) {
 func (r *responseRecorder) capturedHeaders() map[string]string {
 	headers := make(map[string]string)
 
-	for key, values := range r.ResponseWriter.Header() {
+	for key, values := range r.Header() {
 		if len(values) > 0 {
 			headers[key] = values[0]
 		}

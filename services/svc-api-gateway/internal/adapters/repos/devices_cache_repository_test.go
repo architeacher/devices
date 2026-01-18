@@ -47,7 +47,7 @@ func (s *DevicesCacheRepositoryTestSuite) SetupTest() {
 
 func (s *DevicesCacheRepositoryTestSuite) TearDownTest() {
 	if s.keydbClient != nil {
-		s.keydbClient.Close()
+		_ = s.keydbClient.Close()
 	}
 	if s.miniRedis != nil {
 		s.miniRedis.Close()

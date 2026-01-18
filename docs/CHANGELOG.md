@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- HTTP response compression middleware with gzip, deflate, and brotli support
+- Accept-Encoding header parsing with quality value (q=) support per RFC 7231
+- Server preference order: gzip > brotli > deflate for equal quality values
+- Configurable compression: level (1-9), minimum size threshold, content-type filtering
+- Skip paths for health endpoints to avoid compression overhead
+- Compression metrics: `http_compression_total`, `http_compression_original_bytes`, `http_compression_compressed_bytes`, `http_compression_ratio`
+- Skip metrics: `http_compression_skipped_total` with reason attribute
+- Structured logging for compression events (DEBUG for success, WARN for skips/errors)
+- Vary: Accept-Encoding header for proper cache behavior
+- 406 Not Acceptable response when a client rejects identity encoding with no alternatives
+- Pooled compression writers (sync.Pool) for reduced GC pressure
+
 ### Changed
 
 - Made gRPC message size limits configurable via `DEVICES_MAX_MESSAGE_SIZE` environment variable (default: 4 MiB)
