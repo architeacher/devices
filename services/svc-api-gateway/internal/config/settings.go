@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"time"
 )
 
@@ -31,6 +32,7 @@ type (
 		ThrottledRateLimiting ThrottledRateLimiting `json:"throttled_rate_limiting"`
 		Idempotency           Idempotency           `json:"idempotency"`
 		Deprecation           Deprecation           `json:"deprecation"`
+		Compression           Compression           `json:"compression"`
 		Logging               Logging               `json:"logging"`
 		Telemetry             Telemetry             `json:"telemetry"`
 	}
@@ -170,6 +172,35 @@ type (
 		SuccessorPath string `envconfig:"API_SUCCESSOR_PATH" default:"" json:"successor_path"`
 	}
 
+	// Compression holds the configuration for HTTP response compression middleware.
+	Compression struct {
+		// Enabled controls whether compression middleware is active.
+		// When false, responses pass through unmodified.
+		Enabled bool `envconfig:"COMPRESSION_ENABLED" default:"true" json:"enabled"`
+
+		// Level sets the compression level (1-9).
+		// Higher levels = better compression ratio but more CPU.
+		// Recommended: 5 for balanced performance.
+		Level int `envconfig:"COMPRESSION_LEVEL" default:"5" json:"level"`
+
+		// MinSize is the minimum response body size (bytes) to compress.
+		// Responses smaller than this are passed through uncompressed.
+		// Default: 1024 (1KB)
+		MinSize int `envconfig:"COMPRESSION_MIN_SIZE" default:"1024" json:"min_size"`
+
+		// ContentTypes specifies which MIME types to compress.
+		// If empty, uses sensible defaults for text-based types.
+		ContentTypes []string `envconfig:"COMPRESSION_CONTENT_TYPES" json:"content_types"`
+
+		// SkipPaths lists URL paths that should skip compression.
+		// Useful for health checks or binary endpoints.
+		SkipPaths []string `envconfig:"COMPRESSION_SKIP_PATHS" default:"/v1/health,/v1/liveness,/v1/readiness" json:"skip_paths"`
+
+		// GracefulDegraded when true serves uncompressed on errors.
+		// When false, returns 500 on compression failures.
+		GracefulDegraded bool `envconfig:"COMPRESSION_GRACEFUL_DEGRADED" default:"true" json:"graceful_degraded"`
+	}
+
 	Logging struct {
 		Level     string    `envconfig:"LOG_LEVEL" default:"info" json:"level"`
 		Format    string    `envconfig:"LOG_FORMAT" default:"json" json:"format"`
@@ -221,4 +252,17 @@ func (c *ServiceConfig) GetEnvironment() int {
 
 func (c *ServiceConfig) IsProduction() bool {
 	return c.GetEnvironment() == Production
+}
+
+// Validate validates the Compression configuration.
+func (c *Compression) Validate() error {
+	if c.Level < 1 || c.Level > 9 {
+		return fmt.Errorf("compression level must be between 1 and 9, got %d", c.Level)
+	}
+
+	if c.MinSize < 0 {
+		return fmt.Errorf("compression min_size must be non-negative, got %d", c.MinSize)
+	}
+
+	return nil
 }

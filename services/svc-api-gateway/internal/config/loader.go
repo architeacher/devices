@@ -81,12 +81,12 @@ func (l *Loader) WatchConfigSignals(ctx context.Context) <-chan error {
 func (l *Loader) DumpConfig() {
 	configJSON, err := json.MarshalIndent(l.cfg, "", "  ")
 	if err != nil {
-		fmt.Fprintf(os.Stdout, "Error marshaling config: %v\n", err)
+		_, _ = fmt.Fprintf(os.Stdout, "Error marshaling config: %v\n", err)
 
 		return
 	}
 
-	fmt.Fprintf(os.Stdout, "\n=== Configuration Dump ===\n%s\n=== End Configuration ===\n\n", string(configJSON))
+	_, _ = fmt.Fprintf(os.Stdout, "\n=== Configuration Dump ===\n%s\n=== End Configuration ===\n\n", string(configJSON))
 }
 
 func (l *Loader) Load(ctx context.Context, secretsRepo ports.SecretsRepository, cfg *ServiceConfig) (uint, error) {

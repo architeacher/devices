@@ -114,6 +114,32 @@ func initMiddlewares(cfg RouterConfig) []public.MiddlewareFunc {
 			Msg("API deprecation headers enabled")
 	}
 
+	if cfg.ServiceConfig.Compression.Enabled {
+		var compressionMiddleware func(http.Handler) http.Handler
+
+		// Use metrics-enabled middleware when the metrics client is available
+		if cfg.MetricsClient != nil && cfg.ServiceConfig.Telemetry.Metrics.Enabled {
+			compressionMiddleware = middleware.CompressionMiddlewareWithMetrics(
+				cfg.ServiceConfig.Compression,
+				cfg.Logger,
+				cfg.MetricsClient,
+			)
+		} else {
+			compressionMiddleware = middleware.CompressionMiddleware(
+				cfg.ServiceConfig.Compression,
+				cfg.Logger,
+			)
+		}
+
+		middlewares = append(middlewares, compressionMiddleware)
+
+		cfg.Logger.Info().
+			Int("level", cfg.ServiceConfig.Compression.Level).
+			Int("min_size", cfg.ServiceConfig.Compression.MinSize).
+			Bool("metrics_enabled", cfg.MetricsClient != nil && cfg.ServiceConfig.Telemetry.Metrics.Enabled).
+			Msg("response compression enabled")
+	}
+
 	// Access logging with health check filtering.
 	if cfg.ServiceConfig.Logging.AccessLog.Enabled {
 		accessLogCfg := cfg.ServiceConfig.Logging.AccessLog

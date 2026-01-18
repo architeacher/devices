@@ -48,7 +48,7 @@ func (s *IdempotencyRepositoryTestSuite) SetupTest() {
 
 func (s *IdempotencyRepositoryTestSuite) TearDownTest() {
 	if s.keydbClient != nil {
-		s.keydbClient.Close()
+		_ = s.keydbClient.Close()
 	}
 	if s.miniRedis != nil {
 		s.miniRedis.Close()
