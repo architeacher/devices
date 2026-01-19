@@ -33,7 +33,16 @@ type RouterConfig struct {
 func NewRouter(cfg RouterConfig) http.Handler {
 	router := chi.NewRouter()
 
-	handler := public.NewDeviceHandler(cfg.App)
+	// Configure HTTP caching for the handler
+	cacheConfig := public.HTTPCacheConfig{
+		Enabled:              cfg.ServiceConfig.DevicesCache.HTTPCachingEnabled,
+		MaxAge:               cfg.ServiceConfig.DevicesCache.MaxAge,
+		StaleWhileRevalidate: cfg.ServiceConfig.DevicesCache.StaleWhileRevalidate,
+		ListMaxAge:           cfg.ServiceConfig.DevicesCache.ListMaxAge,
+		ListStaleRevalidate:  cfg.ServiceConfig.DevicesCache.ListStaleRevalidate,
+	}
+
+	handler := public.NewDeviceHandler(cfg.App, public.WithHTTPCacheConfig(cacheConfig))
 
 	// Spin up automatic generated routes.
 	return public.HandlerWithOptions(handler, public.ChiServerOptions{
@@ -138,6 +147,20 @@ func initMiddlewares(cfg RouterConfig) []public.MiddlewareFunc {
 			Int("min_size", cfg.ServiceConfig.Compression.MinSize).
 			Bool("metrics_enabled", cfg.MetricsClient != nil && cfg.ServiceConfig.Telemetry.Metrics.Enabled).
 			Msg("response compression enabled")
+	}
+
+	// ConditionalGET middleware for ETag generation and 304 Not Modified responses.
+	// Must be placed after compression to compute ETag on uncompressed content.
+	if cfg.ServiceConfig.DevicesCache.HTTPCachingEnabled {
+		etagGenerator := middleware.NewETagGenerator()
+		conditionalMiddleware := middleware.ConditionalGET(etagGenerator)
+
+		middlewares = append(middlewares, conditionalMiddleware)
+
+		cfg.Logger.Info().
+			Uint("max_age", cfg.ServiceConfig.DevicesCache.MaxAge).
+			Uint("stale_while_revalidate", cfg.ServiceConfig.DevicesCache.StaleWhileRevalidate).
+			Msg("HTTP response caching enabled (ETag + conditional GET)")
 	}
 
 	// Access logging with health check filtering.

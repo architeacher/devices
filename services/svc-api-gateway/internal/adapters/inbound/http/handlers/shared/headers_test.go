@@ -233,3 +233,106 @@ func TestETagMatches(t *testing.T) {
 		})
 	}
 }
+
+func TestSetCacheStatusHeader(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name     string
+		status   ports.CacheStatus
+		expected string
+	}{
+		{
+			name:     "HIT status",
+			status:   ports.CacheStatusHit,
+			expected: "HIT",
+		},
+		{
+			name:     "MISS status",
+			status:   ports.CacheStatusMiss,
+			expected: "MISS",
+		},
+		{
+			name:     "BYPASS status",
+			status:   ports.CacheStatusBypass,
+			expected: "BYPASS",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			w := httptest.NewRecorder()
+			shared.SetCacheStatusHeader(w, tc.status)
+
+			require.Equal(t, tc.expected, w.Header().Get(shared.HeaderCacheStatus))
+		})
+	}
+}
+
+func TestIsCacheBypassRequested(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name         string
+		cacheControl string
+		pragma       string
+		expected     bool
+	}{
+		{
+			name:         "no headers",
+			cacheControl: "",
+			pragma:       "",
+			expected:     false,
+		},
+		{
+			name:         "Cache-Control no-cache",
+			cacheControl: "no-cache",
+			pragma:       "",
+			expected:     true,
+		},
+		{
+			name:         "Pragma no-cache",
+			cacheControl: "",
+			pragma:       "no-cache",
+			expected:     true,
+		},
+		{
+			name:         "both no-cache headers",
+			cacheControl: "no-cache",
+			pragma:       "no-cache",
+			expected:     true,
+		},
+		{
+			name:         "Cache-Control max-age",
+			cacheControl: "max-age=0",
+			pragma:       "",
+			expected:     false,
+		},
+		{
+			name:         "Pragma something else",
+			cacheControl: "",
+			pragma:       "something",
+			expected:     false,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			req := httptest.NewRequest(http.MethodGet, "/test", nil)
+			if tc.cacheControl != "" {
+				req.Header.Set(shared.HeaderCacheControl, tc.cacheControl)
+			}
+
+			if tc.pragma != "" {
+				req.Header.Set("Pragma", tc.pragma)
+			}
+
+			result := shared.IsCacheBypassRequested(req)
+			require.Equal(t, tc.expected, result)
+		})
+	}
+}

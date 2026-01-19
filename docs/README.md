@@ -401,7 +401,7 @@ api-version: v1
 | Feature | Status | Description |
 |---------|--------|-------------|
 | **Response Compression** | ✅ Full | Gzip, Brotli, and Deflate with RFC 7231 quality-aware algorithm selection, content-type filtering, configurable min-size threshold, writer pooling, and OpenTelemetry metrics |
-| **Response Caching** | ⚠️ Partial | KeyDB-backed application caching implemented; HTTP cache headers (ETag, Cache-Control, If-None-Match) not yet integrated into response pipeline |
+| **Response Caching** | ✅ Full | HTTP caching with ETag generation (xxhash), 304 Not Modified responses, configurable Cache-Control headers (max-age, stale-while-revalidate), Vary header for cache variance, Cache-Status/Cache-Key observability headers, KeyDB backend caching |
 
 #### Observability & Operations
 
@@ -489,4 +489,4 @@ The following features are planned for future releases:
 ## Documentation
 
 - [Architecture](docs/architecture.md) - ADRs and system diagrams
-- [API Specification](contracts/openapi/devices/v1/specs.yaml) - OpenAPI spec
+- [API Specification](docs/contracts/openapi/devices/v1/specs.yaml) - OpenAPI spec

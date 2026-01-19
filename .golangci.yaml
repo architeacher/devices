@@ -103,15 +103,15 @@ linters:
       disable-dec-order-check: false
       # Check init func placement
       disable-init-func-first-check: false
-      # Disable type declaration order check (exported first)
-      disable-dec-num-check: true
+      # Enforce exported declarations before unexported in grouped blocks
+      disable-dec-num-check: false
 
     # grouper: Grouping enforcement
     grouper:
-      # Require single const block
+      # Require a single const block
       const-require-single-const: true
       const-require-grouping: true
-      # Require single type block
+      # Require a single type block
       type-require-single-type: true
       type-require-grouping: true
       # Require single var block

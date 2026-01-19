@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- HTTP response caching integration with ETag generation and 304 Not Modified responses
+- ConditionalGET middleware registration in HTTP pipeline after compression
+- Cache-Control headers with configurable max-age and stale-while-revalidate directives
+- Separate TTL configuration for single device (60s/30s) and list endpoints (30s/15s)
+- Vary header with Accept, Authorization, and Accept-Encoding for cache variance
+- Last-Modified header on device responses using updatedAt timestamp
+- Cache observability headers: Cache-Status (MISS/BYPASS), Cache-Key
+- IsCacheBypassRequested helper for detecting Cache-Control: no-cache requests
+- HTTPCachingEnabled configuration field for independent HTTP-layer caching control
+
+## [Unreleased]
+
+### Added
+
 - HTTP response compression middleware with gzip, deflate, and brotli support
 - Accept-Encoding header parsing with quality value (q=) support per RFC 7231
 - Server preference order: gzip > brotli > deflate for equal quality values

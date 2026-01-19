@@ -87,6 +87,13 @@ security:
 
 paths:
   /devices:
+    # Common parameters for all operations on this path
+    parameters:
+      - $ref: "#/components/parameters/ApiVersionHeader"
+      - $ref: "#/components/parameters/RequestIdHeader"
+      - $ref: "#/components/parameters/TraceparentHeader"
+      - $ref: "#/components/parameters/TracestateHeader"
+
     post:
       summary: Create a new device
       description: |
@@ -99,10 +106,6 @@ paths:
         - PasetoAuth: []
       parameters:
         - $ref: "#/components/parameters/AuthorizationHeader"
-        - $ref: "#/components/parameters/ApiVersionHeader"
-        - $ref: "#/components/parameters/RequestIdHeader"
-        - $ref: "#/components/parameters/TraceparentHeader"
-        - $ref: "#/components/parameters/TracestateHeader"
         - $ref: "#/components/parameters/IdempotencyKeyHeader"
         - $ref: "#/components/parameters/AcceptHeader"
       requestBody:
@@ -135,10 +138,6 @@ paths:
         - PasetoAuth: []
       parameters:
         - $ref: "#/components/parameters/AuthorizationHeader"
-        - $ref: "#/components/parameters/ApiVersionHeader"
-        - $ref: "#/components/parameters/RequestIdHeader"
-        - $ref: "#/components/parameters/TraceparentHeader"
-        - $ref: "#/components/parameters/TracestateHeader"
         - $ref: "#/components/parameters/PageParam"
         - $ref: "#/components/parameters/SizeParam"
         - $ref: "#/components/parameters/BrandFilterParam"
@@ -178,10 +177,6 @@ paths:
         - PasetoAuth: []
       parameters:
         - $ref: "#/components/parameters/AuthorizationHeader"
-        - $ref: "#/components/parameters/ApiVersionHeader"
-        - $ref: "#/components/parameters/RequestIdHeader"
-        - $ref: "#/components/parameters/TraceparentHeader"
-        - $ref: "#/components/parameters/TracestateHeader"
         - $ref: "#/components/parameters/PageParam"
         - $ref: "#/components/parameters/SizeParam"
         - $ref: "#/components/parameters/BrandFilterParam"
@@ -218,6 +213,14 @@ paths:
           $ref: "schemas/common/responses/errors/bad-request.yaml"
 
   /devices/{deviceId}:
+    # Common parameters for all operations on this path
+    parameters:
+      - $ref: "#/components/parameters/DeviceIdParam"
+      - $ref: "#/components/parameters/ApiVersionHeader"
+      - $ref: "#/components/parameters/RequestIdHeader"
+      - $ref: "#/components/parameters/TraceparentHeader"
+      - $ref: "#/components/parameters/TracestateHeader"
+
     get:
       summary: Get a device by ID
       description: Retrieves a single device by its unique identifier.
@@ -228,11 +231,6 @@ paths:
         - PasetoAuth: []
       parameters:
         - $ref: "#/components/parameters/AuthorizationHeader"
-        - $ref: "#/components/parameters/ApiVersionHeader"
-        - $ref: "#/components/parameters/RequestIdHeader"
-        - $ref: "#/components/parameters/TraceparentHeader"
-        - $ref: "#/components/parameters/TracestateHeader"
-        - $ref: "#/components/parameters/DeviceIdParam"
         - $ref: "#/components/parameters/FieldsParam"
         - $ref: "#/components/parameters/IfNoneMatchHeader"
         - $ref: "#/components/parameters/AcceptEncodingHeader"
@@ -268,11 +266,6 @@ paths:
         - PasetoAuth: []
       parameters:
         - $ref: "#/components/parameters/AuthorizationHeader"
-        - $ref: "#/components/parameters/ApiVersionHeader"
-        - $ref: "#/components/parameters/RequestIdHeader"
-        - $ref: "#/components/parameters/TraceparentHeader"
-        - $ref: "#/components/parameters/TracestateHeader"
-        - $ref: "#/components/parameters/DeviceIdParam"
         - $ref: "#/components/parameters/IfMatchHeader"
         - $ref: "#/components/parameters/AcceptHeader"
       requestBody:
@@ -314,11 +307,6 @@ paths:
         - PasetoAuth: []
       parameters:
         - $ref: "#/components/parameters/AuthorizationHeader"
-        - $ref: "#/components/parameters/ApiVersionHeader"
-        - $ref: "#/components/parameters/RequestIdHeader"
-        - $ref: "#/components/parameters/TraceparentHeader"
-        - $ref: "#/components/parameters/TracestateHeader"
-        - $ref: "#/components/parameters/DeviceIdParam"
         - $ref: "#/components/parameters/IfMatchHeader"
         - $ref: "#/components/parameters/AcceptHeader"
       requestBody:
@@ -359,11 +347,6 @@ paths:
         - PasetoAuth: []
       parameters:
         - $ref: "#/components/parameters/AuthorizationHeader"
-        - $ref: "#/components/parameters/ApiVersionHeader"
-        - $ref: "#/components/parameters/RequestIdHeader"
-        - $ref: "#/components/parameters/TraceparentHeader"
-        - $ref: "#/components/parameters/TracestateHeader"
-        - $ref: "#/components/parameters/DeviceIdParam"
       responses:
         "204":
           $ref: "schemas/devices/responses/device-deleted.yaml"
@@ -390,11 +373,6 @@ paths:
         - PasetoAuth: []
       parameters:
         - $ref: "#/components/parameters/AuthorizationHeader"
-        - $ref: "#/components/parameters/ApiVersionHeader"
-        - $ref: "#/components/parameters/RequestIdHeader"
-        - $ref: "#/components/parameters/TraceparentHeader"
-        - $ref: "#/components/parameters/TracestateHeader"
-        - $ref: "#/components/parameters/DeviceIdParam"
         - $ref: "#/components/parameters/IfNoneMatchHeader"
       responses:
         "200":
@@ -419,8 +397,6 @@ paths:
       tags:
         - Devices
       security: []
-      parameters:
-        - $ref: "#/components/parameters/DeviceIdParam"
       responses:
         "204":
           $ref: "schemas/devices/responses/device-options.yaml"
