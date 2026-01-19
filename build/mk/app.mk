@@ -101,7 +101,7 @@ generate-api: lint-api ## 🤖 Generate API specs from OpenAPI definition.
 		-w "/spec" \
 		redocly/cli:latest bundle \
 		"devices/${VERSION}/specs.yaml" \
-		--output "devices/${VERSION}/public/specs-swagger.json" \
+		--output "devices/${VERSION}/public/swagger-pact.json" \
 		--ext json \
 		--config .redocly.yaml \
 	&& \

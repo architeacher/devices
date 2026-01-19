@@ -267,7 +267,7 @@ services:
     networks:
       - internal
     environment:
-      SWAGGER_JSON: /oas/specs-swagger.json
+      SWAGGER_JSON: /oas/swagger-pact.json
     volumes:
       - "./docs/contracts/openapi/devices/v1/public:/oas"
     labels:

@@ -48,8 +48,18 @@ type (
 		UpdatedAt *time.Time         `json:"updatedAt,omitempty"`
 	}
 
+	// HTTPCacheConfig holds HTTP caching configuration for the handler.
+	HTTPCacheConfig struct {
+		Enabled              bool
+		MaxAge               uint
+		StaleWhileRevalidate uint
+		ListMaxAge           uint
+		ListStaleRevalidate  uint
+	}
+
 	DeviceHandler struct {
 		app       *usecases.WebApplication
+		cacheConf HTTPCacheConfig
 		startTime time.Time
 	}
 
@@ -57,47 +67,133 @@ type (
 	DeviceHandlerOption func(*DeviceHandler)
 )
 
-func NewDeviceHandler(app *usecases.WebApplication) *DeviceHandler {
-	return &DeviceHandler{
+func NewDeviceHandler(app *usecases.WebApplication, opts ...DeviceHandlerOption) *DeviceHandler {
+	h := &DeviceHandler{
 		app:       app,
 		startTime: time.Now().UTC(),
 	}
+
+	for _, opt := range opts {
+		opt(h)
+	}
+
+	return h
 }
 
-func (h *DeviceHandler) ListDevices(w http.ResponseWriter, r *http.Request, params ListDevicesParams) {
+// WithHTTPCacheConfig sets the HTTP caching configuration.
+func WithHTTPCacheConfig(cfg HTTPCacheConfig) DeviceHandlerOption {
+	return func(h *DeviceHandler) {
+		h.cacheConf = cfg
+	}
+}
+
+// setCacheControlHeaders sets Cache-Control and Vary headers for cacheable responses.
+func (h *DeviceHandler) setCacheControlHeaders(w http.ResponseWriter, isList bool) {
+	if !h.cacheConf.Enabled {
+		return
+	}
+
+	maxAge := h.cacheConf.MaxAge
+	staleRevalidate := h.cacheConf.StaleWhileRevalidate
+
+	if isList {
+		maxAge = h.cacheConf.ListMaxAge
+		staleRevalidate = h.cacheConf.ListStaleRevalidate
+	}
+
+	cacheControl := fmt.Sprintf("private, max-age=%d", maxAge)
+	if staleRevalidate > 0 {
+		cacheControl = fmt.Sprintf("%s, stale-while-revalidate=%d", cacheControl, staleRevalidate)
+	}
+
+	w.Header().Set(shared.HeaderCacheControl, cacheControl)
+	w.Header().Set(shared.HeaderVary, fmt.Sprintf("%s, %s, Accept-Encoding", shared.HeaderAccept, shared.HeaderAuthorization))
+}
+
+// setCacheObservabilityHeaders sets Cache-Status and Cache-Key headers for debugging.
+func (h *DeviceHandler) setCacheObservabilityHeaders(w http.ResponseWriter, r *http.Request, cacheKey string) {
+	if !h.cacheConf.Enabled {
+		return
+	}
+
+	// Determine cache status based on request headers
+	var status string
+	if shared.IsCacheBypassRequested(r) {
+		status = "BYPASS"
+	} else {
+		// Since we don't have visibility into backend cache hits at the HTTP layer,
+		// we report MISS. The backend KeyDB caching is separate from HTTP caching.
+		status = "MISS"
+	}
+
+	w.Header().Set(shared.HeaderCacheStatus, status)
+
+	if cacheKey != "" {
+		w.Header().Set(shared.HeaderCacheKey, cacheKey)
+	}
+}
+
+// DeviceListFilterInput captures common filter parameters for device list operations.
+// This struct allows both ListDevices and HeadDevices to share filter construction logic.
+type DeviceListFilterInput struct {
+	Q      *SearchParam
+	Brand  *BrandFilterParam
+	State  *StateFilterParam
+	Sort   *SortParam
+	Page   *PageParam
+	Size   *SizeParam
+	Cursor *CursorParam
+}
+
+// buildDeviceFilter constructs a DeviceFilter from the common list/head parameters.
+func buildDeviceFilter(input DeviceListFilterInput) model.DeviceFilter {
 	filter := model.DefaultDeviceFilter()
 
-	if params.Q != nil && *params.Q != "" {
-		filter.Keyword = *params.Q
+	if input.Q != nil && *input.Q != "" {
+		filter.Keyword = *input.Q
 	}
 
-	if params.Brand != nil && len(*params.Brand) > 0 {
-		filter.Brands = *params.Brand
+	if input.Brand != nil && len(*input.Brand) > 0 {
+		filter.Brands = *input.Brand
 	}
 
-	if params.State != nil && len(*params.State) > 0 {
-		states := make([]model.State, 0, len(*params.State))
-		for _, s := range *params.State {
+	if input.State != nil && len(*input.State) > 0 {
+		states := make([]model.State, 0, len(*input.State))
+		for _, s := range *input.State {
 			states = append(states, model.State(s))
 		}
 		filter.States = states
 	}
 
-	if params.Sort != nil && len(*params.Sort) > 0 {
-		filter.Sort = *params.Sort
+	if input.Sort != nil && len(*input.Sort) > 0 {
+		filter.Sort = *input.Sort
 	}
 
-	if params.Page != nil {
-		filter.Page = uint(*params.Page)
+	if input.Page != nil {
+		filter.Page = uint(*input.Page)
 	}
 
-	if params.Size != nil {
-		filter.Size = uint(*params.Size)
+	if input.Size != nil {
+		filter.Size = uint(*input.Size)
 	}
 
-	if params.Cursor != nil && *params.Cursor != "" {
-		filter.Cursor = *params.Cursor
+	if input.Cursor != nil && *input.Cursor != "" {
+		filter.Cursor = *input.Cursor
 	}
+
+	return filter
+}
+
+func (h *DeviceHandler) ListDevices(w http.ResponseWriter, r *http.Request, params ListDevicesParams) {
+	filter := buildDeviceFilter(DeviceListFilterInput{
+		Q:      params.Q,
+		Brand:  params.Brand,
+		State:  params.State,
+		Sort:   params.Sort,
+		Page:   params.Page,
+		Size:   params.Size,
+		Cursor: params.Cursor,
+	})
 
 	result, err := h.app.Queries.ListDevices.Execute(r.Context(), queries.ListDevicesQuery{Filter: filter})
 	if err != nil {
@@ -113,43 +209,30 @@ func (h *DeviceHandler) ListDevices(w http.ResponseWriter, r *http.Request, para
 		Pagination: pagination,
 	}
 
+	// Build cache key from filter parameters for list endpoint
+	cacheKey := buildListCacheKey(filter)
+
+	h.setCacheControlHeaders(w, true)
+	h.setCacheObservabilityHeaders(w, r, cacheKey)
 	writeJSONResponse(w, http.StatusOK, response)
 }
 
+// buildListCacheKey generates a cache key for list queries based on filter parameters.
+func buildListCacheKey(filter model.DeviceFilter) string {
+	return fmt.Sprintf("devices:list:page=%d:size=%d:brands=%v:states=%v",
+		filter.Page, filter.Size, filter.Brands, filter.States)
+}
+
 func (h *DeviceHandler) HeadDevices(w http.ResponseWriter, r *http.Request, params HeadDevicesParams) {
-	filter := model.DefaultDeviceFilter()
-
-	if params.Q != nil && *params.Q != "" {
-		filter.Keyword = *params.Q
-	}
-
-	if params.Brand != nil && len(*params.Brand) > 0 {
-		filter.Brands = *params.Brand
-	}
-
-	if params.State != nil && len(*params.State) > 0 {
-		states := make([]model.State, 0, len(*params.State))
-		for _, s := range *params.State {
-			states = append(states, model.State(s))
-		}
-		filter.States = states
-	}
-
-	if params.Sort != nil && len(*params.Sort) > 0 {
-		filter.Sort = *params.Sort
-	}
-
-	if params.Page != nil {
-		filter.Page = uint(*params.Page)
-	}
-
-	if params.Size != nil {
-		filter.Size = uint(*params.Size)
-	}
-
-	if params.Cursor != nil && *params.Cursor != "" {
-		filter.Cursor = *params.Cursor
-	}
+	filter := buildDeviceFilter(DeviceListFilterInput{
+		Q:      params.Q,
+		Brand:  params.Brand,
+		State:  params.State,
+		Sort:   params.Sort,
+		Page:   params.Page,
+		Size:   params.Size,
+		Cursor: params.Cursor,
+	})
 
 	result, err := h.app.Queries.ListDevices.Execute(r.Context(), queries.ListDevicesQuery{Filter: filter})
 	if err != nil {
@@ -162,7 +245,7 @@ func (h *DeviceHandler) HeadDevices(w http.ResponseWriter, r *http.Request, para
 	w.WriteHeader(http.StatusOK)
 }
 
-func (h *DeviceHandler) OptionsDevices(w http.ResponseWriter, _ *http.Request) {
+func (h *DeviceHandler) OptionsDevices(w http.ResponseWriter, _ *http.Request, _ OptionsDevicesParams) {
 	w.Header().Set("Allow", "GET, POST, HEAD, OPTIONS")
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -229,6 +312,12 @@ func (h *DeviceHandler) GetDevice(w http.ResponseWriter, r *http.Request, device
 		Meta: shared.NewMeta(r),
 	}
 
+	// Build cache key for single device endpoint
+	cacheKey := fmt.Sprintf("device:v1:%s", device.ID.String())
+
+	h.setCacheControlHeaders(w, false)
+	h.setCacheObservabilityHeaders(w, r, cacheKey)
+	shared.SetLastModified(w, device.UpdatedAt)
 	writeJSONResponse(w, http.StatusOK, response)
 }
 
@@ -256,7 +345,7 @@ func (h *DeviceHandler) HeadDevice(w http.ResponseWriter, r *http.Request, devic
 	w.WriteHeader(http.StatusOK)
 }
 
-func (h *DeviceHandler) OptionsDevice(w http.ResponseWriter, _ *http.Request, _ openapi_types.UUID) {
+func (h *DeviceHandler) OptionsDevice(w http.ResponseWriter, _ *http.Request, _ DeviceIdParam, _ OptionsDeviceParams) {
 	w.Header().Set("Allow", "GET, PUT, PATCH, DELETE, HEAD, OPTIONS")
 	w.WriteHeader(http.StatusNoContent)
 }

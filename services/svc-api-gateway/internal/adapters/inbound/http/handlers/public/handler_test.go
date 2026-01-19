@@ -302,7 +302,7 @@ func (s *HandlerTestSuite) TestOptionsDevices() {
 	req := httptest.NewRequest(http.MethodOptions, "/v1/devices", nil)
 	rec := httptest.NewRecorder()
 
-	handler.OptionsDevices(rec, req)
+	handler.OptionsDevices(rec, req, public.OptionsDevicesParams{})
 
 	s.Require().Equal(http.StatusNoContent, rec.Code)
 	s.Require().Contains(rec.Header().Get("Allow"), "GET")
@@ -320,7 +320,7 @@ func (s *HandlerTestSuite) TestOptionsDevice() {
 	req := httptest.NewRequest(http.MethodOptions, "/v1/devices/"+id.String(), nil)
 	rec := httptest.NewRecorder()
 
-	handler.OptionsDevice(rec, req, id.UUID)
+	handler.OptionsDevice(rec, req, id.UUID, public.OptionsDeviceParams{})
 
 	s.Require().Equal(http.StatusNoContent, rec.Code)
 	s.Require().Contains(rec.Header().Get("Allow"), "GET")

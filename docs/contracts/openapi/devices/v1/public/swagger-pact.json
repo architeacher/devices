@@ -58,6 +58,20 @@
   ],
   "paths": {
     "/devices": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/ApiVersionHeader"
+        },
+        {
+          "$ref": "#/components/parameters/RequestIdHeader"
+        },
+        {
+          "$ref": "#/components/parameters/TraceparentHeader"
+        },
+        {
+          "$ref": "#/components/parameters/TracestateHeader"
+        }
+      ],
       "post": {
         "summary": "Create a new device",
         "description": "Creates a new device resource. The device will be assigned a unique UUID v7 identifier\nand the creation time will be automatically set to the current timestamp.\n",
@@ -73,18 +87,6 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/AuthorizationHeader"
-          },
-          {
-            "$ref": "#/components/parameters/ApiVersionHeader"
-          },
-          {
-            "$ref": "#/components/parameters/RequestIdHeader"
-          },
-          {
-            "$ref": "#/components/parameters/TraceparentHeader"
-          },
-          {
-            "$ref": "#/components/parameters/TracestateHeader"
           },
           {
             "$ref": "#/components/parameters/IdempotencyKeyHeader"
@@ -135,18 +137,6 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/AuthorizationHeader"
-          },
-          {
-            "$ref": "#/components/parameters/ApiVersionHeader"
-          },
-          {
-            "$ref": "#/components/parameters/RequestIdHeader"
-          },
-          {
-            "$ref": "#/components/parameters/TraceparentHeader"
-          },
-          {
-            "$ref": "#/components/parameters/TracestateHeader"
           },
           {
             "$ref": "#/components/parameters/PageParam"
@@ -223,18 +213,6 @@
             "$ref": "#/components/parameters/AuthorizationHeader"
           },
           {
-            "$ref": "#/components/parameters/ApiVersionHeader"
-          },
-          {
-            "$ref": "#/components/parameters/RequestIdHeader"
-          },
-          {
-            "$ref": "#/components/parameters/TraceparentHeader"
-          },
-          {
-            "$ref": "#/components/parameters/TracestateHeader"
-          },
-          {
             "$ref": "#/components/parameters/PageParam"
           },
           {
@@ -296,6 +274,23 @@
       }
     },
     "/devices/{deviceId}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/DeviceIdParam"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersionHeader"
+        },
+        {
+          "$ref": "#/components/parameters/RequestIdHeader"
+        },
+        {
+          "$ref": "#/components/parameters/TraceparentHeader"
+        },
+        {
+          "$ref": "#/components/parameters/TracestateHeader"
+        }
+      ],
       "get": {
         "summary": "Get a device by ID",
         "description": "Retrieves a single device by its unique identifier.",
@@ -311,21 +306,6 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/AuthorizationHeader"
-          },
-          {
-            "$ref": "#/components/parameters/ApiVersionHeader"
-          },
-          {
-            "$ref": "#/components/parameters/RequestIdHeader"
-          },
-          {
-            "$ref": "#/components/parameters/TraceparentHeader"
-          },
-          {
-            "$ref": "#/components/parameters/TracestateHeader"
-          },
-          {
-            "$ref": "#/components/parameters/DeviceIdParam"
           },
           {
             "$ref": "#/components/parameters/FieldsParam"
@@ -379,21 +359,6 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/AuthorizationHeader"
-          },
-          {
-            "$ref": "#/components/parameters/ApiVersionHeader"
-          },
-          {
-            "$ref": "#/components/parameters/RequestIdHeader"
-          },
-          {
-            "$ref": "#/components/parameters/TraceparentHeader"
-          },
-          {
-            "$ref": "#/components/parameters/TracestateHeader"
-          },
-          {
-            "$ref": "#/components/parameters/DeviceIdParam"
           },
           {
             "$ref": "#/components/parameters/IfMatchHeader"
@@ -455,21 +420,6 @@
             "$ref": "#/components/parameters/AuthorizationHeader"
           },
           {
-            "$ref": "#/components/parameters/ApiVersionHeader"
-          },
-          {
-            "$ref": "#/components/parameters/RequestIdHeader"
-          },
-          {
-            "$ref": "#/components/parameters/TraceparentHeader"
-          },
-          {
-            "$ref": "#/components/parameters/TracestateHeader"
-          },
-          {
-            "$ref": "#/components/parameters/DeviceIdParam"
-          },
-          {
             "$ref": "#/components/parameters/IfMatchHeader"
           },
           {
@@ -527,21 +477,6 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/AuthorizationHeader"
-          },
-          {
-            "$ref": "#/components/parameters/ApiVersionHeader"
-          },
-          {
-            "$ref": "#/components/parameters/RequestIdHeader"
-          },
-          {
-            "$ref": "#/components/parameters/TraceparentHeader"
-          },
-          {
-            "$ref": "#/components/parameters/TracestateHeader"
-          },
-          {
-            "$ref": "#/components/parameters/DeviceIdParam"
           }
         ],
         "responses": {
@@ -582,21 +517,6 @@
             "$ref": "#/components/parameters/AuthorizationHeader"
           },
           {
-            "$ref": "#/components/parameters/ApiVersionHeader"
-          },
-          {
-            "$ref": "#/components/parameters/RequestIdHeader"
-          },
-          {
-            "$ref": "#/components/parameters/TraceparentHeader"
-          },
-          {
-            "$ref": "#/components/parameters/TracestateHeader"
-          },
-          {
-            "$ref": "#/components/parameters/DeviceIdParam"
-          },
-          {
             "$ref": "#/components/parameters/IfNoneMatchHeader"
           }
         ],
@@ -629,11 +549,6 @@
           "Devices"
         ],
         "security": [],
-        "parameters": [
-          {
-            "$ref": "#/components/parameters/DeviceIdParam"
-          }
-        ],
         "responses": {
           "204": {
             "$ref": "#/components/responses/device-options"

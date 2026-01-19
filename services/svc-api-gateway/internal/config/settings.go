@@ -137,10 +137,13 @@ type (
 
 	DevicesCache struct {
 		Enabled              bool          `envconfig:"DEVICES_CACHE_ENABLED" default:"true" json:"enabled"`
+		HTTPCachingEnabled   bool          `envconfig:"DEVICES_CACHE_HTTP_ENABLED" default:"true" json:"http_caching_enabled"`
 		DeviceTTL            time.Duration `envconfig:"DEVICES_CACHE_DEVICE_TTL" default:"5m" json:"device_ttl"`
 		ListTTL              time.Duration `envconfig:"DEVICES_CACHE_LIST_TTL" default:"1m" json:"list_ttl"`
 		MaxAge               uint          `envconfig:"DEVICES_CACHE_MAX_AGE" default:"60" json:"max_age"`
 		StaleWhileRevalidate uint          `envconfig:"DEVICES_CACHE_STALE_REVALIDATE" default:"30" json:"stale_while_revalidate"`
+		ListMaxAge           uint          `envconfig:"DEVICES_CACHE_LIST_MAX_AGE" default:"30" json:"list_max_age"`
+		ListStaleRevalidate  uint          `envconfig:"DEVICES_CACHE_LIST_STALE_REVALIDATE" default:"15" json:"list_stale_while_revalidate"`
 	}
 
 	ThrottledRateLimiting struct {

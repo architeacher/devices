@@ -75,3 +75,17 @@ func ETagMatches(r *http.Request, etag string) bool {
 
 	return ifNoneMatch == quotedETag || ifNoneMatch == weakETag || ifNoneMatch == "*"
 }
+
+// SetCacheStatusHeader sets only the Cache-Status header.
+func SetCacheStatusHeader(w http.ResponseWriter, status ports.CacheStatus) {
+	w.Header().Set(HeaderCacheStatus, string(status))
+}
+
+// IsCacheBypassRequested checks if the client requested cache bypass.
+// Returns true if Cache-Control: no-cache or Pragma: no-cache is present.
+func IsCacheBypassRequested(r *http.Request) bool {
+	cacheControl := r.Header.Get(HeaderCacheControl)
+	pragma := r.Header.Get("Pragma")
+
+	return cacheControl == "no-cache" || pragma == "no-cache"
+}

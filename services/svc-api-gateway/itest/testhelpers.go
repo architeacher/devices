@@ -117,42 +117,17 @@ func NewIntegrationTestServer(ctx context.Context) (*IntegrationTestServer, erro
 		return nil, err
 	}
 
-	grpcOutbound, err := grpcclient.NewClient(
-		&apiconfig.ServiceConfig{
-			DevicesGRPCClient: apiconfig.DevicesGRPCClient{
-				Address:        grpcAddress,
-				Timeout:        10 * time.Second,
-				MaxRetries:     1,
-				CircuitBreaker: apiconfig.CircuitBreakerConfig{Enabled: false},
-			},
+	grpcClientConfig := &apiconfig.ServiceConfig{
+		DevicesGRPCClient: apiconfig.DevicesGRPCClient{
+			Address:        grpcAddress,
+			Timeout:        10 * time.Second,
+			MaxRetries:     1,
+			CircuitBreaker: apiconfig.CircuitBreakerConfig{Enabled: false},
 		},
-		grpcclient.WithConnection(conn),
-	)
-	if err != nil {
-		conn.Close()
-		testServer.Close()
-
-		return nil, err
 	}
 
-	grpcClient, err := services.NewDevicesService(
-		&apiconfig.ServiceConfig{
-			DevicesGRPCClient: apiconfig.DevicesGRPCClient{
-				Address:        grpcAddress,
-				Timeout:        10 * time.Second,
-				MaxRetries:     1,
-				CircuitBreaker: apiconfig.CircuitBreakerConfig{Enabled: false},
-			},
-		},
-		services.WithConnection(grpcOutbound),
-	)
-	if err != nil {
-		grpcOutbound.Close()
-		conn.Close()
-		testServer.Close()
-
-		return nil, err
-	}
+	grpcOutbound := grpcclient.NewClient(conn, grpcClientConfig)
+	grpcClient := services.NewDevicesService(grpcOutbound)
 
 	log := logger.NewTestLogger()
 	metricsClient := noop.NewMetricsClient()
@@ -206,10 +181,6 @@ func NewIntegrationTestServer(ctx context.Context) (*IntegrationTestServer, erro
 func (s *IntegrationTestServer) Close() {
 	if s.HTTPServer != nil {
 		s.HTTPServer.Close()
-	}
-
-	if s.GRPCClient != nil {
-		s.GRPCClient.Close()
 	}
 
 	if s.grpcConn != nil {
